@@ -24,5 +24,6 @@ Thumbs.db
 # Local Codex workspace metadata and generated deliverables
 .agents/
 .codex/
+.worktrees/
 work/
 outputs/

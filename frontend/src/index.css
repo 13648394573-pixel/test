@@ -1,0 +1,52 @@
+:root {
+  font-family:
+    Inter, "Segoe UI", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+  color: #172033;
+  background: #f4f7fb;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+.app-shell {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 24px;
+}
+
+.status-card {
+  width: min(100%, 520px);
+  padding: 40px;
+  border: 1px solid #dce3ee;
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 16px 40px rgb(27 43 72 / 8%);
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  color: #315fb5;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(32px, 6vw, 48px);
+}
+
+.status {
+  margin: 20px 0 0;
+  color: #526077;
+}

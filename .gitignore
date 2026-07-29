@@ -1,0 +1,28 @@
+# Local configuration and runtime data
+.env
+data/
+logs/
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Node
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Local Codex workspace metadata and generated deliverables
+.agents/
+.codex/
+work/
+outputs/

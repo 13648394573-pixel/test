@@ -18,7 +18,9 @@ body {
 }
 
 button,
-input {
+input,
+select,
+textarea {
   font: inherit;
 }
 
@@ -84,7 +86,31 @@ h3 {
   background: rgb(255 255 255 / 10%);
 }
 
-.device-library {
+.module-nav {
+  display: flex;
+  gap: 8px;
+  padding: 12px clamp(20px, 5vw, 72px);
+  border-bottom: 1px solid #d8e0ec;
+  background: #fff;
+}
+
+.module-nav button {
+  padding: 8px 13px;
+  border: 0;
+  border-radius: 7px;
+  color: #53627a;
+  background: transparent;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.module-nav button.active {
+  color: #244d98;
+  background: #eaf1ff;
+}
+
+.device-library,
+.test-case-library {
   width: min(1440px, calc(100% - 40px));
   margin: 0 auto;
   padding: 42px 0 64px;
@@ -132,6 +158,7 @@ h3 {
 }
 
 .device-form,
+.test-case-form,
 .table-panel {
   margin-top: 24px;
   border: 1px solid #dce3ee;
@@ -140,7 +167,8 @@ h3 {
   box-shadow: 0 10px 30px rgb(27 43 72 / 5%);
 }
 
-.device-form {
+.device-form,
+.test-case-form {
   padding: 24px;
 }
 
@@ -159,17 +187,97 @@ h3 {
   font-weight: 700;
 }
 
-.form-grid input {
+.form-grid input,
+.form-grid select,
+.form-grid textarea,
+.step-card textarea {
   min-width: 0;
   padding: 10px 11px;
   border: 1px solid #cfd9e7;
   border-radius: 7px;
   color: #172033;
+  background: #fff;
 }
 
-.form-grid input:focus {
+.form-grid input:focus,
+.form-grid select:focus,
+.form-grid textarea:focus,
+.step-card textarea:focus {
   border-color: #527dce;
   outline: 3px solid #dbe7ff;
+}
+
+.test-case-fields {
+  grid-template-columns: repeat(4, minmax(150px, 1fr));
+}
+
+.test-case-fields .wide-field {
+  grid-column: span 2;
+}
+
+.checkbox-field {
+  align-content: center;
+  grid-template-columns: auto 1fr !important;
+  justify-content: start;
+}
+
+.checkbox-field input {
+  width: 18px;
+  height: 18px;
+}
+
+.step-editor {
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1px solid #e3e8f0;
+}
+
+.step-editor-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.step-editor-heading p {
+  margin-bottom: 0;
+  color: #718097;
+}
+
+.step-card {
+  display: grid;
+  grid-template-columns: 40px minmax(220px, 1fr) minmax(220px, 1fr) auto;
+  align-items: start;
+  gap: 14px;
+  margin-top: 14px;
+  padding: 16px;
+  border: 1px solid #dce3ee;
+  border-radius: 10px;
+  background: #f9fbfe;
+}
+
+.step-card label {
+  display: grid;
+  gap: 7px;
+  color: #43516a;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.step-number {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  background: #315fb5;
+  font-weight: 800;
+}
+
+.step-actions {
+  display: flex;
+  gap: 6px;
 }
 
 .form-actions {
@@ -212,6 +320,16 @@ tbody tr:last-child td {
   background: #eaf1ff;
 }
 
+.priority-badge {
+  display: inline-flex;
+  padding: 4px 8px;
+  border-radius: 6px;
+  color: #6b3a00;
+  background: #fff0d8;
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .mono {
   font-family: "Cascadia Code", Consolas, monospace;
   font-size: 13px;
@@ -242,6 +360,15 @@ tbody tr:last-child td {
   .form-grid {
     grid-template-columns: repeat(2, minmax(140px, 1fr));
   }
+
+  .step-card {
+    grid-template-columns: 40px 1fr;
+  }
+
+  .step-card label,
+  .step-actions {
+    grid-column: 2;
+  }
 }
 
 @media (max-width: 600px) {
@@ -254,5 +381,18 @@ tbody tr:last-child td {
 
   .form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .test-case-fields .wide-field {
+    grid-column: auto;
+  }
+
+  .step-card {
+    grid-template-columns: 1fr;
+  }
+
+  .step-card label,
+  .step-actions {
+    grid-column: 1;
   }
 }

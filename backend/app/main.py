@@ -10,6 +10,8 @@ from app.db.base import Base
 from app.db.session import create_database_engine, create_session_factory
 from app.devices.router import router as device_router
 from app.devices.service import DeviceNotFoundError, DuplicateSerialNumberError
+from app.test_cases.router import router as test_case_router
+from app.test_cases.service import DuplicateCaseCodeError, TestCaseNotFoundError
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -54,8 +56,32 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             content={"detail": "Serial number already exists"},
         )
 
+    @application.exception_handler(TestCaseNotFoundError)
+    def test_case_not_found(
+        _request: Request,
+        _exception: TestCaseNotFoundError,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=404,
+            content={"detail": "Test case not found"},
+        )
+
+    @application.exception_handler(DuplicateCaseCodeError)
+    def duplicate_case_code(
+        _request: Request,
+        _exception: DuplicateCaseCodeError,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=409,
+            content={"detail": "Case code already exists"},
+        )
+
     application.include_router(
         device_router,
+        prefix=application_settings.api_prefix,
+    )
+    application.include_router(
+        test_case_router,
         prefix=application_settings.api_prefix,
     )
 

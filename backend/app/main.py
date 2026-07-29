@@ -1,12 +1,15 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
 from app.db.base import Base
 from app.db.session import create_database_engine, create_session_factory
+from app.devices.router import router as device_router
+from app.devices.service import DeviceNotFoundError, DuplicateSerialNumberError
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -33,6 +36,28 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @application.get(f"{application_settings.api_prefix}/health")
     def health() -> dict[str, str]:
         return {"status": "ok", "app": application_settings.app_name}
+
+    @application.exception_handler(DeviceNotFoundError)
+    def device_not_found(
+        _request: Request,
+        _exception: DeviceNotFoundError,
+    ) -> JSONResponse:
+        return JSONResponse(status_code=404, content={"detail": "Device not found"})
+
+    @application.exception_handler(DuplicateSerialNumberError)
+    def duplicate_serial_number(
+        _request: Request,
+        _exception: DuplicateSerialNumberError,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=409,
+            content={"detail": "Serial number already exists"},
+        )
+
+    application.include_router(
+        device_router,
+        prefix=application_settings.api_prefix,
+    )
 
     return application
 

@@ -5,17 +5,23 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session, sessionmaker
 
 
-def create_database_engine(database_url: str) -> Engine:
+def ensure_database_directory(database_url: str) -> None:
     url = make_url(database_url)
-    connect_args: dict[str, bool] = {}
-
     if url.drivername.startswith("sqlite"):
-        connect_args["check_same_thread"] = False
         if url.database and url.database != ":memory:":
             Path(url.database).expanduser().resolve().parent.mkdir(
                 parents=True,
                 exist_ok=True,
             )
+
+
+def create_database_engine(database_url: str) -> Engine:
+    url = make_url(database_url)
+    connect_args: dict[str, bool] = {}
+
+    ensure_database_directory(database_url)
+    if url.drivername.startswith("sqlite"):
+        connect_args["check_same_thread"] = False
 
     return create_engine(database_url, connect_args=connect_args)
 

@@ -2,7 +2,7 @@
   font-family:
     Inter, "Segoe UI", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
   color: #172033;
-  background: #f4f7fb;
+  background: #f3f6fb;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
@@ -17,36 +17,242 @@ body {
   min-height: 100vh;
 }
 
-.app-shell {
-  display: grid;
+button,
+input {
+  font: inherit;
+}
+
+.application {
   min-height: 100vh;
-  place-items: center;
-  padding: 24px;
 }
 
-.status-card {
-  width: min(100%, 520px);
-  padding: 40px;
-  border: 1px solid #dce3ee;
-  border-radius: 16px;
-  background: #ffffff;
-  box-shadow: 0 16px 40px rgb(27 43 72 / 8%);
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 22px clamp(20px, 5vw, 72px);
+  color: #fff;
+  background: #14284a;
 }
 
-.eyebrow {
-  margin: 0 0 8px;
-  color: #315fb5;
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+.eyebrow,
+.section-kicker {
+  margin: 0 0 5px;
+  color: #3d68bd;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.app-header .eyebrow {
+  color: #9ebcf4;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin-top: 0;
 }
 
 h1 {
-  margin: 0;
-  font-size: clamp(32px, 6vw, 48px);
+  margin-bottom: 0;
+  font-size: 26px;
 }
 
-.status {
+h2 {
+  margin-bottom: 8px;
+  font-size: 32px;
+}
+
+h3 {
+  margin-bottom: 0;
+}
+
+.local-badge,
+.device-type {
+  display: inline-flex;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.local-badge {
+  padding: 7px 12px;
+  color: #dbe8ff;
+  background: rgb(255 255 255 / 10%);
+}
+
+.device-library {
+  width: min(1440px, calc(100% - 40px));
+  margin: 0 auto;
+  padding: 42px 0 64px;
+}
+
+.page-heading,
+.form-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.page-heading > div > p:last-child {
+  color: #617089;
+}
+
+.button {
+  padding: 9px 14px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.button-primary {
+  color: #fff;
+  background: #315fb5;
+}
+
+.button-quiet {
+  color: #294a83;
+  border-color: #d3ddeb;
+  background: #fff;
+}
+
+.button-danger {
+  color: #a62e2e;
+  background: #fff1f1;
+}
+
+.device-form,
+.table-panel {
+  margin-top: 24px;
+  border: 1px solid #dce3ee;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 10px 30px rgb(27 43 72 / 5%);
+}
+
+.device-form {
+  padding: 24px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(160px, 1fr));
+  gap: 16px;
+  margin-top: 22px;
+}
+
+.form-grid label {
+  display: grid;
+  gap: 7px;
+  color: #43516a;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.form-grid input {
+  min-width: 0;
+  padding: 10px 11px;
+  border: 1px solid #cfd9e7;
+  border-radius: 7px;
+  color: #172033;
+}
+
+.form-grid input:focus {
+  border-color: #527dce;
+  outline: 3px solid #dbe7ff;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  padding: 14px 16px;
+  border-bottom: 1px solid #e5eaf1;
+  text-align: left;
+  white-space: nowrap;
+}
+
+th {
+  color: #66758d;
+  background: #f8fafd;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+
+tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.device-type {
+  padding: 4px 9px;
+  color: #27529e;
+  background: #eaf1ff;
+}
+
+.mono {
+  font-family: "Cascadia Code", Consolas, monospace;
+  font-size: 13px;
+}
+
+.row-actions {
+  display: flex;
+  gap: 7px;
+}
+
+.empty-state {
+  margin: 0;
+  padding: 50px 20px;
+  color: #718097;
+  text-align: center;
+}
+
+.error-message {
   margin: 20px 0 0;
-  color: #526077;
+  padding: 12px 14px;
+  border: 1px solid #efb5b5;
+  border-radius: 8px;
+  color: #8f2020;
+  background: #fff3f3;
+}
+
+@media (max-width: 900px) {
+  .form-grid {
+    grid-template-columns: repeat(2, minmax(140px, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .app-header,
+  .page-heading,
+  .form-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
 }

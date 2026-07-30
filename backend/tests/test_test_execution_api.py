@@ -96,6 +96,7 @@ def test_execution_api_supports_project_run_result_and_history_lifecycle(
     assert len(run["results"]) == 1
     assert run["results"][0]["snapshot_version"] == 1
     assert run["results"][0]["result"] is None
+    assert run["results"][0]["integrity_status"] == "DRAFT"
     assert run["results"][0]["case_snapshot"]["steps"][0]["action"] == (
         "Create an IPoE WAN"
     )
@@ -119,13 +120,23 @@ def test_execution_api_supports_project_run_result_and_history_lifecycle(
     )
 
     result_id = run["results"][0]["id"]
-    for result_value in ["PASS", "FAIL", "BLOCKED"]:
-        result_response = client.put(
-            f"/api/test-runs/{run['id']}/results/{result_id}",
-            json={"result": result_value},
-        )
-        assert result_response.status_code == 200
-        assert result_response.json()["result"] == result_value
+    result_response = client.put(
+        f"/api/test-runs/{run['id']}/results/{result_id}",
+        json={
+            "result": "FAIL",
+            "actual_result": "WAN has no address",
+            "blocked_reason": None,
+            "test_notes": "Repeated twice",
+        },
+    )
+    assert result_response.status_code == 200
+    assert result_response.json()["integrity_status"] == "DRAFT"
+    lock_response = client.post(
+        f"/api/test-runs/{run['id']}/results/{result_id}/lock"
+    )
+    assert lock_response.status_code == 200
+    assert lock_response.json()["integrity_status"] == "LOCKED"
+    assert lock_response.json()["actual_result"] == "WAN has no address"
     completed = client.get(f"/api/test-runs/{run['id']}").json()
     assert completed["status"] == "COMPLETED"
     assert completed["finished_at"]
@@ -133,6 +144,12 @@ def test_execution_api_supports_project_run_result_and_history_lifecycle(
     conflict = client.delete(f"/api/test-projects/{project['id']}")
     assert conflict.status_code == 409
     assert conflict.json() == {"detail": "Project has run history"}
+
+    locked_update = client.put(
+        f"/api/test-runs/{run['id']}/results/{result_id}",
+        json={"result": "PASS"},
+    )
+    assert locked_update.status_code == 409
 
 
 def test_execution_api_deletes_project_without_history(client: TestClient) -> None:

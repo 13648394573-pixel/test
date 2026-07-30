@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./data/test_workbench.db"
     log_level: str = "INFO"
     log_file: str = "./logs/test-workbench.log"
+    evidence_root: str = "./data/evidence"
+    evidence_max_size_mb: int = 50
 
 
 @lru_cache

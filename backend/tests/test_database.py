@@ -24,3 +24,14 @@ def test_session_factory_binds_sessions_to_engine(tmp_path) -> None:
         value = session.execute(text("SELECT 2")).scalar_one()
 
     assert value == 2
+
+
+def test_sqlite_engine_enables_foreign_key_enforcement(tmp_path) -> None:
+    engine = create_database_engine(
+        f"sqlite:///{(tmp_path / 'foreign-keys.db').as_posix()}"
+    )
+
+    with engine.connect() as connection:
+        enabled = connection.execute(text("PRAGMA foreign_keys")).scalar_one()
+
+    assert enabled == 1

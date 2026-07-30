@@ -74,7 +74,11 @@ class DefectService:
         source = self.repository.get_run_result(source_id)
         if source is None:
             raise RunResultEvidenceNotFoundError(source_id)
-        if source.result not in {"FAIL", "BLOCKED"} or source.executed_at is None:
+        if (
+            source.integrity_status != "LOCKED"
+            or source.result not in {"FAIL", "BLOCKED"}
+            or source.executed_at is None
+        ):
             raise InvalidDefectSourceError(source_id)
         if self.repository.source_has_defect(source_id):
             raise DuplicateDefectSourceError(source_id)
@@ -152,7 +156,8 @@ class DefectService:
                 verification_run_result_id
             )
         if (
-            verification.executed_at is None
+            verification.integrity_status != "LOCKED"
+            or verification.executed_at is None
             or verification.result not in {"PASS", "FAIL", "BLOCKED"}
             or verification.case_source_id
             != defect.source_run_result.case_source_id

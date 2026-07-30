@@ -54,9 +54,16 @@ def create_result(
     )
     if result is None:
         return run.results[0]
-    return repository.update_result(
+    draft = repository.update_result_draft(
         run.results[0],
-        result,
+        {
+            "result": result,
+            "actual_result": "Observed failure" if result == "FAIL" else None,
+            "blocked_reason": "Lab unavailable" if result == "BLOCKED" else None,
+        },
+    )
+    return repository.lock_result(
+        draft,
         datetime(2026, 7, 30, 9, 0, 0),
         complete_run=True,
     )
@@ -104,6 +111,17 @@ def test_service_rejects_non_failure_source(
     result: str | None,
 ) -> None:
     source = create_result(db_session, str(result), "case-wan", result)
+
+    with pytest.raises(InvalidDefectSourceError):
+        service(db_session).create_defect(create_payload(source.id))
+
+
+def test_service_rejects_unlocked_failure_source(db_session: Session) -> None:
+    source = create_result(db_session, "draft", "case-wan", None)
+    source = TestExecutionRepository(db_session).update_result_draft(
+        source,
+        {"result": "FAIL", "actual_result": "No address"},
+    )
 
     with pytest.raises(InvalidDefectSourceError):
         service(db_session).create_defect(create_payload(source.id))

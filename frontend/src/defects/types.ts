@@ -1,4 +1,6 @@
 import type {
+  Evidence,
+  EvidenceCategory,
   ExecutionResultValue,
   RunResult
 } from "../testExecution/types";
@@ -73,4 +75,13 @@ export interface DefectApi {
   ): Promise<Defect>;
   listRegressions(id: string): Promise<Regression[]>;
   createRegression(id: string, input: RegressionInput): Promise<Regression>;
+  listEvidence(id: string): Promise<Evidence[]>;
+  uploadEvidence(
+    id: string,
+    category: EvidenceCategory,
+    file: File,
+    description: string | null
+  ): Promise<Evidence>;
+  deleteEvidence(evidenceId: string): Promise<void>;
+  evidenceDownloadUrl(evidenceId: string): string;
 }

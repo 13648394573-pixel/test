@@ -5,8 +5,8 @@ import type { Device, DeviceApi } from "../devices/types";
 import { testCaseApi as defaultTestCaseApi } from "../testCases/api";
 import type { TestCase, TestCaseApi } from "../testCases/types";
 import { testExecutionApi } from "./api";
+import ResultEditor from "./ResultEditor";
 import type {
-  ExecutionResultValue,
   TestExecutionApi,
   TestProject,
   TestProjectInput,
@@ -147,25 +147,6 @@ export default function TestExecutionPage({
       setActiveRun(await api.getRun(runId));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "加载运行详情失败");
-    }
-  };
-
-  const updateResult = async (
-    resultId: string,
-    result: ExecutionResultValue
-  ) => {
-    if (!activeRun) {
-      return;
-    }
-    try {
-      await api.updateResult(activeRun.id, resultId, result);
-      const refreshed = await api.getRun(activeRun.id);
-      setActiveRun(refreshed);
-      setRuns((current) =>
-        current.map((run) => run.id === refreshed.id ? refreshed : run)
-      );
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "保存测试结果失败");
     }
   };
 
@@ -416,19 +397,12 @@ export default function TestExecutionPage({
                         </li>
                       ))}
                     </ol>
-                    <div className="result-actions">
-                      {(["PASS", "FAIL", "BLOCKED"] as const).map((value) => (
-                        <button
-                          key={value}
-                          className={`button result-${value.toLowerCase()}`}
-                          type="button"
-                          aria-label={`设置 ${runResult.case_snapshot.case_code} 为 ${value}`}
-                          onClick={() => updateResult(runResult.id, value)}
-                        >
-                          {value}
-                        </button>
-                      ))}
-                    </div>
+                    <ResultEditor
+                      api={api}
+                      runId={activeRun.id}
+                      runResult={runResult}
+                      onChanged={() => { void openRun(activeRun.id); }}
+                    />
                   </article>
                 ))}
               </div>

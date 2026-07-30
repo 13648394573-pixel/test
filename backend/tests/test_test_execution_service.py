@@ -10,6 +10,8 @@ from app.test_execution.service import (
     InvalidCaseSourceError,
     InvalidDeviceSourceError,
     InvalidResultValueError,
+    InvalidResultIntegrityError,
+    LockedResultError,
     ProjectHasRunsError,
     RunResultNotFoundError,
     TestExecutionService,
@@ -158,7 +160,7 @@ def test_service_rejects_missing_device_and_missing_selected_case(
         service.create_run(project.id, device.id)
 
 
-def test_service_saves_blocked_and_completes_when_all_results_exist(
+def test_service_saves_drafts_and_completes_when_all_results_are_locked(
     db_session: Session,
 ) -> None:
     service, device_repository, case_repository = build_service(db_session)
@@ -178,17 +180,87 @@ def test_service_saves_blocked_and_completes_when_all_results_exist(
     )
     run = service.create_run(project.id, device.id)
 
-    first_result = service.update_result(run.id, run.results[0].id, "BLOCKED")
+    first_result = service.update_result(
+        run.id,
+        run.results[0].id,
+        {
+            "result": "BLOCKED",
+            "actual_result": None,
+            "blocked_reason": "Lab fiber unavailable",
+            "test_notes": "Waiting for repair",
+        },
+    )
     assert first_result.result == "BLOCKED"
+    assert first_result.integrity_status == "DRAFT"
     assert run.status == "IN_PROGRESS"
     assert run.finished_at is None
 
-    service.update_result(run.id, run.results[1].id, "PASS")
+    with pytest.raises(InvalidResultValueError):
+        service.update_result(
+            run.id,
+            run.results[1].id,
+            {"result": "SKIPPED"},
+        )
+
+    service.lock_result(run.id, run.results[0].id)
+    second = service.update_result(
+        run.id,
+        run.results[1].id,
+        {
+            "result": "PASS",
+            "actual_result": "WAN connected",
+            "blocked_reason": None,
+            "test_notes": None,
+        },
+    )
+    service.lock_result(run.id, second.id)
     assert run.status == "COMPLETED"
     assert run.finished_at == NOW
 
-    with pytest.raises(InvalidResultValueError):
-        service.update_result(run.id, run.results[0].id, "SKIPPED")
+
+def test_service_validates_lock_and_rejects_locked_updates(
+    db_session: Session,
+) -> None:
+    service, device_repository, case_repository = build_service(db_session)
+    device = device_repository.create(DEVICE_DATA)
+    test_case = case_repository.create(CASE_DATA, STEPS)
+    project = service.create_project(
+        {
+            "name": "Acceptance",
+            "version": "V1",
+            "description": None,
+            "case_source_ids": [test_case.id],
+        }
+    )
+    run = service.create_run(project.id, device.id)
+    result_id = run.results[0].id
+
+    service.update_result(
+        run.id,
+        result_id,
+        {"result": "FAIL", "actual_result": " ", "blocked_reason": None},
+    )
+    with pytest.raises(InvalidResultIntegrityError):
+        service.lock_result(run.id, result_id)
+
+    service.update_result(
+        run.id,
+        result_id,
+        {
+            "result": "BLOCKED",
+            "actual_result": None,
+            "blocked_reason": "OLT unavailable",
+            "test_notes": None,
+        },
+    )
+    locked = service.lock_result(run.id, result_id)
+    assert locked.integrity_status == "LOCKED"
+    assert locked.locked_at == NOW
+
+    with pytest.raises(LockedResultError):
+        service.update_result(run.id, result_id, {"result": "PASS"})
+    with pytest.raises(LockedResultError):
+        service.lock_result(run.id, result_id)
 
 
 def test_service_preserves_history_and_reports_missing_resources(
@@ -216,4 +288,4 @@ def test_service_preserves_history_and_reports_missing_resources(
     with pytest.raises(TestRunNotFoundError):
         service.get_run("missing")
     with pytest.raises(RunResultNotFoundError):
-        service.update_result(run.id, "missing", "FAIL")
+        service.update_result(run.id, "missing", {"result": "FAIL"})

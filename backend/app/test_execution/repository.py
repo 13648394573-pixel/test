@@ -139,26 +139,41 @@ class TestExecutionRepository:
         )
         return self.session.scalar(statement)
 
-    def update_result(
+    def update_result_draft(
         self,
         run_result: RunResult,
-        result: str,
-        executed_at: datetime,
+        values: Mapping[str, Any],
+    ) -> RunResult:
+        try:
+            for field, value in values.items():
+                setattr(run_result, field, value)
+            self.session.commit()
+            self.session.refresh(run_result)
+        except (SQLAlchemyError, ValueError):
+            self.session.rollback()
+            raise
+        return run_result
+
+    def lock_result(
+        self,
+        run_result: RunResult,
+        locked_at: datetime,
         *,
         complete_run: bool,
     ) -> RunResult:
         try:
-            run_result.result = result
-            run_result.executed_at = executed_at
+            run_result.executed_at = locked_at
+            run_result.locked_at = locked_at
+            run_result.integrity_status = "LOCKED"
             if complete_run:
                 run_result.run.status = "COMPLETED"
-                run_result.run.finished_at = executed_at
+                run_result.run.finished_at = locked_at
             else:
                 run_result.run.status = "IN_PROGRESS"
                 run_result.run.finished_at = None
             self.session.commit()
             self.session.refresh(run_result)
-        except SQLAlchemyError:
+        except (SQLAlchemyError, ValueError):
             self.session.rollback()
             raise
         return run_result

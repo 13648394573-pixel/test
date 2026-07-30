@@ -121,9 +121,13 @@ class RunResult(Base):
             "case_source_id",
             name="uq_run_results_run_case_source",
         ),
-        CheckConstraint(
+    CheckConstraint(
             "result IS NULL OR result IN ('PASS', 'FAIL', 'BLOCKED')",
             name="ck_run_results_result",
+        ),
+        CheckConstraint(
+            "integrity_status IN ('DRAFT', 'LOCKED')",
+            name="ck_run_results_integrity_status",
         ),
     )
 
@@ -147,7 +151,17 @@ class RunResult(Base):
         server_default="1",
     )
     result: Mapped[str | None] = mapped_column(String(10))
+    integrity_status: Mapped[str] = mapped_column(
+        String(10),
+        nullable=False,
+        default="DRAFT",
+        server_default="DRAFT",
+    )
+    actual_result: Mapped[str | None] = mapped_column(Text)
+    blocked_reason: Mapped[str | None] = mapped_column(Text)
+    test_notes: Mapped[str | None] = mapped_column(Text)
     executed_at: Mapped[datetime | None] = mapped_column(DateTime)
+    locked_at: Mapped[datetime | None] = mapped_column(DateTime)
     run: Mapped[TestRun] = relationship(back_populates="results")
 
 
@@ -175,3 +189,55 @@ for snapshot_attribute in (
         retval=True,
         active_history=True,
     )
+
+
+def _keep_locked_result_immutable(
+    target: RunResult,
+    value: Any,
+    old_value: Any,
+    _initiator: object,
+) -> Any:
+    if (
+        target.integrity_status == "LOCKED"
+        and old_value is not attributes.NO_VALUE
+        and value != old_value
+    ):
+        raise ValueError("Locked results are immutable")
+    return value
+
+
+for result_attribute in (
+    RunResult.result,
+    RunResult.actual_result,
+    RunResult.blocked_reason,
+    RunResult.test_notes,
+    RunResult.executed_at,
+    RunResult.locked_at,
+):
+    event.listen(
+        result_attribute,
+        "set",
+        _keep_locked_result_immutable,
+        retval=True,
+        active_history=True,
+    )
+
+
+def _keep_integrity_one_way(
+    _target: RunResult,
+    value: Any,
+    old_value: Any,
+    _initiator: object,
+) -> Any:
+    if old_value == "LOCKED" and value != "LOCKED":
+        raise ValueError("Locked results cannot be unlocked")
+    return value
+
+
+event.listen(
+    RunResult.integrity_status,
+    "set",
+    _keep_integrity_one_way,
+    retval=True,
+    active_history=True,
+)

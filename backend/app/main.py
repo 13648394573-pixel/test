@@ -21,6 +21,15 @@ from app.defects.service import (
 )
 from app.devices.router import router as device_router
 from app.devices.service import DeviceNotFoundError, DuplicateSerialNumberError
+from app.evidence.router import router as evidence_router
+from app.evidence.service import (
+    EvidenceConflictError,
+    EvidenceGoneError,
+    EvidenceNotFoundError,
+    EvidenceOwnerNotFoundError,
+    EvidenceTooLargeError,
+    InvalidEvidenceError,
+)
 from app.test_cases.router import router as test_case_router
 from app.test_cases.service import DuplicateCaseCodeError, TestCaseNotFoundError
 from app.test_execution.router import router as test_execution_router
@@ -28,6 +37,8 @@ from app.test_execution.service import (
     InvalidCaseSourceError,
     InvalidDeviceSourceError,
     InvalidResultValueError,
+    InvalidResultIntegrityError,
+    LockedResultError,
     ProjectHasRunsError,
     RunResultNotFoundError,
     TestProjectNotFoundError,
@@ -55,6 +66,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         title=application_settings.app_name,
         lifespan=lifespan,
     )
+    application.state.settings = application_settings
 
     @application.get(f"{application_settings.api_prefix}/health")
     def health() -> dict[str, str]:
@@ -167,6 +179,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             content={"detail": "Invalid result value"},
         )
 
+    @application.exception_handler(InvalidResultIntegrityError)
+    def invalid_result_integrity(
+        _request: Request,
+        exception: InvalidResultIntegrityError,
+    ) -> JSONResponse:
+        return JSONResponse(status_code=422, content={"detail": str(exception)})
+
+    @application.exception_handler(LockedResultError)
+    def locked_result(
+        _request: Request,
+        _exception: LockedResultError,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=409,
+            content={"detail": "Run result is locked"},
+        )
+
     def defect_not_found(
         _request: Request,
         _exception: Exception,
@@ -200,6 +229,46 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     ):
         application.add_exception_handler(exception_type, invalid_defect_evidence)
 
+    def evidence_not_found(
+        _request: Request,
+        _exception: Exception,
+    ) -> JSONResponse:
+        return JSONResponse(status_code=404, content={"detail": "Evidence not found"})
+
+    for exception_type in (
+        EvidenceNotFoundError,
+        EvidenceOwnerNotFoundError,
+    ):
+        application.add_exception_handler(exception_type, evidence_not_found)
+    application.add_exception_handler(
+        EvidenceConflictError,
+        lambda _request, exception: JSONResponse(
+            status_code=409,
+            content={"detail": str(exception)},
+        ),
+    )
+    application.add_exception_handler(
+        EvidenceGoneError,
+        lambda _request, _exception: JSONResponse(
+            status_code=410,
+            content={"detail": "Evidence file is missing"},
+        ),
+    )
+    application.add_exception_handler(
+        EvidenceTooLargeError,
+        lambda _request, _exception: JSONResponse(
+            status_code=413,
+            content={"detail": "Evidence file is too large"},
+        ),
+    )
+    application.add_exception_handler(
+        InvalidEvidenceError,
+        lambda _request, exception: JSONResponse(
+            status_code=422,
+            content={"detail": str(exception)},
+        ),
+    )
+
     application.include_router(
         device_router,
         prefix=application_settings.api_prefix,
@@ -214,6 +283,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     application.include_router(
         defect_router,
+        prefix=application_settings.api_prefix,
+    )
+    application.include_router(
+        evidence_router,
         prefix=application_settings.api_prefix,
     )
 

@@ -12,7 +12,8 @@ import type { Device, DeviceApi } from "../devices/types";
 import type { TestCase, TestCaseApi } from "../testCases/types";
 import TestExecutionPage from "./TestExecutionPage";
 import type {
-  ExecutionResultValue,
+  Evidence,
+  ResultDraftInput,
   RunResult,
   TestExecutionApi,
   TestProject,
@@ -134,17 +135,43 @@ class MemoryExecutionApi implements TestExecutionApi {
   async updateResult(
     runId: string,
     resultId: string,
-    result: ExecutionResultValue
+    input: ResultDraftInput
   ) {
     const run = this.runs.find((candidate) => candidate.id === runId)!;
     const runResult = run.results.find((candidate) => candidate.id === resultId)!;
-    runResult.result = result;
+    Object.assign(runResult, input);
+    return structuredClone(runResult);
+  }
+
+  async lockResult(runId: string, resultId: string) {
+    const run = this.runs.find((candidate) => candidate.id === runId)!;
+    const runResult = run.results.find((candidate) => candidate.id === resultId)!;
+    runResult.integrity_status = "LOCKED";
     runResult.executed_at = "2026-07-29T09:30:00";
-    if (run.results.every((candidate) => candidate.result !== null)) {
+    runResult.locked_at = "2026-07-29T09:30:00";
+    if (run.results.every(
+      (candidate) => candidate.integrity_status === "LOCKED"
+    )) {
       run.status = "COMPLETED";
       run.finished_at = "2026-07-29T09:30:00";
     }
     return structuredClone(runResult);
+  }
+
+  async listResultEvidence() {
+    return [];
+  }
+
+  async uploadResultEvidence(): Promise<Evidence> {
+    throw new Error("not used");
+  }
+
+  async deleteEvidence() {
+    return undefined;
+  }
+
+  evidenceDownloadUrl(id: string) {
+    return `/api/evidences/${id}/download`;
   }
 
   private buildProject(id: string, input: TestProjectInput): TestProject {
@@ -207,7 +234,12 @@ function buildRun(
         },
         snapshot_version: 1,
         result: null,
-        executed_at: null
+        integrity_status: "DRAFT",
+        actual_result: null,
+        blocked_reason: null,
+        test_notes: null,
+        executed_at: null,
+        locked_at: null
       }
     ]
   };
@@ -283,31 +315,26 @@ describe("Test Execution", () => {
       .toHaveTextContent("快照版本 1");
   });
 
-  it.each(["PASS", "FAIL", "BLOCKED"] as const)(
-    "saves a %s result",
-    async (value) => {
-      const run = buildRun();
-      const api = new MemoryExecutionApi([PROJECT], [run]);
-      render(
-        <TestExecutionPage
-          api={api}
-          deviceApi={emptyDeviceApi}
-          testCaseApi={emptyCaseApi}
-        />
-      );
+  it("opens the detailed draft and evidence editor for a run result", async () => {
+    const api = new MemoryExecutionApi([PROJECT], [buildRun()]);
+    render(
+      <TestExecutionPage
+        api={api}
+        deviceApi={emptyDeviceApi}
+        testCaseApi={emptyCaseApi}
+      />
+    );
 
-      fireEvent.click(await screen.findByRole("button", { name: "打开 ONU Release" }));
-      fireEvent.click(await screen.findByRole("button", { name: /查看运行 run-1/ }));
-      fireEvent.click(
-        await screen.findByRole("button", {
-          name: `设置 ONU-WAN-001 为 ${value}`
-        })
-      );
+    fireEvent.click(await screen.findByRole("button", { name: "打开 ONU Release" }));
+    fireEvent.click(await screen.findByRole("button", { name: /查看运行 run-1/ }));
 
-      await waitFor(() =>
-        expect(screen.getByText(`结果：${value}`)).toBeInTheDocument()
-      );
-      expect(screen.getAllByText("已完成")).toHaveLength(2);
-    }
-  );
+    expect(
+      await screen.findByLabelText("测试结果 ONU-WAN-001")
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("实际结果")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "保存草稿" }))
+      .toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "锁定结果" }))
+      .toBeInTheDocument();
+  });
 });

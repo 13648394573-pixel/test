@@ -58,7 +58,12 @@ class RunResultEvidenceRead(BaseModel):
     case_snapshot: CaseSnapshotRead
     snapshot_version: int
     result: Literal["PASS", "FAIL", "BLOCKED"]
+    integrity_status: Literal["LOCKED"]
+    actual_result: str | None
+    blocked_reason: str | None
+    test_notes: str | None
     executed_at: datetime
+    locked_at: datetime
 
 
 class RegressionRead(BaseModel):

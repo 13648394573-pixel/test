@@ -212,7 +212,7 @@ def test_repository_rolls_back_run_when_result_creation_fails(
     assert db_session.scalar(select(func.count()).select_from(RunResult)) == 0
 
 
-def test_repository_updates_result_and_completes_run(
+def test_repository_saves_draft_then_locks_and_completes_run(
     db_session: Session,
 ) -> None:
     repository = TestExecutionRepository(db_session)
@@ -233,14 +233,61 @@ def test_repository_updates_result_and_completes_run(
     )
     executed_at = datetime(2026, 7, 29, 12, 0, 0)
 
-    updated = repository.update_result(
+    updated = repository.update_result_draft(
         run.results[0],
-        "BLOCKED",
+        {
+            "result": "BLOCKED",
+            "actual_result": "WAN did not connect",
+            "blocked_reason": "OLT profile unavailable",
+            "test_notes": "Retry after provisioning",
+        },
+    )
+
+    assert updated.result == "BLOCKED"
+    assert updated.actual_result == "WAN did not connect"
+    assert updated.integrity_status == "DRAFT"
+    assert updated.executed_at is None
+    assert run.status == "IN_PROGRESS"
+
+    locked = repository.lock_result(
+        updated,
         executed_at,
         complete_run=True,
     )
 
-    assert updated.result == "BLOCKED"
-    assert updated.executed_at == executed_at
+    assert locked.integrity_status == "LOCKED"
+    assert locked.executed_at == executed_at
+    assert locked.locked_at == executed_at
     assert run.status == "COMPLETED"
     assert run.finished_at == executed_at
+
+
+def test_repository_rejects_locked_result_and_snapshot_mutation(
+    db_session: Session,
+) -> None:
+    repository = TestExecutionRepository(db_session)
+    project = repository.create_project(
+        {"name": "Acceptance", "version": "V1", "description": None},
+        ["case-1"],
+    )
+    run = repository.create_run(
+        project.id,
+        "device-1",
+        {"serial_number": "ONU-001"},
+        [
+            {
+                "case_source_id": "case-1",
+                "case_snapshot": {"case_code": "CASE-1", "steps": []},
+            }
+        ],
+    )
+    result = repository.update_result_draft(
+        run.results[0],
+        {"result": "PASS", "actual_result": None},
+    )
+    repository.lock_result(result, datetime(2026, 7, 30), complete_run=True)
+
+    with pytest.raises(ValueError, match="Locked results are immutable"):
+        result.actual_result = "changed"
+    with pytest.raises(ValueError, match="Snapshots are immutable"):
+        result.case_snapshot = {"case_code": "CHANGED"}

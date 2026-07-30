@@ -6,6 +6,7 @@ import type {
   TestExecutionApi
 } from "../testExecution/types";
 import { defectApi } from "./api";
+import DefectEvidencePanel from "./DefectEvidencePanel";
 import type {
   Defect,
   DefectApi,
@@ -64,6 +65,7 @@ export default function DefectPage({
     const used = new Set(defects.map((defect) => defect.source_run_result_id));
     return evidence.filter(
       (result) =>
+        result.integrity_status === "LOCKED" &&
         (result.result === "FAIL" || result.result === "BLOCKED") &&
         !used.has(result.id)
     );
@@ -78,6 +80,7 @@ export default function DefectPage({
   const regressionCandidates = active
     ? evidence.filter(
         (result) =>
+          result.integrity_status === "LOCKED" &&
           result.result !== null &&
           result.id !== active.source_run_result_id &&
           result.case_source_id === active.source_run_result.case_source_id &&
@@ -440,6 +443,8 @@ export default function DefectPage({
                 </button>
               </div>
             )}
+
+            <DefectEvidencePanel defect={active} api={api} />
 
             <section className="regression-history">
               <h3>回归历史</h3>

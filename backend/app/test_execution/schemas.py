@@ -68,7 +68,12 @@ class RunResultRead(BaseModel):
     case_snapshot: CaseSnapshotRead
     snapshot_version: int
     result: Literal["PASS", "FAIL", "BLOCKED"] | None
+    integrity_status: Literal["DRAFT", "LOCKED"]
+    actual_result: str | None
+    blocked_reason: str | None
+    test_notes: str | None
     executed_at: datetime | None
+    locked_at: datetime | None
 
 
 class TestRunRead(BaseModel):
@@ -90,4 +95,9 @@ class RunCreate(BaseModel):
 
 
 class ResultUpdate(BaseModel):
-    result: Literal["PASS", "FAIL", "BLOCKED"]
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    result: Literal["PASS", "FAIL", "BLOCKED"] | None = None
+    actual_result: str | None = None
+    blocked_reason: str | None = None
+    test_notes: str | None = None

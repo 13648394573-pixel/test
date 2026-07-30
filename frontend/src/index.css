@@ -531,6 +531,83 @@ tbody tr:last-child td {
   justify-content: flex-end;
 }
 
+.result-editor,
+.evidence-panel {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid #e3e8f0;
+}
+
+.result-integrity,
+.evidence-panel li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.result-integrity strong {
+  color: #27529e;
+}
+
+.result-integrity span,
+.evidence-panel span,
+.evidence-panel small {
+  color: #718097;
+  font-size: 12px;
+}
+
+.result-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.result-fields label {
+  display: grid;
+  gap: 6px;
+  color: #43516a;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.result-fields select,
+.result-fields textarea,
+.evidence-upload select,
+.evidence-upload input {
+  padding: 9px 10px;
+  border: 1px solid #cfd9e7;
+  border-radius: 7px;
+  background: #fff;
+}
+
+.result-fields textarea {
+  min-height: 76px;
+  resize: vertical;
+}
+
+.evidence-panel ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.evidence-panel li {
+  padding: 9px 10px;
+  border-radius: 7px;
+  background: #f8fafd;
+}
+
+.evidence-upload {
+  display: grid;
+  grid-template-columns: 120px minmax(180px, 1fr) minmax(160px, 1fr) auto;
+  gap: 8px;
+}
+
 .result-pass {
   color: #17683a;
   background: #e8f7ef;
@@ -743,6 +820,11 @@ tbody tr:last-child td {
 
   .run-launcher label {
     min-width: 0;
+  }
+
+  .result-fields,
+  .evidence-upload {
+    grid-template-columns: 1fr;
   }
 
   .case-selector label {

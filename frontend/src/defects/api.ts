@@ -7,6 +7,7 @@ import type {
   RegressionInput,
   Severity
 } from "./types";
+import type { Evidence, EvidenceCategory } from "../testExecution/types";
 
 
 const JSON_HEADERS = { "Content-Type": "application/json" };
@@ -23,6 +24,9 @@ async function request<T>(
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
     throw new Error(body.detail ?? "Defect request failed");
+  }
+  if (response.status === 204) {
+    return undefined as T;
   }
   return response.json() as Promise<T>;
 }
@@ -65,5 +69,30 @@ export const defectApi: DefectApi = {
       method: "POST",
       headers: JSON_HEADERS,
       body: JSON.stringify(input)
-    })
+    }),
+  listEvidence: (id) =>
+    request<Evidence[]>(`/api/defects/${id}/evidences`),
+  uploadEvidence: (
+    id: string,
+    category: EvidenceCategory,
+    file: File,
+    description: string | null
+  ) => {
+    const form = new FormData();
+    form.set("category", category);
+    form.set("file", file);
+    if (description) form.set("description", description);
+    return request<Evidence>(`/api/defects/${id}/evidences`, {
+      method: "POST",
+      headers: {},
+      body: form
+    });
+  },
+  deleteEvidence: (evidenceId) =>
+    request<void>(`/api/evidences/${evidenceId}`, {
+      method: "DELETE",
+      headers: JSON_HEADERS
+    }),
+  evidenceDownloadUrl: (evidenceId) =>
+    `/api/evidences/${evidenceId}/download`
 };

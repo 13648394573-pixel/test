@@ -1,0 +1,71 @@
+from datetime import datetime
+from uuid import uuid4
+
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    event,
+    func,
+)
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.db.base import Base
+
+
+class Evidence(Base):
+    __tablename__ = "evidences"
+    __table_args__ = (
+        CheckConstraint(
+            "((run_result_id IS NOT NULL AND defect_id IS NULL) OR "
+            "(run_result_id IS NULL AND defect_id IS NOT NULL))",
+            name="ck_evidences_exactly_one_owner",
+        ),
+        CheckConstraint(
+            "category IN ('SCREENSHOT', 'LOG', 'CONFIG', 'OTHER')",
+            name="ck_evidences_category",
+        ),
+        UniqueConstraint(
+            "storage_path",
+            name="uq_evidences_storage_path",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(
+        String(36),
+        primary_key=True,
+        default=lambda: str(uuid4()),
+    )
+    run_result_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("run_results.id", ondelete="CASCADE"),
+        index=True,
+    )
+    defect_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("defects.id", ondelete="CASCADE"),
+        index=True,
+    )
+    category: Mapped[str] = mapped_column(String(20), nullable=False)
+    original_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    storage_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    media_type: Mapped[str] = mapped_column(String(200), nullable=False)
+    file_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        server_default=func.current_timestamp(),
+    )
+
+
+def _reject_metadata_mutation(*_args: object, **_kwargs: object) -> None:
+    raise ValueError("Evidence metadata is immutable")
+
+
+event.listen(Evidence, "before_update", _reject_metadata_mutation)

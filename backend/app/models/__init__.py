@@ -1,5 +1,6 @@
 from app.models.device import Device
 from app.models.defect import Defect, Regression
+from app.models.evidence import Evidence
 from app.models.test_execution import (
     ProjectCaseSelection,
     RunResult,
@@ -12,6 +13,7 @@ __all__ = [
     "CaseStep",
     "Device",
     "Defect",
+    "Evidence",
     "ProjectCaseSelection",
     "RunResult",
     "Regression",

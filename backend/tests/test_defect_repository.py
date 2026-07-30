@@ -43,9 +43,16 @@ def create_result(
             }
         ],
     )
-    return execution_repository.update_result(
+    draft = execution_repository.update_result_draft(
         run.results[0],
-        result,
+        {
+            "result": result,
+            "actual_result": "Observed failure" if result == "FAIL" else None,
+            "blocked_reason": "Lab unavailable" if result == "BLOCKED" else None,
+        },
+    )
+    return execution_repository.lock_result(
+        draft,
         datetime(2026, 7, 30, 9, 0, 0),
         complete_run=True,
     )

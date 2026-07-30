@@ -48,9 +48,14 @@ def test_upgrade_creates_test_execution_tables_and_constraints(tmp_path) -> None
         "case_source_id",
         "case_snapshot",
         "snapshot_version",
-        "result",
-        "executed_at",
-    }
+            "result",
+            "integrity_status",
+            "actual_result",
+            "blocked_reason",
+            "test_notes",
+            "executed_at",
+            "locked_at",
+        }
 
     assert inspector.get_pk_constraint("test_projects")["constrained_columns"] == [
         "id"

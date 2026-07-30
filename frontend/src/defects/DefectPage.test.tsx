@@ -8,6 +8,7 @@ import {
 import { afterEach, describe, expect, it } from "vitest";
 
 import type {
+  Evidence,
   TestExecutionApi,
   TestProject,
   TestRun
@@ -115,6 +116,22 @@ class MemoryDefectApi implements DefectApi {
     defect.closed_at = "2026-07-30T11:00:00";
     return structuredClone(regression);
   }
+
+  async listEvidence() {
+    return [];
+  }
+
+  async uploadEvidence(): Promise<Evidence> {
+    throw new Error("not used");
+  }
+
+  async deleteEvidence() {
+    return undefined;
+  }
+
+  evidenceDownloadUrl(id: string) {
+    return `/api/evidences/${id}/download`;
+  }
 }
 
 
@@ -126,7 +143,12 @@ const executionApi: TestExecutionApi = {
   deleteProject: async () => undefined,
   createRun: async () => { throw new Error("not used"); },
   getRun: async () => { throw new Error("not used"); },
-  updateResult: async () => { throw new Error("not used"); }
+  updateResult: async () => { throw new Error("not used"); },
+  lockResult: async () => { throw new Error("not used"); },
+  listResultEvidence: async () => [],
+  uploadResultEvidence: async () => { throw new Error("not used"); },
+  deleteEvidence: async () => undefined,
+  evidenceDownloadUrl: (id) => `/api/evidences/${id}/download`
 };
 
 
@@ -251,7 +273,12 @@ function buildRun(
         },
         snapshot_version: 1,
         result,
-        executed_at: "2026-07-30T08:30:00"
+        integrity_status: "LOCKED",
+        actual_result: result === "FAIL" ? "WAN did not recover" : null,
+        blocked_reason: result === "BLOCKED" ? "Lab unavailable" : null,
+        test_notes: null,
+        executed_at: "2026-07-30T08:30:00",
+        locked_at: "2026-07-30T08:30:00"
       }
     ]
   };

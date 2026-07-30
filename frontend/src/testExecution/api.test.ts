@@ -126,7 +126,11 @@ describe("testExecutionApi", () => {
     await testExecutionApi.createRun("project-1", "device-1");
     await testExecutionApi.getRun("run-1");
     await testExecutionApi.listRuns("project-1");
-    await testExecutionApi.updateResult("run-1", "result-1", "BLOCKED");
+    await testExecutionApi.updateResult(
+      "run-1",
+      "result-1",
+      { result: "BLOCKED" }
+    );
 
     expect(fetchStub).toHaveBeenNthCalledWith(
       1,
@@ -153,6 +157,53 @@ describe("testExecutionApi", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ result: "BLOCKED" })
       }
+    );
+  });
+
+  it("supports result lock and multipart evidence contracts", async () => {
+    const evidence = {
+      id: "evidence-1",
+      original_name: "console.log"
+    };
+    const fetchStub = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: "result-1" }), { status: 200 })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify([evidence]), { status: 200 })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(evidence), { status: 201 })
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetchStub);
+    const file = new File(["OLT log"], "console.log", { type: "text/plain" });
+
+    await testExecutionApi.lockResult("run-1", "result-1");
+    await testExecutionApi.listResultEvidence("result-1");
+    await testExecutionApi.uploadResultEvidence(
+      "result-1",
+      "LOG",
+      file,
+      "OLT console"
+    );
+    await testExecutionApi.deleteEvidence("evidence-1");
+
+    expect(fetchStub).toHaveBeenNthCalledWith(
+      1,
+      "/api/test-runs/run-1/results/result-1/lock",
+      { method: "POST", headers: { "Content-Type": "application/json" } }
+    );
+    const uploadOptions = fetchStub.mock.calls[2][1] as RequestInit;
+    expect(fetchStub.mock.calls[2][0]).toBe(
+      "/api/run-results/result-1/evidences"
+    );
+    expect(uploadOptions.method).toBe("POST");
+    expect(uploadOptions.headers).toEqual({});
+    expect(uploadOptions.body).toBeInstanceOf(FormData);
+    expect(testExecutionApi.evidenceDownloadUrl("evidence-1")).toBe(
+      "/api/evidences/evidence-1/download"
     );
   });
 

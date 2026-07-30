@@ -1,4 +1,27 @@
 export type ExecutionResultValue = "PASS" | "FAIL" | "BLOCKED";
+export type IntegrityStatus = "DRAFT" | "LOCKED";
+export type EvidenceCategory = "SCREENSHOT" | "LOG" | "CONFIG" | "OTHER";
+
+export interface Evidence {
+  id: string;
+  run_result_id: string | null;
+  defect_id: string | null;
+  category: EvidenceCategory;
+  original_name: string;
+  storage_path: string;
+  media_type: string;
+  file_size: number;
+  sha256: string;
+  description: string | null;
+  created_at: string;
+}
+
+export interface ResultDraftInput {
+  result?: ExecutionResultValue | null;
+  actual_result?: string | null;
+  blocked_reason?: string | null;
+  test_notes?: string | null;
+}
 
 export interface TestProjectInput {
   name: string;
@@ -56,7 +79,12 @@ export interface RunResult {
   case_snapshot: CaseSnapshot;
   snapshot_version: number;
   result: ExecutionResultValue | null;
+  integrity_status: IntegrityStatus;
+  actual_result: string | null;
+  blocked_reason: string | null;
+  test_notes: string | null;
   executed_at: string | null;
+  locked_at: string | null;
 }
 
 export interface TestRun {
@@ -82,6 +110,16 @@ export interface TestExecutionApi {
   updateResult(
     runId: string,
     resultId: string,
-    result: ExecutionResultValue
+    input: ResultDraftInput
   ): Promise<RunResult>;
+  lockResult(runId: string, resultId: string): Promise<RunResult>;
+  listResultEvidence(resultId: string): Promise<Evidence[]>;
+  uploadResultEvidence(
+    resultId: string,
+    category: EvidenceCategory,
+    file: File,
+    description: string | null
+  ): Promise<Evidence>;
+  deleteEvidence(evidenceId: string): Promise<void>;
+  evidenceDownloadUrl(evidenceId: string): string;
 }

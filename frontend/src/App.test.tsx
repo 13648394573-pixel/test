@@ -48,7 +48,16 @@ const emptyTestExecutionApi: TestExecutionApi = {
   listRuns: async () => [],
   updateResult: async () => {
     throw new Error("not used");
-  }
+  },
+  lockResult: async () => {
+    throw new Error("not used");
+  },
+  listResultEvidence: async () => [],
+  uploadResultEvidence: async () => {
+    throw new Error("not used");
+  },
+  deleteEvidence: async () => undefined,
+  evidenceDownloadUrl: (id) => `/api/evidences/${id}/download`
 };
 
 const emptyDefectApi: DefectApi = {
@@ -68,7 +77,13 @@ const emptyDefectApi: DefectApi = {
   listRegressions: async () => [],
   createRegression: async () => {
     throw new Error("not used");
-  }
+  },
+  listEvidence: async () => [],
+  uploadEvidence: async () => {
+    throw new Error("not used");
+  },
+  deleteEvidence: async () => undefined,
+  evidenceDownloadUrl: (id) => `/api/evidences/${id}/download`
 };
 
 afterEach(cleanup);

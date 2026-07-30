@@ -106,4 +106,20 @@ def update_result(
     payload: ResultUpdate,
     service: ServiceDependency,
 ):
-    return service.update_result(run_id, result_id, payload.result)
+    return service.update_result(
+        run_id,
+        result_id,
+        payload.model_dump(exclude_unset=True),
+    )
+
+
+@router.post(
+    "/test-runs/{run_id}/results/{result_id}/lock",
+    response_model=RunResultRead,
+)
+def lock_result(
+    run_id: str,
+    result_id: str,
+    service: ServiceDependency,
+):
+    return service.lock_result(run_id, result_id)

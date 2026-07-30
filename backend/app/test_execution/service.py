@@ -38,6 +38,14 @@ class InvalidResultValueError(Exception):
     pass
 
 
+class InvalidResultIntegrityError(Exception):
+    pass
+
+
+class LockedResultError(Exception):
+    pass
+
+
 class ProjectHasRunsError(Exception):
     pass
 
@@ -133,10 +141,67 @@ class TestExecutionService:
         self,
         run_id: str,
         result_id: str,
-        result: str,
+        values: Mapping[str, Any],
     ) -> RunResult:
-        if result not in {"PASS", "FAIL", "BLOCKED"}:
-            raise InvalidResultValueError(result)
+        run, run_result = self._get_result(run_id, result_id)
+        if run_result.integrity_status == "LOCKED":
+            raise LockedResultError(result_id)
+        result = values.get("result", run_result.result)
+        if result is not None and result not in {"PASS", "FAIL", "BLOCKED"}:
+            raise InvalidResultValueError(str(result))
+        updates = {
+            name: self._clean_optional_text(value)
+            for name, value in values.items()
+            if name in {
+                "result",
+                "actual_result",
+                "blocked_reason",
+                "test_notes",
+            }
+        }
+        if "result" in values:
+            updates["result"] = result
+        return self.repository.update_result_draft(run_result, updates)
+
+    def lock_result(self, run_id: str, result_id: str) -> RunResult:
+        run, run_result = self._get_result(run_id, result_id)
+        if run_result.integrity_status == "LOCKED":
+            raise LockedResultError(result_id)
+        if run_result.result is None:
+            raise InvalidResultIntegrityError("result is required")
+        if run_result.result == "FAIL" and not self._has_text(
+            run_result.actual_result
+        ):
+            raise InvalidResultIntegrityError(
+                "actual_result is required for FAIL"
+            )
+        if run_result.result == "BLOCKED" and not self._has_text(
+            run_result.blocked_reason
+        ):
+            raise InvalidResultIntegrityError(
+                "blocked_reason is required for BLOCKED"
+            )
+        if run_result.result == "PASS" and self._has_text(
+            run_result.blocked_reason
+        ):
+            raise InvalidResultIntegrityError(
+                "blocked_reason must be empty for PASS"
+            )
+        complete_run = all(
+            item.id == run_result.id or item.integrity_status == "LOCKED"
+            for item in run.results
+        )
+        return self.repository.lock_result(
+            run_result,
+            self.clock(),
+            complete_run=complete_run,
+        )
+
+    def _get_result(
+        self,
+        run_id: str,
+        result_id: str,
+    ) -> tuple[TestRun, RunResult]:
         run = self.get_run(run_id)
         run_result = next(
             (item for item in run.results if item.id == result_id),
@@ -144,16 +209,18 @@ class TestExecutionService:
         )
         if run_result is None:
             raise RunResultNotFoundError(result_id)
-        complete_run = all(
-            item.id == run_result.id or item.result is not None
-            for item in run.results
-        )
-        return self.repository.update_result(
-            run_result,
-            result,
-            self.clock(),
-            complete_run=complete_run,
-        )
+        return run, run_result
+
+    @staticmethod
+    def _clean_optional_text(value: Any) -> Any:
+        if isinstance(value, str):
+            value = value.strip()
+            return value or None
+        return value
+
+    @staticmethod
+    def _has_text(value: str | None) -> bool:
+        return bool(value and value.strip())
 
     def _prepare_project(
         self,

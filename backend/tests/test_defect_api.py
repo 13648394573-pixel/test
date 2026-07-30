@@ -67,9 +67,17 @@ def create_result(
         json={"device_source_id": device["id"]},
     ).json()
     run_result = run["results"][0]
-    return client.put(
+    payload = {"result": result}
+    if result == "FAIL":
+        payload["actual_result"] = "WAN remains disconnected"
+    if result == "BLOCKED":
+        payload["blocked_reason"] = "Lab dependency unavailable"
+    client.put(
         f"/api/test-runs/{run['id']}/results/{run_result['id']}",
-        json={"result": result},
+        json=payload,
+    )
+    return client.post(
+        f"/api/test-runs/{run['id']}/results/{run_result['id']}/lock"
     ).json()
 
 
@@ -151,6 +159,10 @@ def test_defect_api_supports_lifecycle_and_pass_regression(
         f"/api/test-runs/{verification_run['id']}/results/"
         f"{verification_result['id']}",
         json={"result": "PASS"},
+    )
+    client.post(
+        f"/api/test-runs/{verification_run['id']}/results/"
+        f"{verification_result['id']}/lock"
     )
 
     regression = client.post(
@@ -237,7 +249,18 @@ def test_regression_outcome_updates_defect_as_specified(
     verification = run["results"][0]
     client.put(
         f"/api/test-runs/{run['id']}/results/{verification['id']}",
-        json={"result": result},
+        json={
+            "result": result,
+            "actual_result": (
+                "WAN still fails" if result == "FAIL" else None
+            ),
+            "blocked_reason": (
+                "Lab dependency unavailable" if result == "BLOCKED" else None
+            ),
+        },
+    )
+    client.post(
+        f"/api/test-runs/{run['id']}/results/{verification['id']}/lock"
     )
 
     response = client.post(

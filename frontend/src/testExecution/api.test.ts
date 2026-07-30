@@ -42,6 +42,7 @@ const run: TestRun = {
   status: "IN_PROGRESS",
   started_at: "2026-07-29T09:00:00",
   finished_at: null,
+  environment_snapshot: null,
   results: []
 };
 
@@ -123,7 +124,7 @@ describe("testExecutionApi", () => {
       );
     vi.stubGlobal("fetch", fetchStub);
 
-    await testExecutionApi.createRun("project-1", "device-1");
+    await testExecutionApi.createRun("project-1", "device-1", "env-1");
     await testExecutionApi.getRun("run-1");
     await testExecutionApi.listRuns("project-1");
     await testExecutionApi.updateResult(
@@ -138,7 +139,10 @@ describe("testExecutionApi", () => {
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ device_source_id: "device-1" })
+        body: JSON.stringify({
+          device_source_id: "device-1",
+          environment_profile_id: "env-1"
+        })
       }
     );
     expect(fetchStub).toHaveBeenNthCalledWith(2, "/api/test-runs/run-1", {

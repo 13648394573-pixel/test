@@ -249,6 +249,7 @@ function buildRun(
     status: "COMPLETED",
     started_at: "2026-07-30T08:00:00",
     finished_at: "2026-07-30T08:30:00",
+    environment_snapshot: null,
     results: [
       {
         id: resultId,

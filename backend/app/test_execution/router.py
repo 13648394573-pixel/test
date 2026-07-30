@@ -5,6 +5,8 @@ from sqlalchemy.orm import Session
 
 from app.db.dependencies import get_session
 from app.devices.repository import DeviceRepository
+from app.environments.repository import EnvironmentRepository
+from app.environments.service import EnvironmentService
 from app.test_cases.repository import TestCaseRepository
 from app.test_execution.repository import TestExecutionRepository
 from app.test_execution.schemas import (
@@ -27,6 +29,7 @@ def get_service(session: SessionDependency) -> TestExecutionService:
         TestExecutionRepository(session),
         DeviceRepository(session),
         TestCaseRepository(session),
+        EnvironmentService(EnvironmentRepository(session)),
     )
 
 
@@ -80,7 +83,11 @@ def create_run(
     payload: RunCreate,
     service: ServiceDependency,
 ):
-    return service.create_run(project_id, payload.device_source_id)
+    return service.create_run(
+        project_id,
+        payload.device_source_id,
+        payload.environment_profile_id,
+    )
 
 
 @router.get(

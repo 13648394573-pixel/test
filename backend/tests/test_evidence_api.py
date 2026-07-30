@@ -52,9 +52,21 @@ def create_run(client: TestClient):
             "case_source_ids": [case["id"]],
         },
     ).json()
+    environment = client.post(
+        "/api/environment-profiles",
+        json={
+            "name": "Evidence lab",
+            "description": None,
+            "enabled": True,
+            "parameters": [],
+        },
+    ).json()
     return client.post(
         f"/api/test-projects/{project['id']}/runs",
-        json={"device_source_id": device["id"]},
+        json={
+            "device_source_id": device["id"],
+            "environment_profile_id": environment["id"],
+        },
     ).json()
 
 

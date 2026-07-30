@@ -59,6 +59,32 @@ class CaseSnapshotRead(BaseModel):
     steps: list[CaseStepSnapshotRead]
 
 
+class EnvironmentParameterSnapshotRead(BaseModel):
+    section: str
+    param_key: str
+    param_value: str
+    display_order: int
+
+
+class EnvironmentProfileSnapshotRead(BaseModel):
+    profile_name: str
+    description: str | None
+    profile_updated_at: datetime
+    captured_at: datetime
+    parameters: list[EnvironmentParameterSnapshotRead]
+
+
+class RunEnvironmentSnapshotRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    test_run_id: str
+    environment_profile_source_id: str
+    snapshot_version: int
+    profile_snapshot: EnvironmentProfileSnapshotRead
+    created_at: datetime
+
+
 class RunResultRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -88,10 +114,12 @@ class TestRunRead(BaseModel):
     started_at: datetime
     finished_at: datetime | None
     results: list[RunResultRead]
+    environment_snapshot: RunEnvironmentSnapshotRead | None = None
 
 
 class RunCreate(BaseModel):
     device_source_id: str = Field(min_length=1)
+    environment_profile_id: str = Field(min_length=1)
 
 
 class ResultUpdate(BaseModel):

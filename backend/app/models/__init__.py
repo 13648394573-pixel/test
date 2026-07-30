@@ -1,6 +1,11 @@
 from app.models.device import Device
 from app.models.defect import Defect, Regression
 from app.models.evidence import Evidence
+from app.models.environment import (
+    EnvironmentParameter,
+    EnvironmentProfile,
+    RunEnvironmentSnapshot,
+)
 from app.models.test_execution import (
     ProjectCaseSelection,
     RunResult,
@@ -14,8 +19,11 @@ __all__ = [
     "Device",
     "Defect",
     "Evidence",
+    "EnvironmentParameter",
+    "EnvironmentProfile",
     "ProjectCaseSelection",
     "RunResult",
+    "RunEnvironmentSnapshot",
     "Regression",
     "TestCase",
     "TestProject",

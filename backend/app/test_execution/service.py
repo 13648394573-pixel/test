@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from app.devices.repository import DeviceRepository
+from app.environments.service import EnvironmentService
 from app.models.test_execution import RunResult, TestProject, TestRun
 from app.test_cases.repository import TestCaseRepository
 from app.test_execution.repository import TestExecutionRepository
@@ -62,12 +63,14 @@ class TestExecutionService:
         repository: TestExecutionRepository,
         device_repository: DeviceRepository,
         case_repository: TestCaseRepository,
+        environment_service: EnvironmentService | None = None,
         *,
         clock: Callable[[], datetime] = utc_now,
     ) -> None:
         self.repository = repository
         self.device_repository = device_repository
         self.case_repository = case_repository
+        self.environment_service = environment_service
         self.clock = clock
 
     def list_projects(self) -> list[TestProject]:
@@ -102,11 +105,22 @@ class TestExecutionService:
             raise ProjectHasRunsError(project.id)
         self.repository.delete_project(project)
 
-    def create_run(self, project_id: str, device_source_id: str) -> TestRun:
+    def create_run(
+        self,
+        project_id: str,
+        device_source_id: str,
+        environment_profile_id: str,
+    ) -> TestRun:
         project = self.get_project(project_id)
         device = self.device_repository.get(device_source_id)
         if device is None:
             raise InvalidDeviceSourceError(device_source_id)
+        if self.environment_service is None:
+            raise RuntimeError("Environment service is required for run creation")
+        environment_profile = self.environment_service.get_enabled_profile(
+            environment_profile_id
+        )
+        captured_at = self.clock()
 
         results: list[dict[str, Any]] = []
         for selection in project.case_selections:
@@ -125,6 +139,11 @@ class TestExecutionService:
             device.id,
             build_device_snapshot(device),
             results,
+            environment_profile_source_id=environment_profile.id,
+            environment_snapshot=self.environment_service.build_snapshot(
+                environment_profile,
+                captured_at,
+            ),
         )
 
     def get_run(self, run_id: str) -> TestRun:

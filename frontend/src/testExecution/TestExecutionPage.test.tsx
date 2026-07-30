@@ -9,6 +9,10 @@ import {
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Device, DeviceApi } from "../devices/types";
+import type {
+  EnvironmentApi,
+  EnvironmentProfile
+} from "../environments/types";
 import type { TestCase, TestCaseApi } from "../testCases/types";
 import TestExecutionPage from "./TestExecutionPage";
 import type {
@@ -70,6 +74,25 @@ const PROJECT: TestProject = {
   case_selections: [{ case_source_id: "case-1" }]
 };
 
+const ENVIRONMENT: EnvironmentProfile = {
+  id: "env-1",
+  name: "ONU Lab",
+  description: "Access lab",
+  enabled: true,
+  created_at: "2026-07-29T08:00:00",
+  updated_at: "2026-07-29T08:00:00",
+  parameters: [{
+    id: "parameter-1",
+    profile_id: "env-1",
+    section: "OLT",
+    param_key: "model",
+    param_value: "MA5800-X7",
+    display_order: 1,
+    created_at: "2026-07-29T08:00:00",
+    updated_at: "2026-07-29T08:00:00"
+  }]
+};
+
 const emptyDeviceApi: DeviceApi = {
   list: async () => [DEVICE],
   create: async () => { throw new Error("not used"); },
@@ -79,6 +102,13 @@ const emptyDeviceApi: DeviceApi = {
 
 const emptyCaseApi: TestCaseApi = {
   list: async () => [TEST_CASE],
+  create: async () => { throw new Error("not used"); },
+  update: async () => { throw new Error("not used"); },
+  delete: async () => undefined
+};
+
+const emptyEnvironmentApi: EnvironmentApi = {
+  list: async () => [ENVIRONMENT],
   create: async () => { throw new Error("not used"); },
   update: async () => { throw new Error("not used"); },
   delete: async () => undefined
@@ -116,8 +146,17 @@ class MemoryExecutionApi implements TestExecutionApi {
     this.projects = this.projects.filter((project) => project.id !== id);
   }
 
-  async createRun(projectId: string, deviceSourceId: string) {
-    const run = buildRun(`run-${this.runs.length + 1}`, projectId, deviceSourceId);
+  async createRun(
+    projectId: string,
+    deviceSourceId: string,
+    environmentProfileId: string
+  ) {
+    const run = buildRun(
+      `run-${this.runs.length + 1}`,
+      projectId,
+      deviceSourceId,
+      environmentProfileId
+    );
     this.runs.unshift(run);
     return structuredClone(run);
   }
@@ -193,7 +232,8 @@ class MemoryExecutionApi implements TestExecutionApi {
 function buildRun(
   id = "run-1",
   projectId = "project-1",
-  deviceSourceId = "device-1"
+  deviceSourceId = "device-1",
+  environmentProfileId = "env-1"
 ): TestRun {
   return {
     id,
@@ -212,6 +252,25 @@ function buildRun(
     status: "IN_PROGRESS",
     started_at: "2026-07-29T09:00:00",
     finished_at: null,
+    environment_snapshot: {
+      id: `${id}-environment`,
+      test_run_id: id,
+      environment_profile_source_id: environmentProfileId,
+      snapshot_version: 1,
+      created_at: "2026-07-29T09:00:00",
+      profile_snapshot: {
+        profile_name: ENVIRONMENT.name,
+        description: ENVIRONMENT.description,
+        profile_updated_at: ENVIRONMENT.updated_at,
+        captured_at: "2026-07-29T09:00:00",
+        parameters: ENVIRONMENT.parameters.map((parameter) => ({
+          section: parameter.section,
+          param_key: parameter.param_key,
+          param_value: parameter.param_value,
+          display_order: parameter.display_order
+        }))
+      }
+    },
     results: [
       {
         id: `${id}-result-1`,
@@ -261,6 +320,7 @@ describe("Test Execution", () => {
         api={api}
         deviceApi={emptyDeviceApi}
         testCaseApi={emptyCaseApi}
+        environmentApi={emptyEnvironmentApi}
       />
     );
 
@@ -297,6 +357,7 @@ describe("Test Execution", () => {
         api={api}
         deviceApi={emptyDeviceApi}
         testCaseApi={emptyCaseApi}
+        environmentApi={emptyEnvironmentApi}
       />
     );
 
@@ -304,11 +365,15 @@ describe("Test Execution", () => {
     fireEvent.change(screen.getByLabelText("执行设备"), {
       target: { value: DEVICE.id }
     });
+    fireEvent.change(screen.getByLabelText("环境模板"), {
+      target: { value: ENVIRONMENT.id }
+    });
     fireEvent.click(screen.getByRole("button", { name: "创建执行" }));
 
     expect((await screen.findAllByText("ONU0001")).length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText("ONU-WAN-001")).toBeInTheDocument();
     expect(screen.getByText("Create an IPoE WAN")).toBeInTheDocument();
+    expect(screen.getByText("MA5800-X7")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "ONU0001" }).parentElement)
       .toHaveTextContent("快照版本 1");
     expect(screen.getByText("ONU-WAN-001").parentElement?.parentElement)
@@ -322,6 +387,7 @@ describe("Test Execution", () => {
         api={api}
         deviceApi={emptyDeviceApi}
         testCaseApi={emptyCaseApi}
+        environmentApi={emptyEnvironmentApi}
       />
     );
 

@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import App from "./App";
 import type { DefectApi } from "./defects/types";
 import type { DeviceApi } from "./devices/types";
+import type { EnvironmentApi } from "./environments/types";
 import type { TestCaseApi } from "./testCases/types";
 import type { TestExecutionApi } from "./testExecution/types";
 
@@ -20,6 +21,17 @@ const emptyApi: DeviceApi = {
 };
 
 const emptyTestCaseApi: TestCaseApi = {
+  list: async () => [],
+  create: async () => {
+    throw new Error("not used");
+  },
+  update: async () => {
+    throw new Error("not used");
+  },
+  delete: async () => undefined
+};
+
+const emptyEnvironmentApi: EnvironmentApi = {
   list: async () => [],
   create: async () => {
     throw new Error("not used");
@@ -121,6 +133,7 @@ describe("application", () => {
         api={emptyApi}
         testCaseApi={emptyTestCaseApi}
         testExecutionApi={emptyTestExecutionApi}
+        environmentApi={emptyEnvironmentApi}
       />
     );
 
@@ -137,6 +150,7 @@ describe("application", () => {
         testCaseApi={emptyTestCaseApi}
         testExecutionApi={emptyTestExecutionApi}
         defectApi={emptyDefectApi}
+        environmentApi={emptyEnvironmentApi}
       />
     );
 

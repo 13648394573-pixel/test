@@ -2,6 +2,12 @@ import { FormEvent, useEffect, useState } from "react";
 
 import { deviceApi as defaultDeviceApi } from "../devices/api";
 import type { Device, DeviceApi } from "../devices/types";
+import { environmentApi as defaultEnvironmentApi } from "../environments/api";
+import EnvironmentSnapshotPanel from "../environments/EnvironmentSnapshotPanel";
+import type {
+  EnvironmentApi,
+  EnvironmentProfile
+} from "../environments/types";
 import { testCaseApi as defaultTestCaseApi } from "../testCases/api";
 import type { TestCase, TestCaseApi } from "../testCases/types";
 import { testExecutionApi } from "./api";
@@ -18,6 +24,7 @@ interface TestExecutionPageProps {
   api?: TestExecutionApi;
   deviceApi?: DeviceApi;
   testCaseApi?: TestCaseApi;
+  environmentApi?: EnvironmentApi;
 }
 
 const EMPTY_PROJECT: TestProjectInput = {
@@ -31,11 +38,13 @@ const EMPTY_PROJECT: TestProjectInput = {
 export default function TestExecutionPage({
   api = testExecutionApi,
   deviceApi = defaultDeviceApi,
-  testCaseApi = defaultTestCaseApi
+  testCaseApi = defaultTestCaseApi,
+  environmentApi = defaultEnvironmentApi
 }: TestExecutionPageProps) {
   const [projects, setProjects] = useState<TestProject[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
   const [testCases, setTestCases] = useState<TestCase[]>([]);
+  const [environments, setEnvironments] = useState<EnvironmentProfile[]>([]);
   const [activeProject, setActiveProject] = useState<TestProject | null>(null);
   const [activeRun, setActiveRun] = useState<TestRun | null>(null);
   const [runs, setRuns] = useState<TestRun[]>([]);
@@ -43,19 +52,26 @@ export default function TestExecutionPage({
   const [form, setForm] = useState<TestProjectInput>(EMPTY_PROJECT);
   const [showForm, setShowForm] = useState(false);
   const [selectedDeviceId, setSelectedDeviceId] = useState("");
+  const [selectedEnvironmentId, setSelectedEnvironmentId] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    Promise.all([api.listProjects(), deviceApi.list(), testCaseApi.list()])
-      .then(([projectItems, deviceItems, caseItems]) => {
+    Promise.all([
+      api.listProjects(),
+      deviceApi.list(),
+      testCaseApi.list(),
+      environmentApi.list()
+    ])
+      .then(([projectItems, deviceItems, caseItems, environmentItems]) => {
         setProjects(projectItems);
         setDevices(deviceItems);
         setTestCases(caseItems.filter((testCase) => testCase.enabled));
+        setEnvironments(environmentItems.filter((profile) => profile.enabled));
       })
       .catch((reason: Error) => setError(reason.message))
       .finally(() => setLoading(false));
-  }, [api, deviceApi, testCaseApi]);
+  }, [api, deviceApi, testCaseApi, environmentApi]);
 
   const startCreate = () => {
     setEditing(null);
@@ -130,11 +146,15 @@ export default function TestExecutionPage({
   };
 
   const createRun = async () => {
-    if (!activeProject || !selectedDeviceId) {
+    if (!activeProject || !selectedDeviceId || !selectedEnvironmentId) {
       return;
     }
     try {
-      const run = await api.createRun(activeProject.id, selectedDeviceId);
+      const run = await api.createRun(
+        activeProject.id,
+        selectedDeviceId,
+        selectedEnvironmentId
+      );
       setRuns((current) => [run, ...current]);
       setActiveRun(run);
     } catch (reason) {
@@ -327,10 +347,24 @@ export default function TestExecutionPage({
                 ))}
               </select>
             </label>
+            <label>
+              环境模板
+              <select
+                value={selectedEnvironmentId}
+                onChange={(event) => setSelectedEnvironmentId(event.target.value)}
+              >
+                <option value="">请选择启用的环境模板</option>
+                {environments.map((profile) => (
+                  <option key={profile.id} value={profile.id}>
+                    {profile.name}
+                  </option>
+                ))}
+              </select>
+            </label>
             <button
               className="button button-primary"
               type="button"
-              disabled={!selectedDeviceId}
+              disabled={!selectedDeviceId || !selectedEnvironmentId}
               onClick={createRun}
             >
               创建执行
@@ -375,6 +409,8 @@ export default function TestExecutionPage({
                   {activeRun.status === "COMPLETED" ? "已完成" : "执行中"}
                 </span>
               </div>
+
+              <EnvironmentSnapshotPanel snapshot={activeRun.environment_snapshot} />
 
               <div className="result-list">
                 {activeRun.results.map((runResult) => (

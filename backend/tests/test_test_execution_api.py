@@ -46,13 +46,29 @@ def client(tmp_path):
 def create_sources(client: TestClient):
     device = client.post("/api/devices", json=DEVICE_PAYLOAD).json()
     test_case = client.post("/api/test-cases", json=CASE_PAYLOAD).json()
-    return device, test_case
+    environment = client.post(
+        "/api/environment-profiles",
+        json={
+            "name": "API execution lab",
+            "description": "Stable test environment",
+            "enabled": True,
+            "parameters": [
+                {
+                    "section": "OLT",
+                    "param_key": "model",
+                    "param_value": "MA5800-X7",
+                    "display_order": 1,
+                }
+            ],
+        },
+    ).json()
+    return device, test_case, environment
 
 
 def test_execution_api_supports_project_run_result_and_history_lifecycle(
     client: TestClient,
 ) -> None:
-    device, test_case = create_sources(client)
+    device, test_case, environment = create_sources(client)
 
     project_response = client.post(
         "/api/test-projects",
@@ -86,13 +102,21 @@ def test_execution_api_supports_project_run_result_and_history_lifecycle(
 
     run_response = client.post(
         f"/api/test-projects/{project['id']}/runs",
-        json={"device_source_id": device["id"]},
+        json={
+            "device_source_id": device["id"],
+            "environment_profile_id": environment["id"],
+        },
     )
     assert run_response.status_code == 201
     run = run_response.json()
     assert run["snapshot_version"] == 1
     assert run["device_snapshot"]["software_version"] == "V5R020"
     assert run["status"] == "IN_PROGRESS"
+    assert run["environment_snapshot"]["snapshot_version"] == 1
+    assert run["environment_snapshot"]["profile_snapshot"]["profile_name"] == (
+        "API execution lab"
+    )
+    assert run["environment_snapshot"]["profile_snapshot"]["captured_at"]
     assert len(run["results"]) == 1
     assert run["results"][0]["snapshot_version"] == 1
     assert run["results"][0]["result"] is None
@@ -118,6 +142,24 @@ def test_execution_api_supports_project_run_result_and_history_lifecycle(
     assert historical["results"][0]["case_snapshot"]["title"] == (
         "Verify IPoE WAN"
     )
+    client.put(
+        f"/api/environment-profiles/{environment['id']}",
+        json={
+            "name": "Changed lab",
+            "description": None,
+            "enabled": True,
+            "parameters": [],
+        },
+    )
+    assert client.get(f"/api/test-runs/{run['id']}").json()[
+        "environment_snapshot"
+    ]["profile_snapshot"]["profile_name"] == "API execution lab"
+    assert client.delete(
+        f"/api/environment-profiles/{environment['id']}"
+    ).status_code == 204
+    assert client.get(f"/api/test-runs/{run['id']}").json()[
+        "environment_snapshot"
+    ]["profile_snapshot"]["profile_name"] == "API execution lab"
 
     result_id = run["results"][0]["id"]
     result_response = client.put(
@@ -153,7 +195,7 @@ def test_execution_api_supports_project_run_result_and_history_lifecycle(
 
 
 def test_execution_api_deletes_project_without_history(client: TestClient) -> None:
-    _device, test_case = create_sources(client)
+    _device, test_case, _environment = create_sources(client)
     project = client.post(
         "/api/test-projects",
         json={
@@ -171,7 +213,7 @@ def test_execution_api_deletes_project_without_history(client: TestClient) -> No
 
 
 def test_execution_api_reports_missing_resources(client: TestClient) -> None:
-    _device, test_case = create_sources(client)
+    _device, test_case, environment = create_sources(client)
     project = client.post(
         "/api/test-projects",
         json={
@@ -186,9 +228,20 @@ def test_execution_api_reports_missing_resources(client: TestClient) -> None:
     assert client.get("/api/test-runs/missing").status_code == 404
     missing_device = client.post(
         f"/api/test-projects/{project['id']}/runs",
-        json={"device_source_id": "missing"},
+        json={
+            "device_source_id": "missing",
+            "environment_profile_id": environment["id"],
+        },
     )
     assert missing_device.status_code == 422
+    missing_environment = client.post(
+        f"/api/test-projects/{project['id']}/runs",
+        json={
+            "device_source_id": _device["id"],
+            "environment_profile_id": "missing",
+        },
+    )
+    assert missing_environment.status_code == 422
 
 
 @pytest.mark.parametrize(

@@ -111,6 +111,11 @@ class TestRun(Base):
         cascade="all, delete-orphan",
         order_by="RunResult.case_source_id",
     )
+    environment_snapshot: Mapped[RunEnvironmentSnapshot | None] = relationship(
+        back_populates="run",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
 
 
 class RunResult(Base):
@@ -241,3 +246,6 @@ event.listen(
     retval=True,
     active_history=True,
 )
+
+
+from app.models.environment import RunEnvironmentSnapshot  # noqa: E402

@@ -30,6 +30,13 @@ from app.evidence.service import (
     EvidenceTooLargeError,
     InvalidEvidenceError,
 )
+from app.environments.router import router as environment_router
+from app.environments.service import (
+    DuplicateEnvironmentParameterError,
+    DuplicateEnvironmentProfileError,
+    EnvironmentProfileNotFoundError,
+    InvalidEnvironmentProfileError,
+)
 from app.test_cases.router import router as test_case_router
 from app.test_cases.service import DuplicateCaseCodeError, TestCaseNotFoundError
 from app.test_execution.router import router as test_execution_router
@@ -269,6 +276,32 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         ),
     )
 
+    application.add_exception_handler(
+        EnvironmentProfileNotFoundError,
+        lambda _request, _exception: JSONResponse(
+            status_code=404,
+            content={"detail": "Environment profile not found"},
+        ),
+    )
+    application.add_exception_handler(
+        DuplicateEnvironmentProfileError,
+        lambda _request, _exception: JSONResponse(
+            status_code=409,
+            content={"detail": "Environment profile name already exists"},
+        ),
+    )
+    for exception_type in (
+        DuplicateEnvironmentParameterError,
+        InvalidEnvironmentProfileError,
+    ):
+        application.add_exception_handler(
+            exception_type,
+            lambda _request, exception: JSONResponse(
+                status_code=422,
+                content={"detail": str(exception) or "Invalid environment profile"},
+            ),
+        )
+
     application.include_router(
         device_router,
         prefix=application_settings.api_prefix,
@@ -287,6 +320,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     application.include_router(
         evidence_router,
+        prefix=application_settings.api_prefix,
+    )
+    application.include_router(
+        environment_router,
         prefix=application_settings.api_prefix,
     )
 

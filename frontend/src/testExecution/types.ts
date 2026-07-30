@@ -72,6 +72,30 @@ export interface CaseSnapshot {
   steps: CaseStepSnapshot[];
 }
 
+export interface EnvironmentParameterSnapshot {
+  section: string;
+  param_key: string;
+  param_value: string;
+  display_order: number;
+}
+
+export interface EnvironmentProfileSnapshot {
+  profile_name: string;
+  description: string | null;
+  profile_updated_at: string;
+  captured_at: string;
+  parameters: EnvironmentParameterSnapshot[];
+}
+
+export interface RunEnvironmentSnapshot {
+  id: string;
+  test_run_id: string;
+  environment_profile_source_id: string;
+  snapshot_version: number;
+  profile_snapshot: EnvironmentProfileSnapshot;
+  created_at: string;
+}
+
 export interface RunResult {
   id: string;
   run_id: string;
@@ -97,6 +121,7 @@ export interface TestRun {
   started_at: string;
   finished_at: string | null;
   results: RunResult[];
+  environment_snapshot: RunEnvironmentSnapshot | null;
 }
 
 export interface TestExecutionApi {
@@ -104,7 +129,11 @@ export interface TestExecutionApi {
   createProject(input: TestProjectInput): Promise<TestProject>;
   updateProject(id: string, input: TestProjectInput): Promise<TestProject>;
   deleteProject(id: string): Promise<void>;
-  createRun(projectId: string, deviceSourceId: string): Promise<TestRun>;
+  createRun(
+    projectId: string,
+    deviceSourceId: string,
+    environmentProfileId: string
+  ): Promise<TestRun>;
   getRun(runId: string): Promise<TestRun>;
   listRuns(projectId: string): Promise<TestRun[]>;
   updateResult(

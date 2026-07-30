@@ -6,6 +6,9 @@ import type { DefectApi } from "./defects/types";
 import DeviceLibraryPage from "./devices/DeviceLibraryPage";
 import { deviceApi } from "./devices/api";
 import type { DeviceApi } from "./devices/types";
+import EnvironmentProfilePage from "./environments/EnvironmentProfilePage";
+import { environmentApi as defaultEnvironmentApi } from "./environments/api";
+import type { EnvironmentApi } from "./environments/types";
 import TestCaseLibraryPage from "./testCases/TestCaseLibraryPage";
 import { testCaseApi as defaultTestCaseApi } from "./testCases/api";
 import type { TestCaseApi } from "./testCases/types";
@@ -19,6 +22,7 @@ interface AppProps {
   testCaseApi?: TestCaseApi;
   testExecutionApi?: TestExecutionApi;
   defectApi?: DefectApi;
+  environmentApi?: EnvironmentApi;
 }
 
 
@@ -26,10 +30,11 @@ function App({
   api = deviceApi,
   testCaseApi = defaultTestCaseApi,
   testExecutionApi = defaultTestExecutionApi,
-  defectApi = defaultDefectApi
+  defectApi = defaultDefectApi,
+  environmentApi = defaultEnvironmentApi
 }: AppProps) {
   const [activeModule, setActiveModule] = useState<
-    "devices" | "test-cases" | "test-execution" | "defects"
+    "devices" | "test-cases" | "test-execution" | "defects" | "environments"
   >("devices");
 
   return (
@@ -70,6 +75,13 @@ function App({
         >
           缺陷闭环
         </button>
+        <button
+          type="button"
+          className={activeModule === "environments" ? "active" : ""}
+          onClick={() => setActiveModule("environments")}
+        >
+          环境模板
+        </button>
       </nav>
       <main>
         {activeModule === "devices" ? (
@@ -81,9 +93,12 @@ function App({
             api={testExecutionApi}
             deviceApi={api}
             testCaseApi={testCaseApi}
+            environmentApi={environmentApi}
           />
-        ) : (
+        ) : activeModule === "defects" ? (
           <DefectPage api={defectApi} executionApi={testExecutionApi} />
+        ) : (
+          <EnvironmentProfilePage api={environmentApi} />
         )}
       </main>
     </div>

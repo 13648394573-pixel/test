@@ -53,11 +53,14 @@ export const testExecutionApi: TestExecutionApi = {
       method: "DELETE",
       headers: JSON_HEADERS
     }),
-  createRun: (projectId, deviceSourceId) =>
+  createRun: (projectId, deviceSourceId, environmentProfileId) =>
     request<TestRun>(`/api/test-projects/${projectId}/runs`, {
       method: "POST",
       headers: JSON_HEADERS,
-      body: JSON.stringify({ device_source_id: deviceSourceId })
+      body: JSON.stringify({
+        device_source_id: deviceSourceId,
+        environment_profile_id: environmentProfileId
+      })
     }),
   getRun: (runId) => request<TestRun>(`/api/test-runs/${runId}`),
   listRuns: (projectId) =>

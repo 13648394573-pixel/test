@@ -12,6 +12,7 @@ from app.models.test_execution import (
     TestProject,
     TestRun,
 )
+from app.models.environment import RunEnvironmentSnapshot
 
 
 class TestExecutionRepository:
@@ -92,6 +93,8 @@ class TestExecutionRepository:
         device_source_id: str,
         device_snapshot: Mapping[str, Any],
         results: Sequence[Mapping[str, Any]],
+        environment_profile_source_id: str | None = None,
+        environment_snapshot: Mapping[str, Any] | None = None,
     ) -> TestRun:
         run = TestRun(
             project_id=project_id,
@@ -107,6 +110,15 @@ class TestExecutionRepository:
             )
             for result in results
         ]
+        if (
+            environment_profile_source_id is not None
+            and environment_snapshot is not None
+        ):
+            run.environment_snapshot = RunEnvironmentSnapshot(
+                environment_profile_source_id=environment_profile_source_id,
+                profile_snapshot=dict(environment_snapshot),
+                snapshot_version=1,
+            )
         self.session.add(run)
         try:
             self.session.commit()
@@ -118,7 +130,10 @@ class TestExecutionRepository:
     def get_run(self, run_id: str) -> TestRun | None:
         statement = (
             select(TestRun)
-            .options(selectinload(TestRun.results))
+            .options(
+                selectinload(TestRun.results),
+                selectinload(TestRun.environment_snapshot),
+            )
             .where(TestRun.id == run_id)
         )
         return self.session.scalar(statement)
@@ -126,7 +141,10 @@ class TestExecutionRepository:
     def list_runs(self, project_id: str) -> list[TestRun]:
         statement = (
             select(TestRun)
-            .options(selectinload(TestRun.results))
+            .options(
+                selectinload(TestRun.results),
+                selectinload(TestRun.environment_snapshot),
+            )
             .where(TestRun.project_id == project_id)
             .order_by(TestRun.started_at.desc())
         )

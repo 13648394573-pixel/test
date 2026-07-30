@@ -4,6 +4,8 @@ import pytest
 from sqlalchemy.orm import Session
 
 from app.devices.repository import DeviceRepository
+from app.environments.repository import EnvironmentRepository
+from app.environments.service import EnvironmentService
 from app.test_cases.repository import TestCaseRepository
 from app.test_execution.repository import TestExecutionRepository
 from app.test_execution.service import (
@@ -52,13 +54,28 @@ NOW = datetime(2026, 7, 29, 14, 0, 0)
 def build_service(db_session: Session):
     device_repository = DeviceRepository(db_session)
     case_repository = TestCaseRepository(db_session)
+    environment_service = EnvironmentService(EnvironmentRepository(db_session))
+    environment_service.create_profile(
+        {
+            "name": "Service test lab",
+            "description": None,
+            "enabled": True,
+            "parameters": [],
+        }
+    )
     service = TestExecutionService(
         TestExecutionRepository(db_session),
         device_repository,
         case_repository,
+        environment_service,
         clock=lambda: NOW,
     )
     return service, device_repository, case_repository
+
+
+def create_run(service: TestExecutionService, project_id: str, device_id: str):
+    environment_id = service.environment_service.list_profiles()[0].id
+    return service.create_run(project_id, device_id, environment_id)
 
 
 def test_service_validates_project_case_sources(db_session: Session) -> None:
@@ -115,7 +132,7 @@ def test_service_creates_versioned_snapshots_at_run_creation(
         }
     )
 
-    run = service.create_run(project.id, device.id)
+    run = create_run(service, project.id, device.id)
     device_repository.update(device, {"software_version": "V5R021"})
     case_repository.update(
         test_case,
@@ -152,12 +169,12 @@ def test_service_rejects_missing_device_and_missing_selected_case(
     )
 
     with pytest.raises(InvalidDeviceSourceError):
-        service.create_run(project.id, "missing")
+        create_run(service, project.id, "missing")
 
     device = device_repository.create(DEVICE_DATA)
     case_repository.delete(test_case)
     with pytest.raises(InvalidCaseSourceError):
-        service.create_run(project.id, device.id)
+        create_run(service, project.id, device.id)
 
 
 def test_service_saves_drafts_and_completes_when_all_results_are_locked(
@@ -178,7 +195,7 @@ def test_service_saves_drafts_and_completes_when_all_results_are_locked(
             "case_source_ids": [first.id, second.id],
         }
     )
-    run = service.create_run(project.id, device.id)
+    run = create_run(service, project.id, device.id)
 
     first_result = service.update_result(
         run.id,
@@ -232,7 +249,7 @@ def test_service_validates_lock_and_rejects_locked_updates(
             "case_source_ids": [test_case.id],
         }
     )
-    run = service.create_run(project.id, device.id)
+    run = create_run(service, project.id, device.id)
     result_id = run.results[0].id
 
     service.update_result(
@@ -277,7 +294,7 @@ def test_service_preserves_history_and_reports_missing_resources(
             "case_source_ids": [test_case.id],
         }
     )
-    run = service.create_run(project.id, device.id)
+    run = create_run(service, project.id, device.id)
 
     with pytest.raises(ProjectHasRunsError):
         service.delete_project(project.id)

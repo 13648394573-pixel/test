@@ -62,9 +62,21 @@ def create_result(
             "case_source_ids": [test_case["id"]],
         },
     ).json()
+    environment = client.post(
+        "/api/environment-profiles",
+        json={
+            "name": f"Defect lab {suffix}",
+            "description": None,
+            "enabled": True,
+            "parameters": [],
+        },
+    ).json()
     run = client.post(
         f"/api/test-projects/{project['id']}/runs",
-        json={"device_source_id": device["id"]},
+        json={
+            "device_source_id": device["id"],
+            "environment_profile_id": environment["id"],
+        },
     ).json()
     run_result = run["results"][0]
     payload = {"result": result}
@@ -150,9 +162,13 @@ def test_defect_api_supports_lifecycle_and_pass_regression(
     # Build a second run using the original case through the public API.
     devices = client.get("/api/devices").json()
     projects = client.get("/api/test-projects").json()
+    environments = client.get("/api/environment-profiles").json()
     verification_run = client.post(
         f"/api/test-projects/{projects[0]['id']}/runs",
-        json={"device_source_id": devices[0]["id"]},
+        json={
+            "device_source_id": devices[0]["id"],
+            "environment_profile_id": environments[0]["id"],
+        },
     ).json()
     verification_result = verification_run["results"][0]
     client.put(
@@ -242,9 +258,13 @@ def test_regression_outcome_updates_defect_as_specified(
 
     devices = client.get("/api/devices").json()
     project = client.get("/api/test-projects").json()[0]
+    environment = client.get("/api/environment-profiles").json()[0]
     run = client.post(
         f"/api/test-projects/{project['id']}/runs",
-        json={"device_source_id": devices[0]["id"]},
+        json={
+            "device_source_id": devices[0]["id"],
+            "environment_profile_id": environment["id"],
+        },
     ).json()
     verification = run["results"][0]
     client.put(

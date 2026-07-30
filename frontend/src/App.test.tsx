@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import App from "./App";
+import type { DefectApi } from "./defects/types";
 import type { DeviceApi } from "./devices/types";
 import type { TestCaseApi } from "./testCases/types";
 import type { TestExecutionApi } from "./testExecution/types";
@@ -50,6 +51,26 @@ const emptyTestExecutionApi: TestExecutionApi = {
   }
 };
 
+const emptyDefectApi: DefectApi = {
+  list: async () => [],
+  get: async () => {
+    throw new Error("not used");
+  },
+  create: async () => {
+    throw new Error("not used");
+  },
+  update: async () => {
+    throw new Error("not used");
+  },
+  transition: async () => {
+    throw new Error("not used");
+  },
+  listRegressions: async () => [],
+  createRegression: async () => {
+    throw new Error("not used");
+  }
+};
+
 afterEach(cleanup);
 
 
@@ -91,6 +112,22 @@ describe("application", () => {
     fireEvent.click(screen.getByRole("button", { name: "测试执行" }));
     expect(
       await screen.findByRole("heading", { name: "测试执行" })
+    ).toBeInTheDocument();
+  });
+
+  it("opens Defect & Regression as the fourth business module", async () => {
+    render(
+      <App
+        api={emptyApi}
+        testCaseApi={emptyTestCaseApi}
+        testExecutionApi={emptyTestExecutionApi}
+        defectApi={emptyDefectApi}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "缺陷闭环" }));
+    expect(
+      await screen.findByRole("heading", { name: "缺陷闭环" })
     ).toBeInTheDocument();
   });
 });

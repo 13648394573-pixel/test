@@ -1,5 +1,8 @@
 import { useState } from "react";
 
+import DefectPage from "./defects/DefectPage";
+import { defectApi as defaultDefectApi } from "./defects/api";
+import type { DefectApi } from "./defects/types";
 import DeviceLibraryPage from "./devices/DeviceLibraryPage";
 import { deviceApi } from "./devices/api";
 import type { DeviceApi } from "./devices/types";
@@ -15,16 +18,18 @@ interface AppProps {
   api?: DeviceApi;
   testCaseApi?: TestCaseApi;
   testExecutionApi?: TestExecutionApi;
+  defectApi?: DefectApi;
 }
 
 
 function App({
   api = deviceApi,
   testCaseApi = defaultTestCaseApi,
-  testExecutionApi = defaultTestExecutionApi
+  testExecutionApi = defaultTestExecutionApi,
+  defectApi = defaultDefectApi
 }: AppProps) {
   const [activeModule, setActiveModule] = useState<
-    "devices" | "test-cases" | "test-execution"
+    "devices" | "test-cases" | "test-execution" | "defects"
   >("devices");
 
   return (
@@ -58,18 +63,27 @@ function App({
         >
           测试执行
         </button>
+        <button
+          type="button"
+          className={activeModule === "defects" ? "active" : ""}
+          onClick={() => setActiveModule("defects")}
+        >
+          缺陷闭环
+        </button>
       </nav>
       <main>
         {activeModule === "devices" ? (
           <DeviceLibraryPage api={api} />
         ) : activeModule === "test-cases" ? (
           <TestCaseLibraryPage api={testCaseApi} />
-        ) : (
+        ) : activeModule === "test-execution" ? (
           <TestExecutionPage
             api={testExecutionApi}
             deviceApi={api}
             testCaseApi={testCaseApi}
           />
+        ) : (
+          <DefectPage api={defectApi} executionApi={testExecutionApi} />
         )}
       </main>
     </div>

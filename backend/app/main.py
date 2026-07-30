@@ -8,6 +8,17 @@ from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
 from app.db.base import Base
 from app.db.session import create_database_engine, create_session_factory
+from app.defects.router import router as defect_router
+from app.defects.service import (
+    ClosedDefectError,
+    DefectNotFoundError,
+    DuplicateDefectSourceError,
+    DuplicateRegressionError,
+    InvalidDefectSourceError,
+    InvalidDefectTransitionError,
+    InvalidRegressionEvidenceError,
+    RunResultEvidenceNotFoundError,
+)
 from app.devices.router import router as device_router
 from app.devices.service import DeviceNotFoundError, DuplicateSerialNumberError
 from app.test_cases.router import router as test_case_router
@@ -156,6 +167,39 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             content={"detail": "Invalid result value"},
         )
 
+    def defect_not_found(
+        _request: Request,
+        _exception: Exception,
+    ) -> JSONResponse:
+        return JSONResponse(status_code=404, content={"detail": "Evidence not found"})
+
+    def defect_conflict(
+        _request: Request,
+        exception: Exception,
+    ) -> JSONResponse:
+        return JSONResponse(status_code=409, content={"detail": str(exception)})
+
+    def invalid_defect_evidence(
+        _request: Request,
+        exception: Exception,
+    ) -> JSONResponse:
+        return JSONResponse(status_code=422, content={"detail": str(exception)})
+
+    for exception_type in (DefectNotFoundError, RunResultEvidenceNotFoundError):
+        application.add_exception_handler(exception_type, defect_not_found)
+    for exception_type in (
+        ClosedDefectError,
+        DuplicateDefectSourceError,
+        DuplicateRegressionError,
+        InvalidDefectTransitionError,
+    ):
+        application.add_exception_handler(exception_type, defect_conflict)
+    for exception_type in (
+        InvalidDefectSourceError,
+        InvalidRegressionEvidenceError,
+    ):
+        application.add_exception_handler(exception_type, invalid_defect_evidence)
+
     application.include_router(
         device_router,
         prefix=application_settings.api_prefix,
@@ -166,6 +210,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     application.include_router(
         test_execution_router,
+        prefix=application_settings.api_prefix,
+    )
+    application.include_router(
+        defect_router,
         prefix=application_settings.api_prefix,
     )
 

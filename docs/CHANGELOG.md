@@ -1,5 +1,21 @@
 # Changelog
 
+## V1 Alpha Feature Complete
+
+- 完成时间：2026-07-30
+- 基线分支：`main`
+- Feature Complete Commit：`edc26db330f57e01e192acd7f2c7260fecf9c747`
+- 状态：Sprint 0–7已完成，进入V1 Alpha最终验收与Beta验证阶段
+
+完成能力：
+
+- Device Library、Test Case Library、Test Execution
+- Defect & Regression、Test Evidence & Result Integrity
+- Environment Snapshot、Report & Archive
+- 后端117项测试通过，前端39项测试通过，生产构建通过
+
+当前版本仍保持个人、本地、手工测试定位，不包含AI、多用户协作、自动化执行或云端部署。
+
 本文件记录 Test Workbench 已完成并进入 `main` 的开发基线。
 
 ## V1 Reality Review

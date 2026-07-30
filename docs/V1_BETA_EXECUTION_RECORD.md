@@ -7,14 +7,94 @@
 | 项目 | 记录 |
 |---|---|
 | 记录编号 | `BETA-20260730-001` |
-| 验证状态 | 未开始 / 执行中 / 已完成 / 已阻断 |
+| 验证状态 | Round 1已完成，真实业务正向验证被实验室链路阻断 |
 | 验证开始日期 | 2026-07-30 |
-| 验证结束日期 | __________ |
-| 执行人 | __________ |
+| 验证结束日期 | 2026-07-30 |
+| 执行人 | Codex（按测试工程师指令执行） |
 | 复核人 | __________ |
 | 验证分支 | `main` |
-| 验证基线 | `fa70d8d1aec28e1f9d4720a3aa9b29ece9e05c21` |
+| 验证基线 | `df2efa30f97480b5c7b6441750e5eb9c3ff07725` |
 | 关联计划 | `docs/V1_BETA_VALIDATION_PLAN.md` |
+
+## Round 1实际验收记录
+
+### 验收结论
+
+本轮完成了Test Workbench数据闭环，系统侧未发现P0/P1产品缺陷。真实ONU在预期OLT端口处于`offline`，最近掉线原因为`LOSi/LOBi`，ONU Web不可达，因此PON O5及后续WAN正向业务验证均如实记录为`BLOCKED`，不判定为PASS。该实验室阻塞记录为`BETA-ISSUE-001`，在恢复物理链路并完成正向复测前，V1 Release验收结论为“暂缓”。
+
+### DUT信息
+
+| 项目 | 实际记录 |
+|---|---|
+| 设备类型/厂商 | ONU / Huawei |
+| 型号、硬件、软件版本 | ONU Web不可达，未核实 |
+| SN | 文档脱敏：`HWTC-****BBBB`；完整值仅保存在受控本地Workbench档案 |
+| OLT定位 | F/S/P `0/2/10`，ONT ID `36` |
+| OLT状态 | Control active；Run offline；Config/Match initial |
+| 最近链路信息 | Last down cause `LOSi/LOBi`；last distance `85 m` |
+
+### 测试环境
+
+| 项目 | 实际记录 |
+|---|---|
+| Workbench基线 | `main` / `df2efa30f97480b5c7b6441750e5eb9c3ff07725` |
+| 主机 | Windows 10.0.19045，Python 3.12.5，Node.js 24.16.0，npm 11.13.0 |
+| Workbench服务 | `127.0.0.1:8000`、`127.0.0.1:5173`，健康检查通过 |
+| Beta数据 | 独立SQLite数据库、Evidence和Report目录；均为git忽略的本地运行数据 |
+| OLT | Huawei MA5800-X7；只执行只读查询，未下发配置 |
+| 业务参数 | Line/Service Profile `10`，VLAN `1000`，预期IPoE + PPPoE |
+| 测试PC网络 | `192.168.87.17/24`，网关`192.168.87.1`；ONU直连以太网接口断开 |
+
+### Test Workbench闭环
+
+1. 创建1条DUT档案、3条测试用例、1个环境模板和1个测试项目。
+2. 创建首轮Run，自动生成Device/Case/Environment Snapshot，版本均为`1`。
+3. 保存实际结果、阻塞原因和测试备注；上传真实OLT文本及截图Evidence。
+4. 锁定全部结果：Workbench完整性用例`PASS`，PON与WAN用例`BLOCKED`；Run变为`COMPLETED`。
+5. 验证LOCKED结果不可修改，修改请求返回`409`。
+6. 基于LOCKED/BLOCKED结果创建`DEF-000001`，归类为外部DUT/光链路条件。
+7. 创建第二个独立Run执行同用例复测；仍为`BLOCKED`，追加1条BLOCKED Regression，Defect状态不被自动改变。
+8. 对首轮Run生成`RPT-000001`和`ARC-000001`；HTML与ZIP下载文件SHA256均与元数据一致，ZIP含报告、manifest及4份关联Evidence；重复创建Archive返回`409`。
+9. 前端页面核对通过：设备、测试项目、两个Completed Run、报告统计与HTML/ZIP下载入口均可见。
+
+### 测试结果
+
+| Run | 用例 | 结果 | 完整性 | 说明 |
+|---|---|---|---|---|
+| 首轮 | `BETA-R1-TW-001` | PASS | LOCKED | Snapshot、Evidence、锁定、报告及归档闭环正常 |
+| 首轮 | `BETA-R1-PON-001` | BLOCKED | LOCKED | ONT offline，LOSi/LOBi，无法验证O5 |
+| 首轮 | `BETA-R1-WAN-001` | BLOCKED | LOCKED | PON/O5前置条件未满足，未推断WAN结果 |
+| 回归 | `BETA-R1-TW-001` | PASS | LOCKED | 第二次历史记录独立生成 |
+| 回归 | `BETA-R1-PON-001` | BLOCKED | LOCKED | 复测仍无可用光链路 |
+| 回归 | `BETA-R1-WAN-001` | BLOCKED | LOCKED | WAN仍因PON前置条件阻断 |
+
+### Evidence、Defect与Regression
+
+| 类型 | 记录 |
+|---|---|
+| OLT在线状态文本 | Evidence `6af9d269-30d5-4161-a89f-1f7b869803ed`，显示offline及LOSi/LOBi |
+| OLT状态截图 | Evidence `a87859ef-1cb0-4fff-b7a6-5949c9b7cab4` |
+| OLT autofind文本 | Evidence `6a48b6ac-db1f-427f-90be-ea3aa72b8fb4`，无自动发现ONT |
+| 回归Evidence | Evidence `d277a97c-e819-4ce0-8946-d2c3d8c181a3` |
+| Defect | `DEF-000001`，S2，归类为外部实验室链路条件 |
+| Regression | 1条，结果`BLOCKED`，追加成功且未自动修改Defect状态 |
+| Beta Issue | `BETA-ISSUE-001`，P1验收阻塞项 |
+
+### Report与Archive
+
+| 项目 | 结果 |
+|---|---|
+| Report | `RPT-000001`，TOTAL 3 / PASS 1 / FAIL 0 / BLOCKED 2 / DEFECTS 1 |
+| Archive | `ARC-000001`，342521 bytes |
+| 完整性 | HTML SHA256匹配；ZIP SHA256匹配；Evidence打包成功 |
+| 唯一性 | 同一Report第二次创建Archive返回`409` |
+
+### Release影响评估
+
+- Workbench闭环：通过，未发现产品P0/P1问题。
+- 真实ONU/OLT业务验收：未通过正向条件，PON、WAN及外网连通性尚未形成PASS证据。
+- 当前Release判断：**影响Release验收**。这是外部实验室/DUT条件阻塞，不是已确认的Workbench代码缺陷；恢复供电、光路和ONU管理连接后必须执行Round 2正向复测。
+- Tag：本轮不创建Tag。
 
 ## 1. 验证日期
 

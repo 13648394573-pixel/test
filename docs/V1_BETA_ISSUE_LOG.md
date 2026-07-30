@@ -5,7 +5,7 @@
 | 项目 | 内容 |
 |---|---|
 | Beta基线分支 | `main` |
-| Beta基线Commit | `8b6d81ae22aba7ea7389871f2cc9c14085efe6ea` |
+| Beta基线Commit | `df2efa30f97480b5c7b6441750e5eb9c3ff07725` |
 | 台账开始日期 | 2026-07-30 |
 | 当前状态 | 执行中 |
 | 关联执行记录 | `docs/V1_BETA_EXECUTION_RECORD.md` |
@@ -16,6 +16,61 @@
 
 | Issue ID | 日期 | 模块 | 描述 | 严重级别 | 当前状态 | 修复版本 | 是否影响Release |
 |---|---|---|---|---|---|---|---|
+| `BETA-ISSUE-001` | 2026-07-30 | Test Execution（外部DUT/实验室环境） | ONU在预期OLT端口离线，LOSi/LOBi导致O5、WAN和连通性正向验收被阻断 | P1 | OPEN | 环境恢复后复测 | 是 |
+
+## Round 1问题记录
+
+### BETA-ISSUE-001：ONU光链路离线阻断真实业务验收
+
+| 字段 | 记录 |
+|---|---|
+| Issue ID | `BETA-ISSUE-001` |
+| 日期 | 2026-07-30 |
+| 模块 | Test Execution（外部DUT/实验室环境） |
+| 描述 | ONU在预期OLT端口存在历史档案，但当前为offline；无法完成O5、IPoE、PPPoE及外网连通性验证 |
+| 严重级别 | P1（Beta验收阻塞；非已确认产品代码缺陷） |
+| 当前状态 | OPEN |
+| 修复版本 | 环境恢复后复测 |
+| 是否影响Release | 是；缺少真实业务正向PASS证据 |
+| 关联验收步骤 | ONU-01、OLT-01、PON-01、WAN-01、WAN-02、WAN-03、NET-01 |
+| 关联Defect ID | `DEF-000001` |
+| Evidence | `6af9d269-30d5-4161-a89f-1f7b869803ed`、`a87859ef-1cb0-4fff-b7a6-5949c9b7cab4`、`6a48b6ac-db1f-427f-90be-ea3aa72b8fb4` |
+
+#### 前置条件
+
+1. Test Workbench运行在`main`基线`df2efa30f97480b5c7b6441750e5eb9c3ff07725`。
+2. OLT MA5800-X7可访问，目标ONU应位于F/S/P `0/2/10`、ONT ID `36`。
+
+#### 复现步骤
+
+1. 在OLT按SN执行只读ONT状态查询。
+2. 观察Run state为`offline`，Config/Match state为`initial`，Last down cause为`LOSi/LOBi`。
+3. 查询ONT autofind，无自动发现ONT；访问ONU Web `192.168.1.1`超时。
+
+#### 期望结果
+
+ONU在预期端口online/O5，ONU Web可达，可以继续验证IPoE、PPPoE及外网连通性。
+
+#### 实际结果
+
+ONU离线且ONU Web不可达。Workbench如实保存并锁定BLOCKED结果，未把未执行的WAN测试标记为PASS或FAIL。
+
+#### 影响分析
+
+- 数据影响：无；结果、Snapshot、Evidence、Report和Archive完整性验证通过。
+- 历史追溯影响：无。
+- 影响设备或环境：目标ONU、PON物理链路或供电/接线条件。
+- 复现率：本轮两次Run均复现。
+- 临时规避方式：无；必须恢复DUT供电、光纤连接及ONU管理链路。
+
+#### 修复与验证
+
+- 根因：当前证据指向外部DUT/光链路条件，需现场检查后确认。
+- 修复Commit或版本：不适用，未修改Test Workbench代码。
+- 回归范围：ONU Web、OLT online/O5、IPoE、PPPoE、TR069/Internet、Ping及完整Report/Archive。
+- 回归结果：BLOCKED。
+- 验证人及日期：Codex / 2026-07-30。
+- 关闭说明：Round 2取得真实正向PASS证据后方可关闭。
 
 ## 字段填写规则
 
@@ -133,7 +188,7 @@ __________
 | 等级 | 总数 | OPEN | IN_PROGRESS | RESOLVED | VERIFIED/CLOSED | WONT_FIX |
 |---|---:|---:|---:|---:|---:|---:|
 | P0 | 0 | 0 | 0 | 0 | 0 | 0 |
-| P1 | 0 | 0 | 0 | 0 | 0 | 0 |
+| P1 | 1 | 1 | 0 | 0 | 0 | 0 |
 | P2 | 0 | 0 | 0 | 0 | 0 | 0 |
 
 ## V1 Release影响结论
@@ -141,13 +196,13 @@ __________
 | 检查项 | 当前结论 |
 |---|---|
 | 未关闭P0数量 | 0 |
-| 未关闭P1数量 | 0 |
+| 未关闭P1数量 | 1 |
 | 待评估问题数量 | 0 |
 | 是否存在数据可信度风险 | 否 / 是 / 待评估 |
-| 是否存在主流程阻断 | 否 / 是 / 待评估 |
-| 当前是否影响V1 Release | 否 / 是 / 待评估 |
+| 是否存在主流程阻断 | 是：真实PON/WAN正向验收被外部链路条件阻断 |
+| 当前是否影响V1 Release | 是：需完成Round 2正向复测 |
 
-结论说明：__________
+结论说明：Workbench数据闭环本身通过；当前Release影响来自真实DUT/实验室链路不可用，尚未取得O5及WAN正向PASS证据。
 
 复核人：__________
 

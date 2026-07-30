@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import App from "./App";
 import type { DeviceApi } from "./devices/types";
 import type { TestCaseApi } from "./testCases/types";
+import type { TestExecutionApi } from "./testExecution/types";
 
 
 const emptyApi: DeviceApi = {
@@ -26,6 +27,27 @@ const emptyTestCaseApi: TestCaseApi = {
     throw new Error("not used");
   },
   delete: async () => undefined
+};
+
+const emptyTestExecutionApi: TestExecutionApi = {
+  listProjects: async () => [],
+  createProject: async () => {
+    throw new Error("not used");
+  },
+  updateProject: async () => {
+    throw new Error("not used");
+  },
+  deleteProject: async () => undefined,
+  createRun: async () => {
+    throw new Error("not used");
+  },
+  getRun: async () => {
+    throw new Error("not used");
+  },
+  listRuns: async () => [],
+  updateResult: async () => {
+    throw new Error("not used");
+  }
 };
 
 afterEach(cleanup);
@@ -54,6 +76,21 @@ describe("application", () => {
     fireEvent.click(screen.getByRole("button", { name: "设备库" }));
     expect(
       await screen.findByRole("heading", { name: "设备库" })
+    ).toBeInTheDocument();
+  });
+
+  it("opens Test Execution as the third business module", async () => {
+    render(
+      <App
+        api={emptyApi}
+        testCaseApi={emptyTestCaseApi}
+        testExecutionApi={emptyTestExecutionApi}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "测试执行" }));
+    expect(
+      await screen.findByRole("heading", { name: "测试执行" })
     ).toBeInTheDocument();
   });
 });

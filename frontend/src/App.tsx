@@ -6,21 +6,26 @@ import type { DeviceApi } from "./devices/types";
 import TestCaseLibraryPage from "./testCases/TestCaseLibraryPage";
 import { testCaseApi as defaultTestCaseApi } from "./testCases/api";
 import type { TestCaseApi } from "./testCases/types";
+import TestExecutionPage from "./testExecution/TestExecutionPage";
+import { testExecutionApi as defaultTestExecutionApi } from "./testExecution/api";
+import type { TestExecutionApi } from "./testExecution/types";
 
 
 interface AppProps {
   api?: DeviceApi;
   testCaseApi?: TestCaseApi;
+  testExecutionApi?: TestExecutionApi;
 }
 
 
 function App({
   api = deviceApi,
-  testCaseApi = defaultTestCaseApi
+  testCaseApi = defaultTestCaseApi,
+  testExecutionApi = defaultTestExecutionApi
 }: AppProps) {
-  const [activeModule, setActiveModule] = useState<"devices" | "test-cases">(
-    "devices"
-  );
+  const [activeModule, setActiveModule] = useState<
+    "devices" | "test-cases" | "test-execution"
+  >("devices");
 
   return (
     <div className="application">
@@ -46,12 +51,25 @@ function App({
         >
           测试用例库
         </button>
+        <button
+          type="button"
+          className={activeModule === "test-execution" ? "active" : ""}
+          onClick={() => setActiveModule("test-execution")}
+        >
+          测试执行
+        </button>
       </nav>
       <main>
         {activeModule === "devices" ? (
           <DeviceLibraryPage api={api} />
-        ) : (
+        ) : activeModule === "test-cases" ? (
           <TestCaseLibraryPage api={testCaseApi} />
+        ) : (
+          <TestExecutionPage
+            api={testExecutionApi}
+            deviceApi={api}
+            testCaseApi={testCaseApi}
+          />
         )}
       </main>
     </div>

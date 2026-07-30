@@ -110,7 +110,8 @@ h3 {
 }
 
 .device-library,
-.test-case-library {
+.test-case-library,
+.test-execution {
   width: min(1440px, calc(100% - 40px));
   margin: 0 auto;
   padding: 42px 0 64px;
@@ -159,6 +160,7 @@ h3 {
 
 .device-form,
 .test-case-form,
+.execution-project-form,
 .table-panel {
   margin-top: 24px;
   border: 1px solid #dce3ee;
@@ -168,7 +170,8 @@ h3 {
 }
 
 .device-form,
-.test-case-form {
+.test-case-form,
+.execution-project-form {
   padding: 24px;
 }
 
@@ -356,6 +359,190 @@ tbody tr:last-child td {
   background: #fff3f3;
 }
 
+.execution-project-form .wide-field {
+  grid-column: span 2;
+}
+
+.case-selector {
+  display: grid;
+  gap: 10px;
+  margin: 24px 0 0;
+  padding: 16px;
+  border: 1px solid #dce3ee;
+  border-radius: 10px;
+}
+
+.case-selector legend {
+  padding: 0 7px;
+  color: #43516a;
+  font-weight: 800;
+}
+
+.case-selector label {
+  display: grid;
+  grid-template-columns: auto 130px 1fr;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border-radius: 7px;
+  background: #f8fafd;
+}
+
+.execution-workspace {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.7fr) minmax(420px, 1.7fr);
+  gap: 20px;
+  margin-top: 24px;
+}
+
+.run-launcher,
+.run-history,
+.run-detail {
+  border: 1px solid #dce3ee;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 10px 30px rgb(27 43 72 / 5%);
+}
+
+.run-launcher {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: end;
+  gap: 18px;
+  padding: 20px;
+}
+
+.run-launcher > div {
+  margin-right: auto;
+}
+
+.run-launcher label {
+  display: grid;
+  min-width: 300px;
+  gap: 7px;
+  color: #43516a;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.run-launcher select {
+  padding: 10px 11px;
+  border: 1px solid #cfd9e7;
+  border-radius: 7px;
+  background: #fff;
+}
+
+.run-history {
+  align-self: start;
+  padding: 20px;
+}
+
+.history-list,
+.result-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.history-item {
+  display: grid;
+  gap: 4px;
+  padding: 13px;
+  border: 1px solid #dce3ee;
+  border-radius: 9px;
+  color: #24324b;
+  background: #f9fbfe;
+  cursor: pointer;
+  text-align: left;
+}
+
+.history-item strong {
+  color: #315fb5;
+  font-size: 12px;
+}
+
+.run-detail {
+  padding: 22px;
+}
+
+.run-detail-heading,
+.result-card header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.run-detail-heading p {
+  margin-bottom: 0;
+  color: #617089;
+}
+
+.run-status {
+  padding: 6px 10px;
+  border-radius: 999px;
+  color: #27529e;
+  background: #eaf1ff;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.result-card {
+  padding: 18px;
+  border: 1px solid #dce3ee;
+  border-radius: 11px;
+}
+
+.result-card header > div:last-child {
+  display: grid;
+  gap: 6px;
+  color: #617089;
+  font-size: 12px;
+  text-align: right;
+}
+
+.result-card ol {
+  display: grid;
+  gap: 10px;
+  margin: 18px 0;
+  padding-left: 28px;
+}
+
+.result-card li {
+  padding: 10px;
+  border-radius: 8px;
+  background: #f8fafd;
+}
+
+.result-card li p {
+  margin-bottom: 4px;
+}
+
+.result-card li small {
+  color: #617089;
+}
+
+.result-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.result-pass {
+  color: #17683a;
+  background: #e8f7ef;
+}
+
+.result-fail {
+  color: #a62e2e;
+  background: #fff1f1;
+}
+
+.result-blocked {
+  color: #7a4a00;
+  background: #fff4df;
+}
+
 @media (max-width: 900px) {
   .form-grid {
     grid-template-columns: repeat(2, minmax(140px, 1fr));
@@ -368,6 +555,10 @@ tbody tr:last-child td {
   .step-card label,
   .step-actions {
     grid-column: 2;
+  }
+
+  .execution-workspace {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -394,5 +585,28 @@ tbody tr:last-child td {
   .step-card label,
   .step-actions {
     grid-column: 1;
+  }
+
+  .execution-project-form .wide-field {
+    grid-column: auto;
+  }
+
+  .run-launcher,
+  .run-detail-heading,
+  .result-card header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .run-launcher label {
+    min-width: 0;
+  }
+
+  .case-selector label {
+    grid-template-columns: auto 1fr;
+  }
+
+  .case-selector label span:last-child {
+    grid-column: 2;
   }
 }

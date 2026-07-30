@@ -9,6 +9,9 @@ import type { DeviceApi } from "./devices/types";
 import EnvironmentProfilePage from "./environments/EnvironmentProfilePage";
 import { environmentApi as defaultEnvironmentApi } from "./environments/api";
 import type { EnvironmentApi } from "./environments/types";
+import ReportArchivePage from "./reports/ReportArchivePage";
+import { reportApi as defaultReportApi } from "./reports/api";
+import type { ReportApi } from "./reports/types";
 import TestCaseLibraryPage from "./testCases/TestCaseLibraryPage";
 import { testCaseApi as defaultTestCaseApi } from "./testCases/api";
 import type { TestCaseApi } from "./testCases/types";
@@ -23,6 +26,7 @@ interface AppProps {
   testExecutionApi?: TestExecutionApi;
   defectApi?: DefectApi;
   environmentApi?: EnvironmentApi;
+  reportApi?: ReportApi;
 }
 
 
@@ -31,10 +35,16 @@ function App({
   testCaseApi = defaultTestCaseApi,
   testExecutionApi = defaultTestExecutionApi,
   defectApi = defaultDefectApi,
-  environmentApi = defaultEnvironmentApi
+  environmentApi = defaultEnvironmentApi,
+  reportApi = defaultReportApi
 }: AppProps) {
   const [activeModule, setActiveModule] = useState<
-    "devices" | "test-cases" | "test-execution" | "defects" | "environments"
+    | "devices"
+    | "test-cases"
+    | "test-execution"
+    | "defects"
+    | "environments"
+    | "reports"
   >("devices");
 
   return (
@@ -82,6 +92,13 @@ function App({
         >
           环境模板
         </button>
+        <button
+          type="button"
+          className={activeModule === "reports" ? "active" : ""}
+          onClick={() => setActiveModule("reports")}
+        >
+          报告归档
+        </button>
       </nav>
       <main>
         {activeModule === "devices" ? (
@@ -97,8 +114,13 @@ function App({
           />
         ) : activeModule === "defects" ? (
           <DefectPage api={defectApi} executionApi={testExecutionApi} />
-        ) : (
+        ) : activeModule === "environments" ? (
           <EnvironmentProfilePage api={environmentApi} />
+        ) : (
+          <ReportArchivePage
+            api={reportApi}
+            executionApi={testExecutionApi}
+          />
         )}
       </main>
     </div>

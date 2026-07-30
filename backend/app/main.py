@@ -30,6 +30,15 @@ from app.evidence.service import (
     EvidenceTooLargeError,
     InvalidEvidenceError,
 )
+from app.reports.router import router as report_router
+from app.reports.service import (
+    ArchiveAlreadyExistsError,
+    ArchiveNotFoundError,
+    ReportArtifactConflictError,
+    ReportNotFoundError,
+    ReportNotReadyError,
+    ReportSourceNotFoundError,
+)
 from app.environments.router import router as environment_router
 from app.environments.service import (
     DuplicateEnvironmentParameterError,
@@ -276,6 +285,31 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         ),
     )
 
+    def report_not_found(
+        _request: Request,
+        _exception: Exception,
+    ) -> JSONResponse:
+        return JSONResponse(status_code=404, content={"detail": "Report resource not found"})
+
+    for exception_type in (
+        ReportSourceNotFoundError,
+        ReportNotFoundError,
+        ArchiveNotFoundError,
+    ):
+        application.add_exception_handler(exception_type, report_not_found)
+    for exception_type in (
+        ReportNotReadyError,
+        ArchiveAlreadyExistsError,
+        ReportArtifactConflictError,
+    ):
+        application.add_exception_handler(
+            exception_type,
+            lambda _request, exception: JSONResponse(
+                status_code=409,
+                content={"detail": str(exception) or "Report conflict"},
+            ),
+        )
+
     application.add_exception_handler(
         EnvironmentProfileNotFoundError,
         lambda _request, _exception: JSONResponse(
@@ -324,6 +358,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     application.include_router(
         environment_router,
+        prefix=application_settings.api_prefix,
+    )
+    application.include_router(
+        report_router,
         prefix=application_settings.api_prefix,
     )
 

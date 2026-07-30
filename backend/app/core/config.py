@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     log_file: str = "./logs/test-workbench.log"
     evidence_root: str = "./data/evidence"
     evidence_max_size_mb: int = 50
+    report_root: str = "./data/reports"
 
 
 @lru_cache

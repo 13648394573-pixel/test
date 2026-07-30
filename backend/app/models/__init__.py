@@ -1,6 +1,7 @@
 from app.models.device import Device
 from app.models.defect import Defect, Regression
 from app.models.evidence import Evidence
+from app.models.report import Archive, Report
 from app.models.environment import (
     EnvironmentParameter,
     EnvironmentProfile,
@@ -16,6 +17,7 @@ from app.models.test_case import CaseStep, TestCase
 
 __all__ = [
     "CaseStep",
+    "Archive",
     "Device",
     "Defect",
     "Evidence",
@@ -25,6 +27,7 @@ __all__ = [
     "RunResult",
     "RunEnvironmentSnapshot",
     "Regression",
+    "Report",
     "TestCase",
     "TestProject",
     "TestRun",

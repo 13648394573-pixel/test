@@ -16,7 +16,7 @@
 
 | Issue ID | 日期 | 模块 | 描述 | 严重级别 | 当前状态 | 修复版本 | 是否影响Release |
 |---|---|---|---|---|---|---|---|
-| `BETA-ISSUE-001` | 2026-07-30 | Test Execution（外部DUT/实验室环境） | ONU在预期OLT端口离线，LOSi/LOBi导致O5、WAN和连通性正向验收被阻断 | P1 | OPEN | 环境恢复后复测 | 是 |
+| `BETA-ISSUE-001` | 2026-07-30，2026-07-31复测 | Test Execution（外部DUT/实验室环境） | Round 2预检仍显示ONU离线，LOSi/LOBi继续阻断O5、WAN和连通性正向验收 | P1 | OPEN | 环境恢复后复测 | 是 |
 
 ## Round 1问题记录
 
@@ -68,9 +68,21 @@ ONU离线且ONU Web不可达。Workbench如实保存并锁定BLOCKED结果，未
 - 根因：当前证据指向外部DUT/光链路条件，需现场检查后确认。
 - 修复Commit或版本：不适用，未修改Test Workbench代码。
 - 回归范围：ONU Web、OLT online/O5、IPoE、PPPoE、TR069/Internet、Ping及完整Report/Archive。
-- 回归结果：BLOCKED。
-- 验证人及日期：Codex / 2026-07-30。
+- 回归结果：2026-07-31 Round 2预检仍为BLOCKED；因DUT未恢复，未创建正式TestRun。
+- 验证人及日期：Codex / 2026-07-30、2026-07-31。
 - 关闭说明：Round 2取得真实正向PASS证据后方可关闭。
+
+#### Round 2预检补充证据
+
+- OLT SSH：连接成功，只读查询成功。
+- F/S/P：`0/2/10`；ONT ID：`36`。
+- 实际状态：Run state `offline`，Config/Match state `initial`。
+- 光链路：Last down cause `LOSi/LOBi`，当前距离为空，last distance `85 m`。
+- ONU Web：`192.168.1.1`访问超时。
+- Evidence：
+  - `C:\Users\admin\onu_test\screenshots\20260731_beta_round2\20260731_090347_04_ont_online.txt`
+  - `C:\Users\admin\onu_test\screenshots\20260731_beta_round2\20260731_090347_04_ont_online.png`
+- 判定：问题继续复现，状态保持OPEN；不得以CLI命令执行成功替代ONU online/O5业务PASS。
 
 ## 字段填写规则
 
@@ -202,7 +214,7 @@ __________
 | 是否存在主流程阻断 | 是：真实PON/WAN正向验收被外部链路条件阻断 |
 | 当前是否影响V1 Release | 是：需完成Round 2正向复测 |
 
-结论说明：Workbench数据闭环本身通过；当前Release影响来自真实DUT/实验室链路不可用，尚未取得O5及WAN正向PASS证据。
+结论说明：Workbench数据闭环本身通过；2026-07-31 Round 2预检确认真实DUT/实验室链路仍不可用，尚未取得ONU online、O5、IPoE、PPPoE及网络连通正向PASS证据。
 
 复核人：__________
 

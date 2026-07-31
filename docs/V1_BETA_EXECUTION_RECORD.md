@@ -96,6 +96,54 @@
 - 当前Release判断：**影响Release验收**。这是外部实验室/DUT条件阻塞，不是已确认的Workbench代码缺陷；恢复供电、光路和ONU管理连接后必须执行Round 2正向复测。
 - Tag：本轮不创建Tag。
 
+## Round 2预检记录
+
+### 执行信息
+
+| 项目 | 记录 |
+|---|---|
+| 日期 | 2026-07-31 |
+| 验证分支 | `main` |
+| 验证基线 | `f7c33b3f4b95c0f075ebfc96761dcddd496e1fbd` |
+| Round 1历史记录 | 保留，未修改历史Run、Result、Snapshot、Evidence、Report或Archive |
+| Round 2状态 | 预检BLOCKED，未进入正式TestRun |
+
+### DUT恢复检查
+
+| 检查项 | 期望 | 实际 | 结果 |
+|---|---|---|---|
+| ONU Web `192.168.1.1` | 页面可访问 | 请求超时，Ping不可达 | BLOCKED |
+| OLT SSH | 可连接并执行只读查询 | Huawei MA5800-X7连接成功 | PASS |
+| F/S/P与ONT ID | `0/2/10`、ONT ID `36` | 与预期一致 | PASS |
+| ONU在线状态 | `online` | `offline` | BLOCKED |
+| O5/匹配状态 | O5、Config/Match正常 | Config state `initial`、Match state `initial` | BLOCKED |
+| 光链路信息 | 当前有效距离与在线信息 | 当前距离为空，last distance `85 m`，last down cause `LOSi/LOBi` | BLOCKED |
+| IPoE | Connected/up | 未执行；O5前置条件不满足 | BLOCKED |
+| PPPoE | Connected/up | 未执行；O5前置条件不满足 | BLOCKED |
+| 网络连通 | 0%丢包且平均RTT小于100 ms | 未执行；WAN前置条件不满足 | BLOCKED |
+
+### Evidence
+
+- OLT原始文本：`C:\Users\admin\onu_test\screenshots\20260731_beta_round2\20260731_090347_04_ont_online.txt`
+- OLT渲染截图：`C:\Users\admin\onu_test\screenshots\20260731_beta_round2\20260731_090347_04_ont_online.png`
+- 查询为只读操作，未执行ONT注册、WAN配置或业务下发。
+- 现有辅助工具的`PASS`只表示CLI命令成功返回；本轮依据原始字段判定，`Run state: offline`不满足业务PASS标准。
+
+### Test Workbench处理
+
+根据“恢复DUT后创建新的TestRun”的Round 2原则，本次预检确认DUT尚未恢复，因此：
+
+1. 未创建新的TestRun。
+2. 未修改Round 1历史Run或任何不可变Snapshot。
+3. 未新增虚假PASS结果、Evidence、Regression、Report或Archive。
+4. `BETA-ISSUE-001`继续保持OPEN，等待恢复物理光链路后重新开始Round 2。
+
+### Round 2结论
+
+- 要求的ONU online、O5、IPoE PASS、PPPoE PASS和网络连通PASS均未取得。
+- 当前Release判断仍为**影响Release验收**。
+- 本次不创建Tag，不开始Sprint，不扩展功能。
+
 ## 1. 验证日期
 
 | 阶段 | 日期与时间 | 说明 |

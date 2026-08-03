@@ -199,6 +199,47 @@ Round 3完成后数据库共有3个`COMPLETED` TestRun、9个LOCKED结果。
 - 恢复PON光链路后必须创建新的TestRun继续验证，不修改Round 1/2/3历史记录。
 - 本次不创建Tag，不开始Sprint，不扩展V1范围。
 
+## Round 4预检记录
+
+### 执行信息
+
+| 项目 | 记录 |
+|---|---|
+| 日期 | 2026-08-03 |
+| 验证分支 | `main` |
+| 验证基线 | `2500a28f0fb0c0e447b800a41b9ce035cc090951` |
+| 历史记录 | Round 1的2个Run及Round 3新增Run全部保留；共3个`COMPLETED` Run、9个结果、2份Report、2份Archive、2条Regression |
+| Round 4状态 | DUT恢复前置检查BLOCKED，未创建新TestRun |
+
+### DUT恢复检查
+
+| 检查项 | 期望 | 实际 | 结果 |
+|---|---|---|---|
+| ONU Web `192.168.1.1` | 管理页可访问 | 请求超时，Ping不可达 | BLOCKED |
+| OLT SSH | 可连接并执行只读查询 | Huawei MA5800-X7连接成功 | PASS |
+| F/S/P与ONT ID | `0/2/10`、ONT ID `36` | 与预期一致 | PASS |
+| ONU online | Run state `online` | Run state `offline` | BLOCKED |
+| O5/匹配状态 | O5、Config/Match正常 | Config state `initial`、Match state `initial` | BLOCKED |
+| 光链路 | 当前距离和在线信息有效 | 当前距离为空；last distance `85 m`；last down cause `LOSi/LOBi` | BLOCKED |
+| IPoE | Connected/up | 未执行；online/O5前置条件不满足 | BLOCKED |
+| PPPoE | Connected/up | 未执行；online/O5前置条件不满足 | BLOCKED |
+| 网络连通 | 0%丢包且平均RTT小于100 ms | 未执行；WAN前置条件不满足 | BLOCKED |
+
+### Evidence与Workbench处理
+
+- OLT原始文本：`C:\Users\admin\onu_test\screenshots\20260803_beta_round4\20260803_172931_04_ont_online.txt`
+- OLT渲染截图：`C:\Users\admin\onu_test\screenshots\20260803_beta_round4\20260803_172931_04_ont_online.png`
+- 查询为只读操作，未执行ONT注册、WAN配置或业务下发。
+- 现有辅助工具的`PASS`只表示CLI命令返回成功；业务判定依据原始字段，`Run state: offline`不满足online/O5标准。
+- 根据“DUT恢复后创建新的TestRun”的规则，本次未创建Round 4 TestRun，未修改Round 1/2/3历史记录，也未新增Regression、Report或Archive。
+
+### Round 4结论
+
+- ONU online、O5、IPoE PASS、PPPoE PASS和网络连通PASS均未取得。
+- `BETA-ISSUE-001`继续OPEN；Release继续`HOLD`。
+- DUT恢复后创建新的TestRun继续验证。
+- 本次不创建Tag，不开始Sprint，不扩展功能。
+
 ## 1. 验证日期
 
 | 阶段 | 日期与时间 | 说明 |

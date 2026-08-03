@@ -144,6 +144,61 @@
 - 当前Release判断仍为**影响Release验收**。
 - 本次不创建Tag，不开始Sprint，不扩展功能。
 
+## Round 3实际验收记录
+
+### 执行信息
+
+| 项目 | 记录 |
+|---|---|
+| 日期 | 2026-07-31 |
+| 验证分支 | `main` |
+| 验证基线 | `f1db576d2a4ad499614be07e3ae0c68b73d7e859` |
+| Round 1/2历史记录 | 保留；原有2个TestRun、6个LOCKED结果、`RPT-000001`和`ARC-000001`均未修改 |
+| Round 3 TestRun | `fa7b1ecb-0603-45c4-8dcd-e3a7239dca5d`，`COMPLETED` |
+
+### 真实ONU/OLT验证
+
+| 检查项 | 期望 | 实际 | 结果 |
+|---|---|---|---|
+| ONU Web | 管理页可访问 | HTTP 200 | PASS |
+| OLT SSH | 可连接并执行只读查询 | Huawei MA5800-X7连接成功 | PASS |
+| F/S/P与ONT ID | `0/2/10`、ONT ID `36` | 与预期一致 | PASS |
+| ONU online | Run state `online` | Run state `offline` | BLOCKED |
+| O5/匹配状态 | O5、Config/Match正常 | Config state `initial`、Match state `initial` | BLOCKED |
+| 光链路 | 当前距离和在线信息有效 | 当前距离为空；last distance `85 m`；last down cause `LOSi/LOBi` | BLOCKED |
+| IPoE | Connected/up、VLAN 1000、有效地址 | 未执行；online/O5前置条件不满足 | BLOCKED |
+| PPPoE | Connected/up、VLAN 1000、有效地址 | 未执行；online/O5前置条件不满足 | BLOCKED |
+| 网络连通 | 0%丢包且平均RTT小于100 ms | 未执行；WAN前置条件不满足 | BLOCKED |
+
+ONU管理面恢复仅证明本地Web可访问，不代表PON业务面恢复。Round 3未执行ONT注册、WAN配置或OLT业务下发，也未把未执行项目判定为PASS/FAIL。
+
+### Test Workbench结果
+
+| 用例 | 结果 | 完整性 | 说明 |
+|---|---|---|---|
+| `BETA-R1-TW-001` | PASS | LOCKED | 创建独立Round 3 Run与版本1 Snapshot，Round 1/2历史计数保持不变 |
+| `BETA-R1-PON-001` | BLOCKED | LOCKED | OLT原始证据显示ONT offline，未达到O5 |
+| `BETA-R1-WAN-001` | BLOCKED | LOCKED | IPoE、PPPoE和网络连通因PON前置条件失败未执行 |
+
+Round 3完成后数据库共有3个`COMPLETED` TestRun、9个LOCKED结果。
+
+### Evidence、Regression、Report与Archive
+
+| 类型 | 记录 |
+|---|---|
+| OLT原始文本 | Evidence `1ec5769e-bc86-4b87-913d-81d92f23bdac`；本地文件`C:\Users\admin\onu_test\screenshots\20260731_beta_round3\20260731_092307_04_ont_online.txt` |
+| OLT渲染截图 | Evidence `9f5dfc47-3d39-436a-b6b6-9f4d33ccc337`；本地文件`C:\Users\admin\onu_test\screenshots\20260731_beta_round3\20260731_092307_04_ont_online.png` |
+| Regression | 对`DEF-000001`追加第2条Regression，结果`BLOCKED`；Defect状态未自动改变 |
+| Report | `RPT-000002`，HTML SHA256与元数据一致 |
+| Archive | `ARC-000002`，ZIP SHA256与元数据一致 |
+
+### Round 3结论
+
+- 必须取得的ONU online、O5、IPoE PASS、PPPoE PASS和网络连通PASS仍未取得。
+- `BETA-ISSUE-001`继续OPEN；Release继续`HOLD`。
+- 恢复PON光链路后必须创建新的TestRun继续验证，不修改Round 1/2/3历史记录。
+- 本次不创建Tag，不开始Sprint，不扩展V1范围。
+
 ## 1. 验证日期
 
 | 阶段 | 日期与时间 | 说明 |

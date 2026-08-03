@@ -16,7 +16,7 @@
 
 | Issue ID | 日期 | 模块 | 描述 | 严重级别 | 当前状态 | 修复版本 | 是否影响Release |
 |---|---|---|---|---|---|---|---|
-| `BETA-ISSUE-001` | 2026-07-30，2026-07-31复测 | Test Execution（外部DUT/实验室环境） | Round 2预检仍显示ONU离线，LOSi/LOBi继续阻断O5、WAN和连通性正向验收 | P1 | OPEN | 环境恢复后复测 | 是 |
+| `BETA-ISSUE-001` | 2026-07-30，2026-07-31 Round 2/3复测 | Test Execution（外部DUT/实验室环境） | Round 3 ONU Web已恢复，但OLT仍显示offline和LOSi/LOBi，继续阻断O5、WAN及网络连通验证 | P1 | OPEN | PON链路恢复后复测 | 是 |
 
 ## Round 1问题记录
 
@@ -83,6 +83,21 @@ ONU离线且ONU Web不可达。Workbench如实保存并锁定BLOCKED结果，未
   - `C:\Users\admin\onu_test\screenshots\20260731_beta_round2\20260731_090347_04_ont_online.txt`
   - `C:\Users\admin\onu_test\screenshots\20260731_beta_round2\20260731_090347_04_ont_online.png`
 - 判定：问题继续复现，状态保持OPEN；不得以CLI命令执行成功替代ONU online/O5业务PASS。
+
+#### Round 3执行记录
+
+- 新TestRun：`fa7b1ecb-0603-45c4-8dcd-e3a7239dca5d`，`COMPLETED`。
+- ONU Web：HTTP 200，本地管理面恢复。
+- OLT状态：F/S/P `0/2/10`、ONT ID `36`，Run state `offline`，Config/Match state `initial`。
+- 光链路：Last down cause `LOSi/LOBi`，当前距离为空，last distance `85 m`。
+- IPoE、PPPoE、网络连通：因online/O5前置条件失败未执行，均记录为BLOCKED。
+- Test Workbench结果：1 PASS、2 BLOCKED，全部LOCKED。
+- Evidence：
+  - `1ec5769e-bc86-4b87-913d-81d92f23bdac`
+  - `9f5dfc47-3d39-436a-b6b6-9f4d33ccc337`
+- Regression：追加第2条BLOCKED Regression，未自动改变Defect状态。
+- Report/Archive：`RPT-000002`、`ARC-000002`，文件SHA256校验一致。
+- 判定：本地管理面恢复不等于PON恢复，`BETA-ISSUE-001`继续OPEN。
 
 ## 字段填写规则
 
@@ -214,7 +229,7 @@ __________
 | 是否存在主流程阻断 | 是：真实PON/WAN正向验收被外部链路条件阻断 |
 | 当前是否影响V1 Release | 是：需完成Round 2正向复测 |
 
-结论说明：Workbench数据闭环本身通过；2026-07-31 Round 2预检确认真实DUT/实验室链路仍不可用，尚未取得ONU online、O5、IPoE、PPPoE及网络连通正向PASS证据。
+结论说明：Workbench数据闭环本身通过；2026-07-31 Round 3中ONU Web已恢复，但OLT仍显示ONT offline和LOSi/LOBi，尚未取得ONU online、O5、IPoE、PPPoE及网络连通正向PASS证据，Release继续HOLD。
 
 复核人：__________
 

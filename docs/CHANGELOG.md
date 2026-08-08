@@ -1,5 +1,23 @@
 # Changelog
 
+## V1 Release Preparation
+
+- 准备日期：2026-08-08
+- 候选版本：`v1.0.0-rc1`（尚未创建Tag）
+- Beta PASS基线：`5e362687a3a89ee5b4336c9a1db68105858ea875`
+- 状态：功能范围冻结，进入正式发布前收尾
+
+完成事项：
+
+- 真实目标ONU完成online、O5、IPoE、PPPoE和网络连通PASS闭环
+- `BETA-ISSUE-001`关闭，关联Defect经PASS Regression关闭
+- SQLite、Evidence、Report和Archive备份/恢复演练通过
+- 空SQLite数据库连续执行7个Alembic迁移至`20260730_0007`
+- README、Architecture、Database和API文档同步至Sprint 0–7真实实现
+- 新增V1 Release Checklist，记录RC1门禁、观察项和技术债
+
+本阶段未新增业务模块、未修改数据库设计、未扩展V1范围，且未创建Tag。
+
 ## V1 Alpha Feature Complete
 
 - 完成时间：2026-07-30

@@ -1,29 +1,53 @@
 # Test Workbench
 
-供网络设备测试工程师本地使用的测试工作台。当前业务范围仅包含 Device Library（设备库），支持设备档案的列表、新建、编辑和删除。
+Test Workbench 是供网络设备测试工程师本地使用的个人测试记录闭环平台，面向 ONU、OLT、光猫等设备的手工测试。当前版本已完成 Sprint 0–7，进入 `v1.0.0-rc1` 发布准备阶段。
+
+本项目不是自动化测试平台，不包含 AI、多用户权限、企业协作、云部署或脚本自动执行。
+
+## 当前能力
+
+- Device Library：设备档案 CRUD。
+- Test Case Library：测试用例、步骤、优先级和启停管理。
+- Test Execution：项目、设备、环境和用例选择，PASS/FAIL/BLOCKED记录。
+- Result Integrity：实际结果、阻塞原因、备注和 LOCKED 不可变保护。
+- Evidence：结果或缺陷附件上传、下载、删除及 SHA256 校验。
+- Defect & Regression：缺陷状态机、追加式回归和结果联动。
+- Environment Snapshot：环境模板、参数和 Run 创建时的不可变快照。
+- Report & Archive：不可变HTML报告、单一ZIP归档和完整性校验。
 
 ## 技术栈
 
-- 前端：React、TypeScript、Vite
-- 后端：FastAPI、SQLAlchemy、Pydantic Settings、Alembic
-- 数据库：本地 SQLite
-- 测试：Vitest、Testing Library、Pytest
+- 前端：React 19、TypeScript、Vite、Vitest、Testing Library
+- 后端：FastAPI、SQLAlchemy、Pydantic Settings、Alembic、Pytest
+- 数据库：SQLite
+- 部署方式：单机 B/S
 
 ## 目录
 
 ```text
 backend/
-  app/core/        配置与日志
-  app/db/          ORM 基类、数据库引擎、会话和依赖
-  app/models/      SQLAlchemy 数据模型
-  app/devices/     设备 Repository、Service、Schema 和 API
-  migrations/      Alembic 数据库迁移
-  tests/           后端测试
-frontend/
-  src/devices/     设备库页面、表单、API client 和测试
-docs/              设计与实施计划
-data/              本地 SQLite 数据（运行时创建）
-logs/              本地日志（运行时创建）
+  app/core/              配置与日志
+  app/db/                Engine、Session、ORM Base和依赖
+  app/models/            全部SQLAlchemy模型
+  app/devices/           设备库
+  app/test_cases/        测试用例库
+  app/test_execution/    项目、Run、Result和Snapshot
+  app/defects/           缺陷与回归
+  app/evidence/          Evidence元数据与文件存储
+  app/environments/      环境模板与快照
+  app/reports/           报告、归档、渲染和存储
+  migrations/            Alembic迁移
+  tests/                 后端测试
+frontend/src/
+  devices/               设备页面
+  testCases/             用例页面
+  testExecution/         执行与结果编辑页面
+  defects/               缺陷及附件页面
+  environments/          环境模板与快照页面
+  reports/               报告归档页面
+docs/                    架构、数据库、API和验收文档
+data/                    SQLite、Evidence、Report、Archive运行数据（Git忽略）
+logs/                    运行日志（Git忽略）
 ```
 
 ## 环境要求
@@ -32,71 +56,75 @@ logs/              本地日志（运行时创建）
 - Node.js 24+
 - npm 11+
 
-## 后端开发
-
-在项目根目录初始化环境：
+## 初始化
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python -m pip install -e "backend[dev]"
 Copy-Item .env.example .env
+Set-Location frontend
+npm.cmd install
+Set-Location ..
 ```
 
-应用数据库迁移：
+## 数据库迁移
+
+默认迁移目标为 `data/test_workbench.db`：
 
 ```powershell
 .\.venv\Scripts\python -m alembic -c backend\alembic.ini upgrade head
 ```
 
-启动 API：
+当前 Alembic 通过 `backend/alembic.ini`读取迁移URL，不会自动使用`TEST_WORKBENCH_DATABASE_URL`切换目标。对自定义数据库执行迁移时，应通过Alembic Config显式覆盖URL；示例见[数据库文档](docs/DATABASE.md)。
+
+## 启动
+
+后端：
 
 ```powershell
 .\.venv\Scripts\python -m uvicorn app.main:app --app-dir backend --reload
 ```
 
-API 默认地址为 `http://127.0.0.1:8000`，健康检查为 `GET /api/health`。
-
-## Device Library API
-
-| 方法 | 路径 | 用途 |
-|---|---|---|
-| `GET` | `/api/devices` | 设备列表 |
-| `POST` | `/api/devices` | 新建设备 |
-| `GET` | `/api/devices/{id}` | 设备详情 |
-| `PUT` | `/api/devices/{id}` | 编辑设备 |
-| `DELETE` | `/api/devices/{id}` | 删除设备 |
-
-`device_type`、`vendor`、`model`、`serial_number` 必填，序列号不可重复。
-
-## 前端开发
+前端：
 
 ```powershell
 Set-Location frontend
-npm.cmd install
 npm.cmd run dev
 ```
 
-前端默认地址为 `http://127.0.0.1:5173`，开发服务器会将 `/api` 转发到本地 FastAPI。
+- API：`http://127.0.0.1:8000`
+- 健康检查：`GET http://127.0.0.1:8000/api/health`
+- 前端：`http://127.0.0.1:5173`
 
 ## 配置
 
-复制 `.env.example` 为 `.env` 后修改。后端变量使用 `TEST_WORKBENCH_` 前缀：
+后端配置使用`TEST_WORKBENCH_`前缀：
 
-- `APP_ENV`：运行环境
-- `API_PREFIX`：API 前缀
-- `DATABASE_URL`：SQLite 连接地址
-- `LOG_LEVEL`：日志级别
-- `LOG_FILE`：日志文件路径
+- `TEST_WORKBENCH_APP_ENV`
+- `TEST_WORKBENCH_API_PREFIX`
+- `TEST_WORKBENCH_DATABASE_URL`
+- `TEST_WORKBENCH_LOG_LEVEL`
+- `TEST_WORKBENCH_LOG_FILE`
+- `TEST_WORKBENCH_EVIDENCE_ROOT`
+- `TEST_WORKBENCH_EVIDENCE_MAX_SIZE_MB`
+- `TEST_WORKBENCH_REPORT_ROOT`
 
-`.env`、数据库、日志、依赖目录和构建产物不会提交到版本库。
+凭据不得写入`.env.example`、文档、Evidence或Git。`.env`、数据库、附件、日志、备份、测试临时目录和构建产物均应保持Git忽略。
 
 ## 验证
 
 ```powershell
-python -m pytest backend/tests -q
+python -m pytest backend/tests -q --basetemp data/pytest
 Set-Location frontend
-npm.cmd test
+npm.cmd test -- --reporter=dot --maxWorkers=1
 npm.cmd run build
 ```
 
-后端测试覆盖迁移、Repository、Service、CRUD API 和基础设施；前端测试覆盖设备列表、新建、编辑、确认删除和 API client。
+Windows环境建议固定Vitest单worker，避免Node/Vitest worker内存不足。
+
+## 发布状态
+
+- 功能基线：Sprint 0–7已完成。
+- 最新自动验证：后端117项、前端39项、生产构建通过。
+- Beta：真实ONU online、O5、IPoE、PPPoE和网络连通闭环通过。
+- RC1：以[发布检查清单](docs/V1_RELEASE_CHECKLIST.md)为准；未经确认不创建Tag。

@@ -1,63 +1,100 @@
 # Test Workbench 数据库
 
-## 数据库引擎
+## 引擎与连接
 
-当前使用本地 SQLite，默认连接地址：
+- 数据库：SQLite
+- 默认URL：`sqlite:///./data/test_workbench.db`
+- 应用配置：`TEST_WORKBENCH_DATABASE_URL`
+- ORM：SQLAlchemy 2.x
+- 迁移：Alembic
+- SQLite外键：每个连接执行`PRAGMA foreign_keys=ON`
 
-```text
-sqlite:///./data/test_workbench.db
-```
+Session使用`autoflush=False`、`expire_on_commit=False`。业务事务由Repository/Service控制。
 
-可通过环境变量 `TEST_WORKBENCH_DATABASE_URL` 覆盖。应用和 Alembic 在首次连接前会创建 SQLite 文件的父目录。
+## 表与关系
 
-## 当前数据表
+空库迁移至head后共有16张表（含`alembic_version`）。
 
-### `devices`
+| 表 | 关键字段/规则 | 关系 |
+|---|---|---|
+| `devices` | UUID；`serial_number`唯一；设备类型、厂商、型号、版本 | 被Run以source id引用并生成快照 |
+| `test_cases` | `case_code`唯一；P0–P3；enabled | 1:N `case_steps` |
+| `case_steps` | `(test_case_id, step_number)`唯一；action、expected_result | 删除TestCase时级联 |
+| `test_projects` | name、version、description | 1:N selections、runs |
+| `project_case_selections` | `(project_id, case_source_id)`复合主键 | 项目删除时级联 |
+| `test_runs` | device_snapshot JSON；status IN_PROGRESS/COMPLETED；version=1 | N:1 project；1:N results；1:1 environment snapshot |
+| `run_results` | case_snapshot JSON；PASS/FAIL/BLOCKED/NULL；DRAFT/LOCKED | Run删除时级联；可关联Evidence/Defect/Regression |
+| `environment_profiles` | name唯一；enabled | 1:N parameters |
+| `environment_parameters` | profile内`param_key`唯一；display_order≥1 | Profile删除时级联 |
+| `run_environment_snapshots` | 每个Run唯一；profile_snapshot JSON；version=1 | Run删除时级联 |
+| `evidences` | 必须且只能属于RunResult或Defect之一；路径唯一；SHA256 | Owner删除时级联 |
+| `defects` | defect_code唯一；source_result唯一；S1–S4；状态约束 | 来源Result RESTRICT；1:N regressions |
+| `regressions` | `(defect_id, verification_result)`唯一；追加式 | Result RESTRICT；Defect删除时级联（API不提供删除） |
+| `reports` | Run内版本唯一；snapshot JSON；HTML路径/hash/大小 | Project/Run删除RESTRICT；1:1 archive |
+| `archives` | `report_id`唯一；manifest JSON；ZIP路径/hash/大小 | Report/Project删除RESTRICT |
+| `alembic_version` | 当前revision | Alembic内部表 |
 
-| 字段 | SQLite/ORM 类型 | 必填 | 规则 |
-|---|---|---:|---|
-| `id` | `VARCHAR(36)` | 是 | UUID 字符串，主键 |
-| `device_type` | `VARCHAR(50)` | 是 | 设备类型 |
-| `vendor` | `VARCHAR(100)` | 是 | 厂商 |
-| `model` | `VARCHAR(100)` | 是 | 型号 |
-| `serial_number` | `VARCHAR(100)` | 是 | 唯一约束及唯一索引 |
-| `mac_address` | `VARCHAR(17)` | 否 | MAC 地址 |
-| `hardware_version` | `VARCHAR(100)` | 否 | 硬件版本 |
-| `software_version` | `VARCHAR(100)` | 否 | 软件版本 |
-| `created_at` | `DATETIME` | 是 | 默认 `CURRENT_TIMESTAMP` |
-| `updated_at` | `DATETIME` | 是 | 默认 `CURRENT_TIMESTAMP`；ORM 更新时刷新 |
+## 不变性规则
 
-当前删除为物理删除，没有软删除字段。
+- `device_snapshot`、`case_snapshot`、`profile_snapshot`创建后不可修改。
+- `snapshot_version`固定为1。
+- RunResult从DRAFT单向进入LOCKED，不能解锁；LOCKED结果字段不可修改。
+- Defect只能来源于LOCKED FAIL/BLOCKED Result，且一个Result最多一个Defect。
+- Regression记录不可更新或删除。
+- Evidence元数据不可更新，文件内容通过SHA256验证。
+- Report和Archive记录不可更新或删除；文件hash不匹配时拒绝下载或归档。
 
-## ORM 与 Session
-
-- ORM Base：`backend/app/db/base.py`
-- Device Model：`backend/app/models/device.py`
-- Engine/Session factory：`backend/app/db/session.py`
-- 请求级 Session：`backend/app/db/dependencies.py`
-
-Session 配置为 `autoflush=False`、`expire_on_commit=False`。Repository 在新增、编辑和删除后提交事务。
-
-## 数据库迁移
-
-迁移工具为 Alembic，配置文件为 `backend/alembic.ini`。
-
-当前迁移：
+## 迁移历史
 
 | Revision | 内容 |
 |---|---|
-| `20260729_0001` | 创建 `devices` 表及序列号唯一索引 |
+| `20260729_0001` | devices |
+| `20260729_0002` | test_cases、case_steps |
+| `20260729_0003` | projects、selections、runs、results和设备/用例快照 |
+| `20260730_0004` | defects、regressions |
+| `20260730_0005` | Result完整性字段、evidences、SQLite外键强化 |
+| `20260730_0006` | environment profiles、parameters、Run环境快照 |
+| `20260730_0007` | reports、archives |
 
-在项目根目录执行升级：
+默认数据库升级：
 
 ```powershell
 python -m alembic -c backend\alembic.ini upgrade head
 ```
 
-回退一个版本：
+查看当前版本：
 
 ```powershell
-python -m alembic -c backend\alembic.ini downgrade -1
+python -m alembic -c backend\alembic.ini current
 ```
 
-应用启动时仍会调用 `Base.metadata.create_all()`，用于确保已注册模型的表存在；正式结构变更应通过 Alembic 迁移记录。
+## 自定义迁移目标
+
+当前`backend/migrations/env.py`读取`backend/alembic.ini`中的`sqlalchemy.url`，不会自动读取应用环境变量。对非默认数据库迁移时显式覆盖：
+
+```powershell
+$env:PYTHONPATH=(Resolve-Path 'backend').Path
+@'
+from pathlib import Path
+from alembic import command
+from alembic.config import Config
+
+database = Path('data/custom.db').resolve()
+config = Config('backend/alembic.ini')
+config.set_main_option('sqlalchemy.url', f'sqlite:///{database.as_posix()}')
+command.upgrade(config, 'head')
+'@ | python -
+```
+
+该差异已列为RC1技术债，不能假设`TEST_WORKBENCH_DATABASE_URL`会改变Alembic CLI目标。
+
+## 备份要求
+
+一致备份必须覆盖：
+
+1. SQLite数据库文件。
+2. `TEST_WORKBENCH_EVIDENCE_ROOT`整个目录。
+3. `TEST_WORKBENCH_REPORT_ROOT`整个目录（含reports和archives）。
+4. 文件清单及SHA256。
+
+恢复后至少执行`PRAGMA quick_check`、`PRAGMA foreign_key_check`、业务表计数、Evidence/Report/Archive hash校验和API下载检查。

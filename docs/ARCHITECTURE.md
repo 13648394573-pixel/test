@@ -1,72 +1,113 @@
 # Test Workbench 架构
 
-## 当前范围
+## 产品边界
 
-Test Workbench 是本地运行的个人网络设备测试工作台。当前已完成基础工程和 Device Library（设备库），尚未包含测试项目、环境、用例或自动化执行模块。
+Test Workbench 是单用户、本地运行的网络设备手工测试记录平台。核心目标是统一设备、用例、环境、执行、证据、缺陷、回归、报告和归档数据，使测试历史可追溯。
 
-## 前后端结构
+不包含AI、多用户权限、企业协作、云存储、自动发现设备或自动化脚本执行。
 
-```text
-frontend/
-  src/App.tsx                 应用入口与页面壳
-  src/devices/                设备库页面、表单、类型和 API client
-
-backend/
-  app/main.py                 FastAPI 创建、生命周期、路由和异常映射
-  app/core/                   配置与日志
-  app/db/                     数据库引擎、Session、ORM Base 和请求依赖
-  app/models/                 SQLAlchemy 数据模型
-  app/devices/                Device Schema、Repository、Service 和 Router
-  migrations/                 Alembic 迁移
-```
-
-前端使用 React、TypeScript 和 Vite，默认开发端口为 `5173`。Vite 将 `/api` 请求代理到本地 FastAPI `127.0.0.1:8000`。
-
-后端使用 FastAPI、SQLAlchemy 和 SQLite。应用启动时加载配置、初始化日志、创建数据库引擎与 Session factory，并通过 FastAPI lifespan 管理引擎生命周期。
-
-## 分层设计
-
-Device Library 后端采用以下单向依赖：
-
-1. **Router**：声明 HTTP 路径、状态码和请求依赖。
-2. **Schema**：使用 Pydantic 校验输入并序列化输出。
-3. **Service**：处理设备不存在、序列号重复等业务规则。
-4. **Repository**：封装 SQLAlchemy 查询与事务提交。
-5. **Model/Database**：定义 `devices` 表并保存数据。
-
-前端采用以下结构：
-
-1. `App` 挂载 `DeviceLibraryPage`。
-2. `DeviceLibraryPage` 管理列表、表单开关、错误和 CRUD 状态。
-3. `DeviceForm` 负责设备字段输入。
-4. `deviceApi` 通过 `fetch` 调用 `/api/devices`。
-
-## 数据流
-
-读取流程：
+## 系统结构
 
 ```text
-DeviceLibraryPage
-→ deviceApi.list()
-→ GET /api/devices
-→ DeviceService.list()
-→ DeviceRepository.list()
-→ SQLite
-→ DeviceRead JSON
-→ 前端设备表格
+React + TypeScript + Vite
+          │ /api
+          ▼
+FastAPI Router
+    ↓ Schema
+    ↓ Service
+    ↓ Repository
+    ↓ SQLAlchemy Model
+          │
+          ├── SQLite：业务数据、JSON Snapshot、文件元数据
+          └── 本地文件：Evidence、HTML Report、ZIP Archive
 ```
 
-写入流程：
+前端开发端口为`5173`，通过Vite代理访问本地FastAPI `8000`。后端在lifespan中初始化日志、SQLite Engine和Session factory，并在关闭时释放Engine。
+
+## 后端模块
+
+| 模块 | 责任 |
+|---|---|
+| `devices` | DUT档案与序列号唯一性 |
+| `test_cases` | TestCase聚合及CaseStep整体替换 |
+| `test_execution` | TestProject、TestRun、RunResult和历史快照 |
+| `environments` | EnvironmentProfile、参数和Run环境快照 |
+| `evidence` | 文件流式存储、元数据、SHA256和生命周期规则 |
+| `defects` | Defect状态机及追加式Regression |
+| `reports` | Report Snapshot、HTML渲染、Archive manifest和ZIP |
+
+所有业务模块保持：
 
 ```text
-设备表单
-→ DeviceInput
-→ POST/PUT/DELETE API
-→ Pydantic 校验
-→ DeviceService 业务检查
-→ DeviceRepository 提交事务
-→ SQLite
-→ 前端更新列表
+Router → Schema → Service → Repository → Model
 ```
 
-后端将 `DeviceNotFoundError` 映射为 `404`，将 `DuplicateSerialNumberError` 映射为 `409`。
+- Router：HTTP路径、依赖、状态码。
+- Schema：Pydantic输入校验与输出序列化。
+- Service：事务边界、状态机、不变性和跨仓储规则。
+- Repository：SQLAlchemy查询与持久化。
+- Model：表、关系、约束和ORM级不可变保护。
+
+## 前端结构
+
+`App.tsx`提供单页导航，各领域目录包含页面、组件、类型、API client和测试：
+
+```text
+devices/  testCases/  testExecution/  defects/  environments/  reports/
+```
+
+前端只调用现有REST API，不直接接触SQLite或文件路径。
+
+## 核心数据流
+
+创建执行记录：
+
+```text
+选择Project + Device + enabled EnvironmentProfile
+→ POST Run
+→ 同事务创建TestRun、RunResult和Environment Snapshot
+→ 冻结Device/Case/Environment数据，snapshot_version=1
+```
+
+结果与证据：
+
+```text
+DRAFT Result编辑
+→ Evidence上传并计算SHA256
+→ Result LOCKED
+→ Result、执行字段和Snapshot不可再修改
+→ 全部LOCKED后Run变为COMPLETED
+```
+
+缺陷回归：
+
+```text
+LOCKED FAIL/BLOCKED Result
+→ Defect（一个Result最多一个Defect）
+→ 追加Regression引用新的LOCKED Result
+→ PASS关闭 / FAIL重开 / BLOCKED仅记录
+```
+
+报告归档：
+
+```text
+COMPLETED且全部LOCKED Run
+→ Report Snapshot + HTML + SHA256
+→ 单一Archive + manifest + 已校验Evidence + ZIP + SHA256
+```
+
+## 历史完整性
+
+- Device、Case和Environment源数据可继续维护，但历史Run使用JSON Snapshot。
+- Snapshot版本固定为1，ORM拒绝修改已创建Snapshot。
+- LOCKED RunResult不可编辑或解锁。
+- Regression追加式，不可修改或删除。
+- Evidence元数据不可修改；文件生命周期由Result/Defect状态控制。
+- Report和Archive生成后不可修改或删除；每个Report最多一个Archive。
+- SQLite连接启用`PRAGMA foreign_keys=ON`。
+
+## 存储与恢复
+
+SQLite只保存文件元数据和相对路径；Evidence、HTML和ZIP保存在配置的本地目录。备份必须同时包含数据库、Evidence根和Report根。
+
+历史Beta数据曾使用不同存储根命名空间，恢复时需要按数据库记录的`storage_path`和SHA256合并到统一根。详情见[V1备份恢复演练](V1_BACKUP_RESTORE_DRILL.md)。

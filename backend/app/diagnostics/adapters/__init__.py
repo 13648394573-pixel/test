@@ -1,0 +1,1 @@
+"""Supported diagnostic adapters."""

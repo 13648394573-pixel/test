@@ -1,5 +1,6 @@
 import { ChangeEvent, useEffect, useState } from "react";
 
+import DiagnosticPanel from "../diagnostics/DiagnosticPanel";
 import type {
   Evidence,
   EvidenceCategory,
@@ -180,6 +181,8 @@ export default function ResultEditor({
           </button>
         </div>
       )}
+
+      <DiagnosticPanel resultId={runResult.id} locked={locked} />
 
       <section className="evidence-panel" aria-label="结果附件">
         <h4>测试附件</h4>

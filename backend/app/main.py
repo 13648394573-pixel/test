@@ -21,6 +21,15 @@ from app.defects.service import (
 )
 from app.devices.router import router as device_router
 from app.devices.service import DeviceNotFoundError, DuplicateSerialNumberError
+from app.diagnostics.router import router as diagnostic_router
+from app.diagnostics.service import (
+    ActiveDiagnosticConflictError,
+    DiagnosticNotFoundError,
+    DiagnosticResultNotFoundError,
+    InvalidDiagnosticPolicyError,
+    LockedDiagnosticResultError,
+    UnsupportedDiagnosticAdapterError,
+)
 from app.evidence.router import router as evidence_router
 from app.evidence.service import (
     EvidenceConflictError,
@@ -336,6 +345,28 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             ),
         )
 
+    for exception_type in (DiagnosticNotFoundError, DiagnosticResultNotFoundError):
+        application.add_exception_handler(
+            exception_type,
+            lambda _request, _exception: JSONResponse(
+                status_code=404, content={"detail": "Diagnostic resource not found"}
+            ),
+        )
+    for exception_type in (LockedDiagnosticResultError, ActiveDiagnosticConflictError):
+        application.add_exception_handler(
+            exception_type,
+            lambda _request, exception: JSONResponse(
+                status_code=409, content={"detail": str(exception) or "Diagnostic conflict"}
+            ),
+        )
+    for exception_type in (InvalidDiagnosticPolicyError, UnsupportedDiagnosticAdapterError):
+        application.add_exception_handler(
+            exception_type,
+            lambda _request, exception: JSONResponse(
+                status_code=422, content={"detail": str(exception) or "Invalid diagnostic request"}
+            ),
+        )
+
     application.include_router(
         device_router,
         prefix=application_settings.api_prefix,
@@ -362,6 +393,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     application.include_router(
         report_router,
+        prefix=application_settings.api_prefix,
+    )
+    application.include_router(
+        diagnostic_router,
         prefix=application_settings.api_prefix,
     )
 

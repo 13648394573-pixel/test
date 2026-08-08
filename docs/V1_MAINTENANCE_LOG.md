@@ -79,6 +79,36 @@
 - Defect/Regression：无产品缺陷，不创建Defect或Regression。
 - Maintenance Observation进度：1/5。
 
+### 使用记录 OBS-002：已注册ONU持续业务复测
+
+| 字段 | 记录 |
+|---|---|
+| 日期 | 2026-08-08 |
+| 测试设备 | ONU；XPON UN-G113；沿用已注册ONT ID 50，SN/MAC已脱敏 |
+| 测试项目 | 已注册ONU在线、O5、双WAN状态与连通稳定性复测 |
+| 使用流程 | OLT只读在线查询 → ONU Web状态采集 → PON/O5确认 → IPoE/PPPoE状态确认 → 双WAN Ping → IPoE异常分层复测 → 证据核验 |
+| 传统测试方式耗时 | 本轮未做同期传统流程对照，不形成节省时间结论 |
+| Workbench耗时 | 本轮按数据库冻结规则未创建TestRun、Report或Archive；维护记录约3分钟 |
+| 测试准备时间 | 约1分钟：确认沿用现有F/S/P `0/2/10`、ONT ID 50及Profile 10/10，不重复注册或下发配置 |
+| 执行时间 | 约3分钟：OLT在线查询、Web状态采集及双WAN Ping；IPoE异常追加诊断约1分钟 |
+| 截图整理时间 | 约1分钟：OLT、WAN、PON及5组Ping证据自动保存并核对 |
+| 报告生成时间 | 少于1分钟：外部测试工具生成JSON/HTML/DOCX；按冻结规则未写入Workbench Report/Archive |
+| 测试结果 | 最终PASS；ONU持续online约24分钟、O5、IPoE up、PPPoE up；PPPoE首次Ping 3/3；IPoE首次域名Ping 0/3，随后网关、公共IP和域名复测均3/3 |
+| Evidence | 新增独立OLT、WAN、PON、PPPoE Ping、IPoE首次失败及三项IPoE复测证据 |
+| 遇到的问题 | ① 自动Ping仍无法识别该固件“Go”按钮，连续第2次需要手工回退；② IPoE首次域名Ping 0/3，但WAN保持up，网关/公共IP/域名立即复测均通过；③ OLT `Match state=mismatch`、ONU `LOID Error`持续存在但不影响业务 |
+| 问题等级 | ① P2；② P2（瞬时连通异常，未稳定复现）；③ P3 |
+| 是否影响测试效率 | 是，手工回退和分层复测额外增加约2分钟；不影响最终业务判定 |
+| 是否进入V1.1候选需求 | 是；`V11-CAND-001`出现次数更新为2；新增`V11-CAND-002`：Ping失败后自动重试并执行网关/公共IP/域名分层诊断 |
+
+#### OBS-002结论
+
+- 最终结果：PASS。
+- ONU/OLT：`online + O5`。
+- WAN：`IPoE up + PPPoE up`。
+- 连通性：PPPoE 3/3；IPoE首次0/3，后续三项复测均3/3。
+- 数据库：未修改；未创建TestRun、Defect、Regression、Report或Archive。
+- Maintenance Observation进度：2/5。
+
 ## 3. 问题分类
 
 | 等级 | 定义 | 维护处理原则 |
@@ -97,7 +127,7 @@
 ### Maintenance Observation门禁
 
 - 最低样本：5次维护期真实ONU/OLT测试记录。
-- 当前进度：1/5。
+- 当前进度：2/5。
 - 当前状态：OBSERVING，尚未满足V1.1方向评审条件。
 - Beta/RC阶段的历史验证记录不替代维护期真实使用记录。
 - 每次真实测试完成后新增一条记录，保留既有记录，不覆盖历史数据。
@@ -117,7 +147,8 @@
 | 候选ID | 日期 | 分类 | 真实场景与问题 | 出现次数 | 当前额外耗时 | 预期收益 | 关联记录/Issue | 优先级 | 状态 |
 |---|---|---|---|---:|---|---|---|---|---|
 | `V11-CAND-___` | __________ | __________ | __________ | ___ | __________ | __________ | __________ | P1/P2/P3 | OBSERVING / REVIEW / ACCEPTED / REJECTED |
-| `V11-CAND-001` | 2026-08-08 | 自动化执行 / 证据采集 | 不同ONU固件的Ping提交控件不同，当前规则定位失败，需要手工选择IPoE/PPPoE出口并执行 | 1 | 约2分钟 | 降低人工回退并稳定采集双WAN连通证据 | `OBS-001` | P2 | OBSERVING |
+| `V11-CAND-001` | 2026-08-08 | 自动化执行 / 证据采集 | 不同ONU固件的Ping提交控件不同，当前规则定位失败，需要手工选择IPoE/PPPoE出口并执行 | 2 | 累计约4分钟 | 降低人工回退并稳定采集双WAN连通证据 | `OBS-001`、`OBS-002` | P2 | OBSERVING |
+| `V11-CAND-002` | 2026-08-08 | 自动化执行 / 证据采集 | IPoE首次域名Ping 0/3，但网关、公共IP和域名立即复测均3/3，需要自动区分瞬时异常与稳定故障 | 1 | 约1分钟 | 降低误判并自动形成分层诊断证据 | `OBS-002` | P2 | OBSERVING |
 
 ### 评审规则
 

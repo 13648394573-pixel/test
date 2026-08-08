@@ -16,7 +16,7 @@
 
 | Issue ID | 日期 | 模块 | 描述 | 严重级别 | 当前状态 | 修复版本 | 是否影响Release |
 |---|---|---|---|---|---|---|---|
-| `BETA-ISSUE-001` | 2026-07-30至2026-08-03，Round 2/3/4复测 | Test Execution（外部DUT/实验室环境） | Round 4 ONU Web再次超时，OLT仍显示offline和LOSi/LOBi，继续阻断O5、WAN及网络连通验证 | P1 | OPEN | PON链路恢复后复测 | 是 |
+| `BETA-ISSUE-001` | 2026-07-30至2026-08-08 | Test Execution（外部DUT/实验室环境） | 授权目标DUT使用空闲ONT ID 48及Profile 10/10注册后，online、O5、IPoE、PPPoE及网络连通全部通过 | P1 | CLOSED | 现场接线恢复与目标DUT重新注册；无代码变更 | 否 |
 
 ## Round 1问题记录
 
@@ -29,9 +29,9 @@
 | 模块 | Test Execution（外部DUT/实验室环境） |
 | 描述 | ONU在预期OLT端口存在历史档案，但当前为offline；无法完成O5、IPoE、PPPoE及外网连通性验证 |
 | 严重级别 | P1（Beta验收阻塞；非已确认产品代码缺陷） |
-| 当前状态 | OPEN |
-| 修复版本 | 环境恢复后复测 |
-| 是否影响Release | 是；缺少真实业务正向PASS证据 |
+| 当前状态 | CLOSED |
+| 修复版本 | 2026-08-08现场接线恢复与目标DUT重新注册；无Test Workbench代码变更 |
+| 是否影响Release | 否；专项恢复验证已取得全部正向PASS证据 |
 | 关联验收步骤 | ONU-01、OLT-01、PON-01、WAN-01、WAN-02、WAN-03、NET-01 |
 | 关联Defect ID | `DEF-000001` |
 | Evidence | `6af9d269-30d5-4161-a89f-1f7b869803ed`、`a87859ef-1cb0-4fff-b7a6-5949c9b7cab4`、`6a48b6ac-db1f-427f-90be-ea3aa72b8fb4` |
@@ -112,6 +112,22 @@ ONU离线且ONU Web不可达。Workbench如实保存并锁定BLOCKED结果，未
   - `C:\Users\admin\onu_test\screenshots\20260803_beta_round4\20260803_172931_04_ont_online.txt`
   - `C:\Users\admin\onu_test\screenshots\20260803_beta_round4\20260803_172931_04_ont_online.png`
 - 判定：DUT尚未恢复，`BETA-ISSUE-001`保持OPEN，Release保持HOLD。
+
+#### 专项恢复验证与关闭记录
+
+- 日期与基线：2026-08-08，`main` / `01024495fb3d12f723b66a70c969db45b74a0ba4`。
+- 授权：当前接入设备确认为目标DUT，允许使用空闲ONT ID及Profile 10/10注册并继续业务验证。
+- DUT：XPON `UN-769XR`；完整SN与MAC仅保存于本地受控Workbench档案。
+- OLT：F/S/P `0/2/10`、ONT ID `48`、Line/Service Profile `10/10`；目标ONT在线，`Match state=match`，但`Config state=failed`作为管理面观察项保留。
+- PON：ONU Web显示`O5`，Tx `2.488809 dBm`，Rx `-6.619421 dBm`。
+- IPoE：Connected，地址`192.168.87.7`，网关`192.168.87.1`。
+- PPPoE：Connected，地址`10.11.20.214`，网关`10.11.20.1`。
+- 网络连通：`www.baidu.com` 4发4收、0%丢包、平均RTT `12.006 ms`。
+- 新TestRun：`b179fb82-f1bc-488a-ab2a-5bcdfc62b309`，3项结果均为PASS/LOCKED；历史3个Run及其Snapshot未修改。
+- PASS Regression：`9f5cc967-f823-43a9-9ac9-44475b87c0a8`；`DEF-000001`已`CLOSED`。
+- Report/Archive：`RPT-000003` / `ARC-000003`，SHA256校验通过。
+- 根因归类：此前阻塞属于外部DUT接线/识别与PON接入条件；本次恢复后使用已确认目标DUT重新注册，未修改Test Workbench代码。
+- 关闭判定：要求的ONU online、O5、IPoE、PPPoE和网络连通全部通过，`BETA-ISSUE-001`关闭，原链路阻塞导致的Release HOLD解除。正式打Tag前需人工确认是否接受`Config state=failed`与SN认证场景下的`LOID Error`观察项。
 
 ## 字段填写规则
 
@@ -229,7 +245,7 @@ __________
 | 等级 | 总数 | OPEN | IN_PROGRESS | RESOLVED | VERIFIED/CLOSED | WONT_FIX |
 |---|---:|---:|---:|---:|---:|---:|
 | P0 | 0 | 0 | 0 | 0 | 0 | 0 |
-| P1 | 1 | 1 | 0 | 0 | 0 | 0 |
+| P1 | 1 | 0 | 0 | 0 | 1 | 0 |
 | P2 | 0 | 0 | 0 | 0 | 0 | 0 |
 
 ## V1 Release影响结论
@@ -237,13 +253,13 @@ __________
 | 检查项 | 当前结论 |
 |---|---|
 | 未关闭P0数量 | 0 |
-| 未关闭P1数量 | 1 |
+| 未关闭P1数量 | 0 |
 | 待评估问题数量 | 0 |
-| 是否存在数据可信度风险 | 否 / 是 / 待评估 |
-| 是否存在主流程阻断 | 是：真实PON/WAN正向验收被外部链路条件阻断 |
-| 当前是否影响V1 Release | 是：需完成Round 2正向复测 |
+| 是否存在数据可信度风险 | 否；历史Run保留，新Run结果与Evidence均已LOCKED |
+| 是否存在主流程阻断 | 否；真实PON/WAN正向验收已完成 |
+| 当前是否影响V1 Release | 原链路阻塞不再影响；具备进入发布复核条件，打Tag前复核管理面观察项 |
 
-结论说明：Workbench数据闭环本身通过；2026-08-03 Round 4预检中ONU Web再次不可达，OLT仍显示ONT offline和LOSi/LOBi，尚未取得ONU online、O5、IPoE、PPPoE及网络连通正向PASS证据，Release继续HOLD。
+结论说明：2026-08-08专项恢复验证中，目标DUT完成注册并取得ONU online、O5、IPoE、PPPoE及网络连通正向PASS证据；新Run全部结果LOCKED，PASS Regression关闭关联Defect，Report/Archive及SHA256校验完成。`BETA-ISSUE-001`已CLOSED，原链路阻塞HOLD解除。OLT仍显示`Config state=failed`且ONU Web显示`LOID Error`，但`Match state=match`且五项业务均实际通过；两项保留为打Tag前人工复核观察项，本阶段不创建Tag。
 
 复核人：__________
 

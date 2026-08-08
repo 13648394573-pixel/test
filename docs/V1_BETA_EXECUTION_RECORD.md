@@ -240,6 +240,61 @@ Round 3完成后数据库共有3个`COMPLETED` TestRun、9个LOCKED结果。
 - DUT恢复后创建新的TestRun继续验证。
 - 本次不创建Tag，不开始Sprint，不扩展功能。
 
+## BETA-ISSUE-001专项恢复验证
+
+### 执行信息
+
+| 项目 | 记录 |
+|---|---|
+| 日期 | 2026-08-08 |
+| 验证分支/基线 | `main` / `01024495fb3d12f723b66a70c969db45b74a0ba4` |
+| 授权范围 | 当前接入设备确认为目标DUT；允许使用空闲ONT ID及Profile 10/10注册，并继续O5、IPoE、PPPoE及网络连通测试 |
+| 新TestRun | `b179fb82-f1bc-488a-ab2a-5bcdfc62b309`，`COMPLETED` |
+| 历史保护 | 原3个Run、9个RunResult、2份Report、2份Archive及2条Regression均保留且未修改 |
+
+### DUT与测试环境
+
+| 项目 | 实际记录 |
+|---|---|
+| DUT | ONU，XPON `UN-769XR`，硬件`V1.0`，软件`V2.2.0-260430` |
+| SN/MAC | 文档脱敏：`XPON-****BDB6` / `60:d2:dd:91:**:**`；完整值仅保存于本地受控Workbench档案 |
+| OLT | Huawei MA5800-X7，F/S/P `0/2/10` |
+| 注册参数 | 空闲ONT ID `48`，SN认证，Line Profile `10`，Service Profile `10` |
+| 业务参数 | VLAN `1000`，IPoE + PPPoE；凭据未写入Evidence |
+| PON光功率 | Tx `2.488809 dBm`，Rx `-6.619421 dBm` |
+
+### 真实ONU/OLT业务结果
+
+| 检查项 | 实际结果 | 判定 |
+|---|---|---|
+| ONU online | OLT显示目标ONT在线，F/S/P `0/2/10`、ONT ID `48`；`Match state=match`，但`Config state=failed` | PASS（业务在线；管理字段保留观察） |
+| O5 | ONU Web显示`ONU State O5`、ONU ID `48` | PASS |
+| IPoE | `Connected`，地址`192.168.87.7`，网关`192.168.87.1` | PASS |
+| PPPoE | `Connected`，地址`10.11.20.214`，网关`10.11.20.1` | PASS |
+| 网络连通 | `www.baidu.com` 4发4收，丢包率`0%`，平均RTT `12.006 ms` | PASS |
+
+ONU Web同时显示`LOID Error`；OLT最终只读复查持续显示`Config state=failed`、`Match state=match`。本轮采用已授权的SN认证，Profile 10/10、ONT IP、O5及完整业务均实际生效，因此两项作为非阻断观察项记录，不否定五项业务验收结果；正式打Tag前仍需人工确认是否接受该管理面状态。最终复查证据：`C:\Users\admin\onu_test\screenshots\20260808_110028_04_ont_online.txt`，Workbench内早期在线Evidence `27bf79a6-01cf-4e32-8890-42b5e512fb46`亦保留该字段。
+
+### Workbench结果、Evidence与闭环
+
+| 用例 | 结果 | 完整性 | 主要Evidence |
+|---|---|---|---|
+| `BETA-R1-PON-001` | PASS | LOCKED | `16799a0c-4e7b-408c-ab37-c31eb1a81bb1`、`27bf79a6-01cf-4e32-8890-42b5e512fb46`、`2e44160d-0619-4eef-b088-8b0f2db0e477`、`32ce6d80-c625-4f2f-a41f-f6901a9f30f0` |
+| `BETA-R1-WAN-001` | PASS | LOCKED | `5bff1322-038e-416d-b6b1-49ffc187c119`、`725f4fb0-d60d-40dc-83ea-5733719e7068`、`9f6cd467-11c2-4c0e-8ffc-c4bbd95f9530`、`e46aee84-5017-4c24-9809-7b5f89991ae6`、`f5f58593-e69a-4c88-bb91-6f31c5e5bb9f` |
+| `BETA-R1-TW-001` | PASS | LOCKED | 新Run的Device/Case/Environment Snapshot及结果锁定均成功 |
+
+- PASS Regression：`9f5cc967-f823-43a9-9ac9-44475b87c0a8`；关联`DEF-000001`由`RESOLVED`流转为`CLOSED`。
+- Report：`RPT-000003`，HTML SHA256 `928801f56bce0ad776a35171d7b566b7bb33f20941e015b6d574df4762842d1e`。
+- Archive：`ARC-000003`，ZIP SHA256 `6ecb924f2bb69629fce8accda4191b8f1c8623a5193de6ab20d55be397ab4c7e`。
+- 完成后共4个`COMPLETED` Run、12个`LOCKED` RunResult、3份Report、3份Archive和3条Regression。
+
+### 专项恢复结论
+
+- `BETA-ISSUE-001`要求的ONU online、O5、IPoE、PPPoE和网络连通五项条件全部取得可追溯PASS证据。
+- `BETA-ISSUE-001`状态更新为`CLOSED`，不再影响V1 Release。
+- 原链路阻塞导致的Release `HOLD`已解除，当前为`PASS（具备进入发布复核条件）`；打Tag前需人工复核`Config state=failed`/`LOID Error`观察项，本阶段不创建Tag。
+- 未修改业务代码、历史Run或V1范围。
+
 ## 1. 验证日期
 
 | 阶段 | 日期与时间 | 说明 |

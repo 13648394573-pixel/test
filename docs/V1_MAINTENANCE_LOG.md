@@ -109,6 +109,38 @@
 - 数据库：未修改；未创建TestRun、Defect、Regression、Report或Archive。
 - Maintenance Observation进度：2/5。
 
+### 使用记录 OBS-003：真实版本回归与资产复用
+
+| 字段 | 记录 |
+|---|---|
+| 日期 | 2026-08-08 |
+| 测试设备 | 复用现有ONU Device `ef6033f6-ccca-48e1-bccb-329da2d4f070`；XPON UN-G113；SN/MAC已脱敏 |
+| 测试项目 | 复用 `Maintenance OBS-001 Real ONU Validation`，执行独立版本回归Run |
+| Workbench记录 | 新Run `2dfbb1f0-dfd6-4511-b246-a53b2b522e22`；历史Run由1增至2，旧Run前后内容一致 |
+| 使用流程 | 复用Device/TestCase/Environment/Project → 创建新TestRun → OLT/Web版本回归 → 双WAN Ping及IPoE分层复测 → Evidence上传 → 5项PASS并LOCKED → Report → Archive |
+| 传统测试方式耗时 | 本轮未做同期传统流程对照，不形成节省时间结论 |
+| Workbench耗时 | 少于1分钟：复用现有资产创建Run、保存5项结果、上传9个Evidence并生成Report/Archive；设备侧回归另约4分钟 |
+| 测试准备时间 | 约1分钟：读取1个Device、5条TestCase、1个Environment Profile和1个Project，无需重新建档 |
+| 设备复用体验 | 良好；直接使用现有Device创建新Run，自动生成设备快照，未修改源Device和历史Run |
+| 用例复用体验 | 5/5用例直接复用并自动生成结果；既有用例中的中文字符损失被忠实带入新快照，Case Code仍可识别，但报告可读性受影响 |
+| 环境复用体验 | 良好；直接复用 `OBS-001 ONU/OLT Lab`，环境快照自动生成，无需重填F/S/P、Profile和VLAN |
+| Evidence整理时间 | 约1分钟；9个附件均上传并通过SHA256；同一WAN截图需分别上传到IPoE和PPPoE结果，存在重复整理 |
+| Report/Archive体验 | `RPT-000002`、`ARC-000002`均在1分钟内生成，HTML/ZIP hash验证通过；归档包含9个本轮Evidence |
+| 测试结果 | 最终PASS；ONU online、O5、IPoE/PPPoE均up；PPPoE首次3/3；IPoE首次0/3，网关、公共IP和域名复测均3/3 |
+| 新发现问题 | ① 自动Ping控件兼容问题连续第3次出现；② IPoE首次0/3、随后全通过的模式连续第2次出现；③ Evidence缺少批量上传或一份证据关联多个结果的整理方式；④ 源用例已有字符损失会进入不可变快照与报告 |
+| 问题等级 | ① P2；② P2；③ P2；④ P2（源数据质量观察） |
+| 是否影响测试效率 | 是，Ping回退、分层复测和重复Evidence关联增加约3分钟；不影响最终业务判定和文件完整性 |
+| 是否进入V1.1候选需求 | `V11-CAND-001`更新为3次；`V11-CAND-002`更新为2次；新增`V11-CAND-003`：Evidence批量上传及多结果关联 |
+
+#### OBS-003结论
+
+- 新TestRun：`COMPLETED`，5/5 `PASS + LOCKED`。
+- Evidence：9个，文件及SHA256全部有效。
+- Report：`95f63bf6-ec26-4bf9-a47f-35d4a0196001`，HTML hash有效。
+- Archive：`db4b080d-e71d-49ed-888c-539596f4fc8d`，ZIP hash有效。
+- 历史完整性：旧Run未修改。
+- Maintenance Observation进度：3/5。
+
 ## 3. 问题分类
 
 | 等级 | 定义 | 维护处理原则 |
@@ -127,7 +159,7 @@
 ### Maintenance Observation门禁
 
 - 最低样本：5次维护期真实ONU/OLT测试记录。
-- 当前进度：2/5。
+- 当前进度：3/5。
 - 当前状态：OBSERVING，尚未满足V1.1方向评审条件。
 - Beta/RC阶段的历史验证记录不替代维护期真实使用记录。
 - 每次真实测试完成后新增一条记录，保留既有记录，不覆盖历史数据。
@@ -147,8 +179,9 @@
 | 候选ID | 日期 | 分类 | 真实场景与问题 | 出现次数 | 当前额外耗时 | 预期收益 | 关联记录/Issue | 优先级 | 状态 |
 |---|---|---|---|---:|---|---|---|---|---|
 | `V11-CAND-___` | __________ | __________ | __________ | ___ | __________ | __________ | __________ | P1/P2/P3 | OBSERVING / REVIEW / ACCEPTED / REJECTED |
-| `V11-CAND-001` | 2026-08-08 | 自动化执行 / 证据采集 | 不同ONU固件的Ping提交控件不同，当前规则定位失败，需要手工选择IPoE/PPPoE出口并执行 | 2 | 累计约4分钟 | 降低人工回退并稳定采集双WAN连通证据 | `OBS-001`、`OBS-002` | P2 | OBSERVING |
-| `V11-CAND-002` | 2026-08-08 | 自动化执行 / 证据采集 | IPoE首次域名Ping 0/3，但网关、公共IP和域名立即复测均3/3，需要自动区分瞬时异常与稳定故障 | 1 | 约1分钟 | 降低误判并自动形成分层诊断证据 | `OBS-002` | P2 | OBSERVING |
+| `V11-CAND-001` | 2026-08-08 | 自动化执行 / 证据采集 | 不同ONU固件的Ping提交控件不同，当前规则定位失败，需要手工选择IPoE/PPPoE出口并执行 | 3 | 累计约6分钟 | 降低人工回退并稳定采集双WAN连通证据 | `OBS-001`、`OBS-002`、`OBS-003` | P2 | OBSERVING |
+| `V11-CAND-002` | 2026-08-08 | 自动化执行 / 证据采集 | IPoE首次域名Ping 0/3，但网关、公共IP和域名立即复测均3/3，需要自动区分瞬时异常与稳定故障 | 2 | 累计约2分钟 | 降低误判并自动形成分层诊断证据 | `OBS-002`、`OBS-003` | P2 | OBSERVING |
+| `V11-CAND-003` | 2026-08-08 | 证据采集 | 同一WAN截图需要分别上传到IPoE与PPPoE结果，多个Evidence缺少批量整理和多结果关联方式 | 1 | 约1分钟 | 减少重复上传、关联和归档文件体积 | `OBS-003` | P2 | OBSERVING |
 
 ### 评审规则
 

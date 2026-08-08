@@ -4,7 +4,7 @@
 
 | 项目 | 当前值 |
 |---|---|
-| 候选Tag | `v1.0.0-rc1`（准备中，尚未创建） |
+| 候选Tag | `v1.0.0-rc1`（Release Approval已批准） |
 | 分支 | `main` |
 | Feature Complete | `edc26db330f57e01e192acd7f2c7260fecf9c747` |
 | Beta PASS基线 | `5e362687a3a89ee5b4336c9a1db68105858ea875` |
@@ -45,7 +45,7 @@
 - [x] 恢复后22/22文件可通过现有API下载并匹配SHA256
 - [x] 空数据库从base连续升级至`20260730_0007`
 - [x] 空库16张表、quick_check和外键检查通过
-- [ ] 正式Tag前将发布备份复制到工作区之外的独立介质
+- [x] 正式发布备份已复制到工作区之外：`Documents\Codex\releases\TestWorkbench\v1.0.0-rc1`，24/24文件及manifest hash一致
 
 详细记录：[Backup / Restore Drill](V1_BACKUP_RESTORE_DRILL.md)和[Empty Database Migration Validation](V1_EMPTY_DATABASE_MIGRATION_VALIDATION.md)。
 
@@ -56,7 +56,7 @@
 - [x] 发布准备最终生产构建通过
 - [x] `git diff --check`通过
 - [x] Git只包含计划内文档，无数据库、附件、ZIP、dist、缓存或临时文件
-- [ ] `main`工作区干净
+- [x] Release Approval执行前`main`工作区干净；批准文档提交后再次核对
 
 ## 5. 文档
 
@@ -69,14 +69,14 @@
 
 ## 6. 已知技术债与观察项
 
-以下项目不否定本次业务PASS，但必须在创建Tag前由发布人明确接受：
+以下项目不否定本次业务PASS。2026-08-08 Release Approval已将其记录为 **Accepted Observation**：接受进入RC1，但不表示问题已修复或技术债已消除。
 
-- [ ] OLT显示`Config state=failed`，同时`Match state=match`且O5、IPoE、PPPoE和网络连通均实际通过。
-- [ ] SN认证场景下ONU Web显示`LOID Error`；本轮未使用LOID认证。
-- [ ] 历史Beta文件跨两个存储根；恢复已通过hash驱动人工归一化，正式数据库生命周期必须固定存储根。
-- [ ] Alembic CLI不会自动读取`TEST_WORKBENCH_DATABASE_URL`切换目标；自定义目标需显式覆盖Config URL。
-- [ ] 当前只有人工备份/恢复流程，没有自动备份工具。
-- [ ] Beta规模仍以少量用例和单一真实ONU闭环为主，100+用例、大附件及更多型号作为后续非阻断验证。
+- [x] Accepted Observation：OLT显示`Config state=failed`，同时`Match state=match`且O5、IPoE、PPPoE和网络连通均实际通过。
+- [x] Accepted Observation：SN认证场景下ONU Web显示`LOID Error`；本轮未使用LOID认证。
+- [x] Accepted Observation：历史Beta文件跨两个存储根；恢复已通过hash驱动人工归一化，正式数据库生命周期必须固定存储根。
+- [x] Accepted Observation：Alembic CLI不会自动读取`TEST_WORKBENCH_DATABASE_URL`切换目标；自定义目标需显式覆盖Config URL。
+- [x] Accepted Observation：当前只有人工备份/恢复流程，没有自动备份工具。
+- [x] Accepted Observation：Beta规模仍以少量用例和单一真实ONU闭环为主，100+用例、大附件及更多型号作为后续非阻断验证。
 
 ## 7. 安全与范围
 
@@ -95,15 +95,26 @@
 4. 后端、前端和生产构建使用发布提交重新验证通过。
 5. 人工接受所有非阻断观察项。
 
-建议Tag命令（本阶段不执行）：
+批准执行的Tag命令：
 
 ```powershell
-git tag -a v1.0.0-rc1 -m "Test Workbench v1.0.0-rc1"
+git tag -a v1.0.0-rc1 -m "Test Workbench V1.0.0 Release Candidate 1"
 ```
+
+## Release Approval记录
+
+| 项目 | 结论 |
+|---|---|
+| 审批日期 | 2026-08-08 |
+| 审批范围 | V1.0.0-rc1；不新增功能、不启动Sprint、不改变数据库设计 |
+| 自动验证 | 后端117 passed；前端39 passed；生产构建通过 |
+| 数据验证 | Backup/Restore PASS；Empty DB Migration PASS |
+| Observation | `Config state=failed`、`LOID Error`及本清单其余技术债全部Accepted |
+| Release决策 | APPROVED：允许创建`v1.0.0-rc1` |
 
 ## 最终签署
 
 | 角色 | 姓名 | 日期 | 结论 |
 |---|---|---|---|
-| 测试工程师 | __________ | __________ | PASS / HOLD |
-| 发布复核 | __________ | __________ | APPROVED / REJECTED |
+| 测试工程师 | 用户（Release Approval指令） | 2026-08-08 | PASS |
+| 发布复核 | Codex（按门禁执行与记录） | 2026-08-08 | APPROVED |

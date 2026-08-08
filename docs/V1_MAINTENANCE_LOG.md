@@ -141,6 +141,36 @@
 - 历史完整性：旧Run未修改。
 - Maintenance Observation进度：3/5。
 
+### 使用记录 OBS-004：真实异常、缺陷与回归闭环
+
+| 字段 | 记录 |
+|---|---|
+| 日期 | 2026-08-08 |
+| 测试设备 | 复用现有ONU Device；XPON UN-G113；SN/MAC已脱敏 |
+| 测试项目 | 复用现有Project、5条TestCase和Environment Profile，执行异常Run与独立Regression Run |
+| 使用流程 | 新Failure Run → IPoE首次Ping失败 → Result FAIL并LOCKED → Evidence → `DEF-000001` → IN_PROGRESS → RESOLVED → 新Regression Run → 同用例PASS并LOCKED → Regression PASS → Defect CLOSED → 两套Report/Archive |
+| 问题发现耗时 | 约3分钟：准备、OLT/Web状态采集后，IPoE首次域名Ping稳定复现0/3；同期PPPoE为3/3 |
+| Evidence关联体验 | Failure Run关联7个、Regression Run关联9个，共16个Evidence，文件及SHA256全部有效；同一WAN/PON证据需在多个结果和Run间重复上传 |
+| Defect创建体验 | 良好；LOCKED FAIL结果可直接创建唯一Defect并自动生成 `DEF-000001`，来源Result与Evidence可追溯；创建和状态流转少于1分钟 |
+| Regression流程体验 | 状态机按OPEN → IN_PROGRESS → RESOLVED → CLOSED正确运行；PASS Regression自动关闭Defect；但验证同一个失败用例仍需创建包含全部5条项目用例的完整Run |
+| Report/Archive完整性 | `RPT-000003`正确汇总5项、4 PASS、1 FAIL、1 Defect；`RPT-000004`汇总5 PASS；`ARC-000003`和`ARC-000004`均包含对应Evidence且HTML/ZIP hash有效 |
+| 测试结果 | 异常Run：4 PASS、1 FAIL、全部LOCKED；Regression Run：5 PASS、全部LOCKED；IPoE网关、公共IP和域名复测均3/3；Defect最终CLOSED |
+| 新发现问题 | ① 自动Ping控件兼容问题连续第4次出现；② IPoE首次0/3、分层复测通过连续第3次出现；③ 单用例回归必须执行完整Project用例集；④ Evidence跨结果/Run重复关联增加整理和归档体积 |
+| 问题等级 | ① P2；② P2；③ P1；④ P2 |
+| 是否影响测试效率 | 是；手工Ping、分层复测、完整Regression Run和重复Evidence整理合计增加约5分钟 |
+| 是否进入V1.1候选需求 | 更新`V11-CAND-001/002/003`出现次数；新增`V11-CAND-004`：支持针对失败用例创建精简Regression Run |
+
+#### OBS-004结论
+
+- Failure Run：`69ea1911-a889-4e95-856d-5a1fe4ddb9eb`，`COMPLETED`，4 PASS / 1 FAIL / 5 LOCKED。
+- Defect：`37408590-0310-4c28-a2bb-c404db1ea837`（`DEF-000001`），最终`CLOSED`。
+- Regression：`e8f83145-c69b-45f6-af86-9bca3aa87ed0`，结果`PASS`。
+- Regression Run：`e11acdc7-617d-403d-96ed-39d8170d240c`，`COMPLETED`，5 PASS / 5 LOCKED。
+- Evidence：共16个，文件及SHA256全部有效。
+- Report/Archive：`RPT-000003` / `ARC-000003`、`RPT-000004` / `ARC-000004`全部有效。
+- 历史完整性：OBS-001与OBS-003历史Run未修改。
+- Maintenance Observation进度：4/5。
+
 ## 3. 问题分类
 
 | 等级 | 定义 | 维护处理原则 |
@@ -159,7 +189,7 @@
 ### Maintenance Observation门禁
 
 - 最低样本：5次维护期真实ONU/OLT测试记录。
-- 当前进度：3/5。
+- 当前进度：4/5。
 - 当前状态：OBSERVING，尚未满足V1.1方向评审条件。
 - Beta/RC阶段的历史验证记录不替代维护期真实使用记录。
 - 每次真实测试完成后新增一条记录，保留既有记录，不覆盖历史数据。
@@ -179,9 +209,10 @@
 | 候选ID | 日期 | 分类 | 真实场景与问题 | 出现次数 | 当前额外耗时 | 预期收益 | 关联记录/Issue | 优先级 | 状态 |
 |---|---|---|---|---:|---|---|---|---|---|
 | `V11-CAND-___` | __________ | __________ | __________ | ___ | __________ | __________ | __________ | P1/P2/P3 | OBSERVING / REVIEW / ACCEPTED / REJECTED |
-| `V11-CAND-001` | 2026-08-08 | 自动化执行 / 证据采集 | 不同ONU固件的Ping提交控件不同，当前规则定位失败，需要手工选择IPoE/PPPoE出口并执行 | 3 | 累计约6分钟 | 降低人工回退并稳定采集双WAN连通证据 | `OBS-001`、`OBS-002`、`OBS-003` | P2 | OBSERVING |
-| `V11-CAND-002` | 2026-08-08 | 自动化执行 / 证据采集 | IPoE首次域名Ping 0/3，但网关、公共IP和域名立即复测均3/3，需要自动区分瞬时异常与稳定故障 | 2 | 累计约2分钟 | 降低误判并自动形成分层诊断证据 | `OBS-002`、`OBS-003` | P2 | OBSERVING |
-| `V11-CAND-003` | 2026-08-08 | 证据采集 | 同一WAN截图需要分别上传到IPoE与PPPoE结果，多个Evidence缺少批量整理和多结果关联方式 | 1 | 约1分钟 | 减少重复上传、关联和归档文件体积 | `OBS-003` | P2 | OBSERVING |
+| `V11-CAND-001` | 2026-08-08 | 自动化执行 / 证据采集 | 不同ONU固件的Ping提交控件不同，当前规则定位失败，需要手工选择IPoE/PPPoE出口并执行 | 4 | 累计约8分钟 | 降低人工回退并稳定采集双WAN连通证据 | `OBS-001`、`OBS-002`、`OBS-003`、`OBS-004` | P2 | OBSERVING |
+| `V11-CAND-002` | 2026-08-08 | 自动化执行 / 证据采集 | IPoE首次域名Ping 0/3，但网关、公共IP和域名立即复测均3/3，需要自动区分瞬时异常与稳定故障 | 3 | 累计约3分钟 | 降低误判并自动形成分层诊断证据 | `OBS-002`、`OBS-003`、`OBS-004` | P2 | OBSERVING |
+| `V11-CAND-003` | 2026-08-08 | 证据采集 | 同一WAN截图需要分别上传到IPoE与PPPoE结果，多个Evidence缺少批量整理和多结果关联方式 | 2 | 累计约3分钟 | 减少重复上传、关联和归档文件体积 | `OBS-003`、`OBS-004` | P2 | OBSERVING |
+| `V11-CAND-004` | 2026-08-08 | 测试模板 / 回归流程 | 验证单个失败用例仍需基于原Project生成全部5条结果，增加无关结果填写、Evidence和报告体积 | 1 | 约2分钟 | 支持从Defect或失败Result创建仅含目标用例的Regression Run | `OBS-004` | P1 | OBSERVING |
 
 ### 评审规则
 

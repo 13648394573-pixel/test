@@ -6,6 +6,7 @@ from app.models.diagnostic import (
 )
 from app.models.defect import Defect, Regression
 from app.models.evidence import Evidence
+from app.models.focused_regression import FocusedRegressionRun
 from app.models.report import Archive, Report
 from app.models.environment import (
     EnvironmentParameter,
@@ -29,6 +30,7 @@ __all__ = [
     "DiagnosticSession",
     "Defect",
     "Evidence",
+    "FocusedRegressionRun",
     "EnvironmentParameter",
     "EnvironmentProfile",
     "ProjectCaseSelection",

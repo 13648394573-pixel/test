@@ -755,6 +755,70 @@ tbody tr:last-child td {
   background: #f8fafd;
 }
 
+.focused-regression-panel {
+  display: grid;
+  gap: 16px;
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid #e3e8f0;
+}
+
+.focused-regression-heading p {
+  margin: 5px 0 0;
+  color: #617089;
+}
+
+.focused-regression-launcher {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(150px, 1fr)) auto;
+  align-items: end;
+  gap: 10px;
+}
+
+.focused-regression-launcher label {
+  display: grid;
+  gap: 6px;
+  color: #43516a;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.focused-regression-launcher select {
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid #cfd9e7;
+  border-radius: 7px;
+  background: #fff;
+}
+
+.focused-regression-history {
+  display: grid;
+  gap: 8px;
+}
+
+.focused-regression-history button {
+  display: grid;
+  grid-template-columns: minmax(170px, 1fr) minmax(120px, 0.7fr) auto;
+  gap: 10px;
+  padding: 11px;
+  border: 1px solid #dce3ee;
+  border-radius: 8px;
+  color: #24324b;
+  background: #f9fbfe;
+  cursor: pointer;
+  text-align: left;
+}
+
+.focused-regression-history strong {
+  color: #315fb5;
+}
+
+.focused-regression-detail {
+  padding: 16px;
+  border: 1px solid #dce3ee;
+  border-radius: 10px;
+}
+
 @media (max-width: 900px) {
   .form-grid {
     grid-template-columns: repeat(2, minmax(140px, 1fr));
@@ -775,6 +839,10 @@ tbody tr:last-child td {
 
   .defect-layout {
     grid-template-columns: 1fr;
+  }
+
+  .focused-regression-launcher {
+    grid-template-columns: 1fr 1fr;
   }
 }
 
@@ -833,5 +901,10 @@ tbody tr:last-child td {
 
   .case-selector label span:last-child {
     grid-column: 2;
+  }
+
+  .focused-regression-launcher,
+  .focused-regression-history button {
+    grid-template-columns: 1fr;
   }
 }

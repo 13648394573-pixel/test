@@ -183,6 +183,9 @@ describe("Defect & Regression", () => {
     fireEvent.click(screen.getByRole("button", { name: /打开 DEF-000001/ }));
     expect(screen.getByText("ONU-WAN-001")).toBeInTheDocument();
 
+    fireEvent.click(screen.getByRole("button", { name: "精简回归" }));
+    expect(screen.getByRole("region", { name: "精简回归" })).toBeInTheDocument();
+
     fireEvent.click(screen.getByRole("button", { name: "编辑缺陷" }));
     fireEvent.change(screen.getByLabelText("标题"), {
       target: { value: "WAN recovery fails" }

@@ -13,7 +13,7 @@ Session使用`autoflush=False`、`expire_on_commit=False`。业务事务由Repos
 
 ## 表与关系
 
-空库迁移至head后共有16张表（含`alembic_version`）。
+空库迁移至head后共有20张表（含`alembic_version`）。
 
 | 表 | 关键字段/规则 | 关系 |
 |---|---|---|
@@ -32,6 +32,10 @@ Session使用`autoflush=False`、`expire_on_commit=False`。业务事务由Repos
 | `regressions` | `(defect_id, verification_result)`唯一；追加式 | Result RESTRICT；Defect删除时级联（API不提供删除） |
 | `reports` | Run内版本唯一；snapshot JSON；HTML路径/hash/大小 | Project/Run删除RESTRICT；1:1 archive |
 | `archives` | `report_id`唯一；manifest JSON；ZIP路径/hash/大小 | Report/Project删除RESTRICT |
+| `diagnostic_sessions` | Ping策略快照；PENDING/RUNNING/COMPLETED/FAILED/INTERRUPTED | N:1 RunResult；活动Session唯一 |
+| `diagnostic_attempts` | 分层、目标、丢包率、时延和原始输出；追加式 | N:1 Diagnostic Session |
+| `diagnostic_attempt_evidences` | Attempt与Evidence复合主键 | Diagnostic/Evidence关联 |
+| `focused_regression_runs` | `test_run_id`唯一；Defect Snapshot JSON；version=1 | TestRun/Defect/来源Result均RESTRICT |
 | `alembic_version` | 当前revision | Alembic内部表 |
 
 ## 不变性规则
@@ -43,6 +47,7 @@ Session使用`autoflush=False`、`expire_on_commit=False`。业务事务由Repos
 - Regression记录不可更新或删除。
 - Evidence元数据不可更新，文件内容通过SHA256验证。
 - Report和Archive记录不可更新或删除；文件hash不匹配时拒绝下载或归档。
+- Focused Regression关联及Defect Snapshot不可更新或删除；每次回归必须产生新的TestRun。
 
 ## 迁移历史
 
@@ -55,6 +60,8 @@ Session使用`autoflush=False`、`expire_on_commit=False`。业务事务由Repos
 | `20260730_0005` | Result完整性字段、evidences、SQLite外键强化 |
 | `20260730_0006` | environment profiles、parameters、Run环境快照 |
 | `20260730_0007` | reports、archives |
+| `20260808_0008` | diagnostic sessions、attempts和Evidence关联 |
+| `20260810_0009` | focused_regression_runs及不可变Defect Snapshot |
 
 默认数据库升级：
 

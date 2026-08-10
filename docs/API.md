@@ -98,6 +98,18 @@ Defect创建必须引用LOCKED FAIL/BLOCKED Result；一个Result最多创建一
 
 Regression引用同用例的新LOCKED Result：PASS使RESOLVED→CLOSED；FAIL使RESOLVED→REOPENED；BLOCKED只追加记录。
 
+## Focused Regression Run
+
+| 方法 | 路径 | 用途 |
+|---|---|---|
+| POST | `/api/defects/{defect_id}/focused-regression-runs` | 从RESOLVED Defect创建单用例新Run |
+| GET | `/api/defects/{defect_id}/focused-regression-runs` | 查询缺陷的精简回归历史 |
+| GET | `/api/focused-regression-runs/{run_id}` | 按TestRun查询精简回归详情 |
+
+创建请求包含`device_source_id`、`environment_profile_id`，可选`source_run_result_id`。来源只能是该Defect的原始LOCKED FAIL/BLOCKED Result，或该Defect已有FAIL/BLOCKED Regression Result。同一Defect存在IN_PROGRESS精简回归时再次创建返回`409`。
+
+精简回归始终创建新的TestRun和DRAFT RunResult；Case Snapshot复制来源历史快照，Device和Environment在本次创建时重新捕获。结果编辑、Evidence、LOCK及Regression状态流转继续使用已有API。
+
 ## Report与Archive
 
 | 方法 | 路径 | 用途 |

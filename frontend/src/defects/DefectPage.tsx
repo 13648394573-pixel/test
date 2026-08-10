@@ -5,6 +5,13 @@ import type {
   RunResult,
   TestExecutionApi
 } from "../testExecution/types";
+import FocusedRegressionPanel from "../focusedRegressions/FocusedRegressionPanel";
+import { focusedRegressionApi } from "../focusedRegressions/api";
+import type { FocusedRegressionApi } from "../focusedRegressions/types";
+import { deviceApi } from "../devices/api";
+import type { DeviceApi } from "../devices/types";
+import { environmentApi } from "../environments/api";
+import type { EnvironmentApi } from "../environments/types";
 import { defectApi } from "./api";
 import DefectEvidencePanel from "./DefectEvidencePanel";
 import type {
@@ -19,6 +26,9 @@ import type {
 interface DefectPageProps {
   api?: DefectApi;
   executionApi?: TestExecutionApi;
+  focusedApi?: FocusedRegressionApi;
+  deviceApi?: DeviceApi;
+  environmentApi?: EnvironmentApi;
 }
 
 const EMPTY_FORM: DefectInput = {
@@ -32,7 +42,10 @@ const EMPTY_FORM: DefectInput = {
 
 export default function DefectPage({
   api = defectApi,
-  executionApi = testExecutionApi
+  executionApi = testExecutionApi,
+  focusedApi = focusedRegressionApi,
+  deviceApi: focusedDeviceApi = deviceApi,
+  environmentApi: focusedEnvironmentApi = environmentApi
 }: DefectPageProps) {
   const [defects, setDefects] = useState<Defect[]>([]);
   const [evidence, setEvidence] = useState<RunResult[]>([]);
@@ -47,6 +60,7 @@ export default function DefectPage({
   const [severityFilter, setSeverityFilter] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [showFocusedRegression, setShowFocusedRegression] = useState(false);
 
   useEffect(() => {
     Promise.all([api.list(), executionApi.listProjects()])
@@ -138,6 +152,7 @@ export default function DefectPage({
     try {
       setActive(await api.get(id));
       setShowForm(false);
+      setShowFocusedRegression(false);
       setError("");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "加载缺陷失败");
@@ -367,6 +382,13 @@ export default function DefectPage({
             </section>
 
             <div className="defect-actions">
+              <button
+                className="button button-quiet"
+                type="button"
+                onClick={() => setShowFocusedRegression((current) => !current)}
+              >
+                精简回归
+              </button>
               {active.status !== "CLOSED" && (
                 <button
                   className="button button-quiet"
@@ -386,6 +408,16 @@ export default function DefectPage({
                 </button>
               )}
             </div>
+
+            {showFocusedRegression && (
+              <FocusedRegressionPanel
+                defect={active}
+                api={focusedApi}
+                deviceApi={focusedDeviceApi}
+                environmentApi={focusedEnvironmentApi}
+                executionApi={executionApi}
+              />
+            )}
 
             {active.status === "IN_PROGRESS" && (
               <div className="resolution-panel">

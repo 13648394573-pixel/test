@@ -41,6 +41,14 @@ from app.evidence.service import (
     EvidenceTooLargeError,
     InvalidEvidenceError,
 )
+from app.focused_regressions.router import router as focused_regression_router
+from app.focused_regressions.service import (
+    ActiveFocusedRegressionExistsError,
+    FocusedDefectNotFoundError,
+    FocusedRegressionNotFoundError,
+    InvalidFocusedRegressionSourceError,
+    InvalidFocusedRegressionStateError,
+)
 from app.reports.router import router as report_router
 from app.reports.service import (
     ArchiveAlreadyExistsError,
@@ -373,6 +381,30 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             ),
         )
 
+    for exception_type in (
+        FocusedDefectNotFoundError,
+        FocusedRegressionNotFoundError,
+    ):
+        application.add_exception_handler(
+            exception_type,
+            lambda _request, _exception: JSONResponse(
+                status_code=404,
+                content={"detail": "Focused regression resource not found"},
+            ),
+        )
+    for exception_type in (
+        ActiveFocusedRegressionExistsError,
+        InvalidFocusedRegressionSourceError,
+        InvalidFocusedRegressionStateError,
+    ):
+        application.add_exception_handler(
+            exception_type,
+            lambda _request, exception: JSONResponse(
+                status_code=409,
+                content={"detail": str(exception) or "Focused regression conflict"},
+            ),
+        )
+
     application.include_router(
         device_router,
         prefix=application_settings.api_prefix,
@@ -403,6 +435,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     application.include_router(
         diagnostic_router,
+        prefix=application_settings.api_prefix,
+    )
+    application.include_router(
+        focused_regression_router,
         prefix=application_settings.api_prefix,
     )
 

@@ -73,6 +73,153 @@ def test_huawei_adapter_rejects_unparseable_output() -> None:
         )
 
 
+def test_huawei_adapter_parses_busybox_packet_summary() -> None:
+    from app.diagnostics.adapters.huawei import HuaweiPingAdapter
+    from app.diagnostics.contracts import DiagnosticContext, PingRequest
+
+    output = "3 packets transmitted, 3 packets received."
+    observation = HuaweiPingAdapter(lambda _context, _request: output).ping(
+        DiagnosticContext({"vendor": "Huawei"}, None, "IPOE"),
+        PingRequest("PUBLIC_IP", "1.1.1.1", 3, 5),
+    )
+
+    assert observation.status == "PASS"
+    assert observation.packets_sent == 3
+    assert observation.packets_received == 3
+    assert observation.loss_percent == Decimal("0")
+
+
+class _LocatorStub:
+    def __init__(self, *, visible=False, enabled=True):
+        self.visible = visible
+        self.enabled = enabled
+
+    @property
+    def first(self):
+        return self
+
+    def count(self):
+        return 1
+
+    def is_visible(self):
+        return self.visible
+
+    def is_enabled(self):
+        return self.enabled
+
+
+class _SurfaceStub:
+    def __init__(self, locators):
+        self.locators = locators
+
+    def locator(self, selector):
+        return self.locators.get(selector, _LocatorStub())
+
+
+def test_huawei_selector_strategy_uses_first_usable_candidate() -> None:
+    from app.diagnostics.adapters.huawei import HuaweiSelectorStrategy
+
+    hidden = _LocatorStub(visible=False)
+    visible = _LocatorStub(visible=True)
+    surface = _SurfaceStub({"#fixed": hidden, "input[name='pingAddr']": visible})
+
+    selected = HuaweiSelectorStrategy.first_usable(
+        surface,
+        ("#fixed", "input[name='pingAddr']"),
+        "PING_TARGET",
+    )
+
+    assert selected is visible
+
+
+def test_huawei_selector_strategy_returns_explicit_stage_error() -> None:
+    from app.diagnostics.adapters.huawei import (
+        HuaweiSelectorError,
+        HuaweiSelectorStrategy,
+    )
+
+    with pytest.raises(HuaweiSelectorError, match="PING_START") as captured:
+        HuaweiSelectorStrategy.first_usable(
+            _SurfaceStub({}),
+            ("#start", "input[value='Go']"),
+            "PING_START",
+        )
+
+    assert captured.value.stage == "PING_START"
+
+
+def test_huawei_selector_strategy_maps_wan_mode_to_interface_option() -> None:
+    from app.diagnostics.adapters.huawei import HuaweiSelectorStrategy
+
+    options = [("65535", "Any"), ("65536", "ppp0"), ("130817", "nas0_1")]
+
+    assert HuaweiSelectorStrategy.choose_wan_option(options, "PPPOE") == "65536"
+    assert HuaweiSelectorStrategy.choose_wan_option(options, "IPOE") == "130817"
+
+
+def test_huawei_selector_strategy_rejects_non_internet_ipoe_options() -> None:
+    from app.diagnostics.adapters.huawei import (
+        HuaweiSelectorError,
+        HuaweiSelectorStrategy,
+    )
+
+    options = [
+        ("1", "Any"),
+        ("2", "ppp0"),
+        ("3", "TR069"),
+        ("4", "VoIP"),
+        ("5", "IPTV"),
+    ]
+
+    with pytest.raises(HuaweiSelectorError) as captured:
+        HuaweiSelectorStrategy.choose_wan_option(options, "IPOE")
+
+    assert captured.value.stage == "WAN_INTERFACE_OPTION"
+
+
+def test_huawei_selector_strategy_does_not_use_arbitrary_text_input() -> None:
+    from app.diagnostics.adapters.huawei import (
+        HuaweiSelectorError,
+        HuaweiSelectorStrategy,
+    )
+
+    surface = _SurfaceStub({"input[type='text']": _LocatorStub(visible=True)})
+
+    with pytest.raises(HuaweiSelectorError):
+        HuaweiSelectorStrategy.first_usable(
+            surface,
+            HuaweiSelectorStrategy.PING_TARGET,
+            "PING_TARGET",
+        )
+
+
+def test_huawei_web_executor_rejects_management_url_userinfo() -> None:
+    from app.diagnostics.adapters.huawei import (
+        HuaweiExecutorConfigurationError,
+        HuaweiWebPingExecutor,
+    )
+    from app.diagnostics.contracts import DiagnosticContext, PingRequest
+
+    executor = HuaweiWebPingExecutor(
+        "operator",
+        "local-secret",
+        runner=lambda *_args: "sent=3 received=3 loss=0%",
+    )
+
+    with pytest.raises(HuaweiExecutorConfigurationError):
+        executor(
+            DiagnosticContext(
+                {"vendor": "Huawei"},
+                {"parameters": [{
+                    "param_key": "onu_management_url",
+                    "param_value": "http://operator:secret@192.168.1.1",
+                }]},
+                "IPOE",
+            ),
+            PingRequest("GATEWAY", "192.168.87.1", 3, 5),
+        )
+
+
 def test_huawei_web_executor_uses_environment_management_url_and_wan() -> None:
     from app.diagnostics.adapters.huawei import HuaweiWebPingExecutor
     from app.diagnostics.contracts import DiagnosticContext, PingRequest

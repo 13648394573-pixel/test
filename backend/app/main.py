@@ -1,5 +1,6 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -22,6 +23,7 @@ from app.defects.service import (
 from app.devices.router import router as device_router
 from app.devices.service import DeviceNotFoundError, DuplicateSerialNumberError
 from app.diagnostics.router import router as diagnostic_router
+from app.diagnostics.repository import DiagnosticRepository
 from app.diagnostics.service import (
     ActiveDiagnosticConflictError,
     DiagnosticNotFoundError,
@@ -84,6 +86,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         Base.metadata.create_all(engine)
         application.state.engine = engine
         application.state.session_factory = create_session_factory(engine)
+        with application.state.session_factory() as session:
+            DiagnosticRepository(session).interrupt_running(
+                datetime.now(UTC).replace(tzinfo=None)
+            )
         yield
         engine.dispose()
 

@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from fastapi.testclient import TestClient
 
 from app.core.config import Settings
@@ -85,3 +87,37 @@ def test_diagnostic_api_rejects_invalid_policy(tmp_path) -> None:
             "packet_count": 3, "timeout_seconds": 5, "max_attempts_per_layer": 2,
         })
         assert response.status_code == 422
+
+
+def test_application_restart_interrupts_running_diagnostic(tmp_path) -> None:
+    from app.diagnostics.repository import DiagnosticRepository
+
+    settings = Settings(
+        _env_file=None,
+        database_url=f"sqlite:///{(tmp_path / 'recovery.db').as_posix()}",
+        log_file=str(tmp_path / "recovery.log"),
+        evidence_root=str(tmp_path / "evidence"),
+    )
+    first_app = create_app(settings)
+    with TestClient(first_app) as client:
+        result_id = create_result(client)
+        with first_app.state.session_factory() as session:
+            repository = DiagnosticRepository(session)
+            diagnostic = repository.create_session(
+                result_id,
+                "huawei-ping",
+                "1",
+                "IPOE",
+                {"layers": ["GATEWAY", "PUBLIC_IP", "DOMAIN"]},
+            )
+            repository.mark_running(diagnostic, datetime(2026, 8, 10, 9, 0))
+            session_id = diagnostic.id
+
+    restarted_app = create_app(settings)
+    with TestClient(restarted_app) as client:
+        response = client.get(f"/api/diagnostics/{session_id}")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "INTERRUPTED"
+    assert response.json()["error_code"] == "PROCESS_RESTARTED"
+    assert response.json()["completed_at"] is not None

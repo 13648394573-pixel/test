@@ -1,3 +1,4 @@
+import logging
 import re
 from collections.abc import Mapping
 from datetime import UTC, datetime
@@ -10,6 +11,9 @@ from app.diagnostics.registry import AdapterMismatchError, AdapterRegistry
 from app.diagnostics.repository import DiagnosticRepository
 from app.models.diagnostic import DiagnosticSession
 from app.evidence.service import EvidenceService
+
+
+logger = logging.getLogger(__name__)
 
 
 class DiagnosticNotFoundError(Exception):
@@ -158,13 +162,21 @@ class DiagnosticService:
                     break
             self.repository.mark_terminal(diagnostic, "COMPLETED", self.clock())
         except Exception as exception:
+            error_message = self._sanitize_failure_message(str(exception))
             self.repository.mark_terminal(
                 diagnostic,
                 "FAILED",
                 self.clock(),
                 error_code=type(exception).__name__.upper(),
-                error_message=str(exception)[:500],
+                error_message=error_message[:500],
             )
+            try:
+                self._record_failure_evidence(diagnostic, exception)
+            except Exception:
+                logger.exception(
+                    "Failed to record diagnostic failure evidence",
+                    extra={"diagnostic_id": diagnostic.id},
+                )
             raise
         return self.get(diagnostic.id)
 
@@ -180,6 +192,49 @@ class DiagnosticService:
             stream=BytesIO(raw_output.encode("utf-8")),
         )
         self.repository.link_evidence(attempt.id, evidence.id)
+
+    def _record_failure_evidence(
+        self,
+        diagnostic: DiagnosticSession,
+        exception: Exception,
+    ) -> None:
+        if self.evidence_service is None:
+            return
+        stage = str(getattr(exception, "stage", "EXECUTION"))
+        message = self._sanitize_failure_message(str(exception))[:1000]
+        content = (
+            f"diagnostic_id={diagnostic.id}\n"
+            f"stage={stage}\n"
+            f"error_type={type(exception).__name__}\n"
+            f"message={message}\n"
+        )
+        self.evidence_service.create_for_run_result(
+            diagnostic.run_result_id,
+            category="LOG",
+            original_name="diagnostic-failure.txt",
+            media_type="text/plain; charset=utf-8",
+            description=f"Diagnostic {diagnostic.id} failure at {stage}",
+            stream=BytesIO(content.encode("utf-8")),
+        )
+
+    @staticmethod
+    def _sanitize_failure_message(message: str) -> str:
+        sanitized = re.sub(
+            r"(?i)\b(https?://)[^/@\s]+@",
+            r"\1[REDACTED]@",
+            message,
+        )
+        sanitized = re.sub(
+            r"(?i)\bcookie\s*[:=]\s*[^\r\n]*",
+            "Cookie=[REDACTED]",
+            sanitized,
+        )
+        return re.sub(
+            r"(?i)\b(password|access_token|token|authorization)"
+            r"\s*[:=]\s*(?:bearer\s+)?[^\s]+",
+            r"\1=[REDACTED]",
+            sanitized,
+        )
 
     @staticmethod
     def _validate_policy(values: Mapping[str, Any]) -> dict[str, Any]:

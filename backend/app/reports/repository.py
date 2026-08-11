@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.models.defect import Defect
 from app.models.evidence import Evidence
+from app.models.evidence_link import EvidenceRunResultLink
 from app.models.report import Archive, Report
 from app.models.test_execution import RunResult, TestRun
 
@@ -36,11 +37,20 @@ class ReportRepository:
             return []
         predicates = []
         if result_ids:
-            predicates.append(Evidence.run_result_id.in_(result_ids))
+            linked_ids = select(EvidenceRunResultLink.evidence_id).where(
+                EvidenceRunResultLink.run_result_id.in_(result_ids)
+            )
+            predicates.append(
+                or_(
+                    Evidence.run_result_id.in_(result_ids),
+                    Evidence.id.in_(linked_ids),
+                )
+            )
         if defect_ids:
             predicates.append(Evidence.defect_id.in_(defect_ids))
         statement = (
             select(Evidence)
+            .options(selectinload(Evidence.result_links))
             .where(or_(*predicates))
             .order_by(Evidence.created_at, Evidence.id)
         )

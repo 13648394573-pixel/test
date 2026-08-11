@@ -97,3 +97,106 @@ def test_evidence_api_uploads_lists_downloads_and_deletes(tmp_path) -> None:
         assert client.get(
             f"/api/evidences/{evidence['id']}/download"
         ).status_code == 404
+
+
+def create_two_result_run(client: TestClient):
+    device = client.post(
+        "/api/devices", json={**DEVICE, "serial_number": "BATCH-ONU-001"}
+    ).json()
+    cases = []
+    for index in (1, 2):
+        cases.append(
+            client.post(
+                "/api/test-cases",
+                json={
+                    **CASE,
+                    "case_code": f"BATCH-EVIDENCE-{index:03d}",
+                    "title": f"WAN {index}",
+                },
+            ).json()
+        )
+    project = client.post(
+        "/api/test-projects",
+        json={
+            "name": "Batch Evidence",
+            "version": "V1",
+            "description": None,
+            "case_source_ids": [item["id"] for item in cases],
+        },
+    ).json()
+    environment = client.post(
+        "/api/environment-profiles",
+        json={
+            "name": "Batch Evidence lab",
+            "description": None,
+            "enabled": True,
+            "parameters": [],
+        },
+    ).json()
+    return client.post(
+        f"/api/test-projects/{project['id']}/runs",
+        json={
+            "device_source_id": device["id"],
+            "environment_profile_id": environment["id"],
+        },
+    ).json()
+
+
+def test_batch_upload_stores_each_file_once_and_links_multiple_results(
+    tmp_path,
+) -> None:
+    with create_client(tmp_path) as client:
+        run = create_two_result_run(client)
+        result_ids = [item["id"] for item in run["results"]]
+        response = client.post(
+            "/api/evidences/batch",
+            data={
+                "run_result_ids": result_ids,
+                "category": "SCREENSHOT",
+                "description": "Shared WAN evidence",
+            },
+            files=[
+                ("files", ("wan.png", b"image", "image/png")),
+                ("files", ("wan.log", b"log", "text/plain")),
+            ],
+        )
+
+        assert response.status_code == 201
+        created = response.json()
+        assert len(created) == 2
+        assert all(item["run_result_ids"] == result_ids for item in created)
+        first_list = client.get(
+            f"/api/run-results/{result_ids[0]}/evidences"
+        ).json()
+        second_list = client.get(
+            f"/api/run-results/{result_ids[1]}/evidences"
+        ).json()
+        assert [item["id"] for item in first_list] == [
+            item["id"] for item in second_list
+        ]
+        files = [path for path in (tmp_path / "evidence").rglob("*") if path.is_file()]
+        assert len(files) == 2
+
+
+def test_batch_upload_rejects_locked_target_without_files(tmp_path) -> None:
+    with create_client(tmp_path) as client:
+        run = create_two_result_run(client)
+        first = run["results"][0]
+        client.put(
+            f"/api/test-runs/{run['id']}/results/{first['id']}",
+            json={"result": "PASS"},
+        )
+        client.post(
+            f"/api/test-runs/{run['id']}/results/{first['id']}/lock"
+        )
+        response = client.post(
+            "/api/evidences/batch",
+            data={
+                "run_result_ids": [item["id"] for item in run["results"]],
+                "category": "LOG",
+            },
+            files=[("files", ("wan.log", b"log", "text/plain"))],
+        )
+
+    assert response.status_code == 409
+    assert not list((tmp_path / "evidence").rglob("*.log"))

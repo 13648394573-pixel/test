@@ -136,3 +136,12 @@ Regression引用同用例的新LOCKED Result：PASS使RESOLVED→CLOSED；FAIL�
 | 410 | Evidence元数据存在但文件缺失 |
 | 413 | 上传文件超过限制 |
 | 422 | 参数、来源Result或业务输入无效 |
+
+## Sprint 10 History & Evidence Efficiency
+
+- `GET /api/test-runs`：按项目、Run 编号、DUT、软件版本、状态、结果和时间分页筛选。
+- `POST /api/test-runs/compare`：按请求顺序比较 2–5 个 Run；第一项为基线，不产生持久化数据。
+- `POST /api/evidences/batch`：一次上传 1–20 个文件，并关联同一 Run 内 1–50 个 DRAFT RunResult。
+- `GET /api/run-results/{result_id}/evidences`：返回主归属及共享关联的 Evidence。
+
+批量 Evidence 不允许跨 Run 或关联 LOCKED Result；冲突返回 `409`，参数错误返回 `422`，单文件超限返回 `413`。

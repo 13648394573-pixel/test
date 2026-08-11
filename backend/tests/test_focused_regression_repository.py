@@ -13,6 +13,7 @@ from app.models.test_execution import RunResult, TestProject, TestRun
 def make_source(db_session):
     project = TestProject(name="Focused", version="1.0", description=None)
     source_run = TestRun(
+        run_no="RUN-000001",
         project=project,
         device_source_id="device-old",
         device_snapshot={"serial_number": "OLD-ONU"},
@@ -146,3 +147,20 @@ def test_repository_rolls_back_all_records_on_association_failure(db_session) ->
         == focused_count
     )
     assert db_session.scalar(select(func.count()).select_from(RunEnvironmentSnapshot)) == 1
+
+
+def test_repository_translates_run_number_conflict(db_session, monkeypatch) -> None:
+    from app.focused_regressions.repository import FocusedRegressionRepository
+    from app.test_execution.run_numbers import RunNumberConflictError
+
+    project, source_result, defect = make_source(db_session)
+    repository = FocusedRegressionRepository(db_session)
+    monkeypatch.setattr(
+        "app.focused_regressions.repository.next_run_no",
+        lambda _session: "RUN-000001",
+    )
+
+    with pytest.raises(RunNumberConflictError):
+        repository.create_run(**create_values(project, source_result, defect))
+
+    assert db_session.scalar(select(func.count()).select_from(TestRun)) == 1

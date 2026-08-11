@@ -50,6 +50,8 @@ from app.focused_regressions.service import (
     InvalidFocusedRegressionStateError,
 )
 from app.reports.router import router as report_router
+from app.run_history.router import router as run_history_router
+from app.run_history.service import RunComparisonConflictError
 from app.reports.service import (
     ArchiveAlreadyExistsError,
     ArchiveNotFoundError,
@@ -79,6 +81,7 @@ from app.test_execution.service import (
     TestProjectNotFoundError,
     TestRunNotFoundError,
 )
+from app.test_execution.run_numbers import RunNumberConflictError
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -234,6 +237,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             status_code=409,
             content={"detail": "Run result is locked"},
         )
+
+    application.add_exception_handler(
+        RunComparisonConflictError,
+        lambda _request, exception: JSONResponse(
+            status_code=409,
+            content={"detail": str(exception)},
+        ),
+    )
+    application.add_exception_handler(
+        RunNumberConflictError,
+        lambda _request, exception: JSONResponse(
+            status_code=409,
+            content={"detail": str(exception)},
+        ),
+    )
 
     def defect_not_found(
         _request: Request,
@@ -411,6 +429,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     application.include_router(
         test_case_router,
+        prefix=application_settings.api_prefix,
+    )
+    application.include_router(
+        run_history_router,
         prefix=application_settings.api_prefix,
     )
     application.include_router(

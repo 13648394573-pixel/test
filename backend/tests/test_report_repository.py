@@ -11,6 +11,7 @@ from app.reports.repository import ReportRepository
 def create_run(db_session) -> TestRun:
     project = TestProject(name="Release", version="R1")
     run = TestRun(
+        run_no="RUN-000001",
         project=project,
         device_source_id="device-1",
         device_snapshot={"serial_number": "ONU-1"},

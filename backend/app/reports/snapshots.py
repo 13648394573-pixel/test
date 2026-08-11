@@ -30,8 +30,13 @@ def build_report_snapshot(
     result_evidence: dict[str, list] = {}
     defect_evidence: dict[str, list] = {}
     for item in evidences:
-        if item.run_result_id:
-            result_evidence.setdefault(item.run_result_id, []).append(item)
+        linked_result_ids = [
+            link.run_result_id for link in getattr(item, "result_links", [])
+        ]
+        if not linked_result_ids and item.run_result_id:
+            linked_result_ids = [item.run_result_id]
+        for result_id in linked_result_ids:
+            result_evidence.setdefault(result_id, []).append(item)
         if item.defect_id:
             defect_evidence.setdefault(item.defect_id, []).append(item)
 
@@ -124,6 +129,7 @@ def build_report_snapshot(
         },
         "run": {
             "id": run.id,
+            "run_no": getattr(run, "run_no", None),
             "status": run.status,
             "started_at": _iso(run.started_at),
             "finished_at": _iso(run.finished_at),

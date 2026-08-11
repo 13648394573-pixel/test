@@ -15,6 +15,7 @@ interface ResultEditorProps {
   api: TestExecutionApi;
   runId: string;
   runResult: RunResult;
+  evidenceRevision?: number;
   onChanged(result: RunResult): void;
 }
 
@@ -23,6 +24,7 @@ export default function ResultEditor({
   api,
   runId,
   runResult,
+  evidenceRevision = 0,
   onChanged
 }: ResultEditorProps) {
   const [draft, setDraft] = useState<ResultDraftInput>({
@@ -42,7 +44,7 @@ export default function ResultEditor({
     api.listResultEvidence(runResult.id)
       .then(setEvidences)
       .catch((reason: Error) => setError(reason.message));
-  }, [api, runResult.id]);
+  }, [api, runResult.id, evidenceRevision]);
 
   useEffect(() => {
     setDraft({

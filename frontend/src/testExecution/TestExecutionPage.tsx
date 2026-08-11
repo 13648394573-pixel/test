@@ -4,6 +4,10 @@ import { deviceApi as defaultDeviceApi } from "../devices/api";
 import type { Device, DeviceApi } from "../devices/types";
 import { environmentApi as defaultEnvironmentApi } from "../environments/api";
 import EnvironmentSnapshotPanel from "../environments/EnvironmentSnapshotPanel";
+import BatchEvidencePanel from "../evidenceBatch/BatchEvidencePanel";
+import RunHistoryPanel from "../runHistory/RunHistoryPanel";
+import { runHistoryApi as defaultRunHistoryApi } from "../runHistory/api";
+import type { RunHistoryApi } from "../runHistory/types";
 import type {
   EnvironmentApi,
   EnvironmentProfile
@@ -25,6 +29,7 @@ interface TestExecutionPageProps {
   deviceApi?: DeviceApi;
   testCaseApi?: TestCaseApi;
   environmentApi?: EnvironmentApi;
+  runHistoryApi?: RunHistoryApi;
 }
 
 const EMPTY_PROJECT: TestProjectInput = {
@@ -39,7 +44,8 @@ export default function TestExecutionPage({
   api = testExecutionApi,
   deviceApi = defaultDeviceApi,
   testCaseApi = defaultTestCaseApi,
-  environmentApi = defaultEnvironmentApi
+  environmentApi = defaultEnvironmentApi,
+  runHistoryApi
 }: TestExecutionPageProps) {
   const [projects, setProjects] = useState<TestProject[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
@@ -55,6 +61,42 @@ export default function TestExecutionPage({
   const [selectedEnvironmentId, setSelectedEnvironmentId] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [evidenceRevision, setEvidenceRevision] = useState(0);
+  const effectiveRunHistoryApi: RunHistoryApi = runHistoryApi ?? (
+    api === testExecutionApi
+      ? defaultRunHistoryApi
+      : {
+          search: async (filters) => {
+            const projectId = filters.project_id ?? activeProject?.id ?? "";
+            const items = (await api.listRuns(projectId)).map((run) => ({
+              id: run.id,
+              run_no: run.run_no ?? run.id,
+              project_id: run.project_id,
+              project_name: activeProject?.name ?? "",
+              project_version: activeProject?.version ?? "",
+              device: {
+                device_type: run.device_snapshot.device_type,
+                vendor: run.device_snapshot.vendor,
+                model: run.device_snapshot.model,
+                serial_number: run.device_snapshot.serial_number,
+                software_version: run.device_snapshot.software_version
+              },
+              status: run.status,
+              summary: {
+                total: run.results.length,
+                pass: run.results.filter((item) => item.result === "PASS").length,
+                fail: run.results.filter((item) => item.result === "FAIL").length,
+                blocked: run.results.filter((item) => item.result === "BLOCKED").length,
+                unset: run.results.filter((item) => item.result === null).length
+              },
+              started_at: run.started_at,
+              finished_at: run.finished_at
+            }));
+            return { items, total: items.length, limit: 25, offset: 0 };
+          },
+          compare: defaultRunHistoryApi.compare
+        }
+  );
 
   useEffect(() => {
     Promise.all([
@@ -371,28 +413,12 @@ export default function TestExecutionPage({
             </button>
           </div>
 
-          <section className="run-history" aria-labelledby="run-history-title">
-            <h3 id="run-history-title">运行历史</h3>
-            {runs.length === 0 ? (
-              <p className="empty-state">暂无运行记录</p>
-            ) : (
-              <div className="history-list">
-                {runs.map((run) => (
-                  <button
-                    key={run.id}
-                    className="history-item"
-                    type="button"
-                    aria-label={`查看运行 ${run.id}`}
-                    onClick={() => openRun(run.id)}
-                  >
-                    <span className="mono">{run.id}</span>
-                    <span>{run.device_snapshot.serial_number}</span>
-                    <strong>{run.status === "COMPLETED" ? "已完成" : "执行中"}</strong>
-                  </button>
-                ))}
-              </div>
-            )}
-          </section>
+          <RunHistoryPanel
+            api={effectiveRunHistoryApi}
+            projectId={activeProject.id}
+            revision={runs.length}
+            onOpen={openRun}
+          />
 
           {activeRun && (
             <section className="run-detail" aria-labelledby="run-detail-title">
@@ -411,6 +437,14 @@ export default function TestExecutionPage({
               </div>
 
               <EnvironmentSnapshotPanel snapshot={activeRun.environment_snapshot} />
+
+              <BatchEvidencePanel
+                results={activeRun.results}
+                upload={api.uploadBatchEvidence ?? (async () => {
+                  throw new Error("批量附件接口不可用");
+                })}
+                onUploaded={() => setEvidenceRevision((value) => value + 1)}
+              />
 
               <div className="result-list">
                 {activeRun.results.map((runResult) => (
@@ -437,6 +471,7 @@ export default function TestExecutionPage({
                       api={api}
                       runId={activeRun.id}
                       runResult={runResult}
+                      evidenceRevision={evidenceRevision}
                       onChanged={() => { void openRun(activeRun.id); }}
                     />
                   </article>

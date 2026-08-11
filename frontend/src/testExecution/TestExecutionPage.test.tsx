@@ -370,13 +370,18 @@ describe("Test Execution", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "创建执行" }));
 
-    expect((await screen.findAllByText("ONU0001")).length).toBeGreaterThanOrEqual(2);
-    expect(screen.getByText("ONU-WAN-001")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getAllByText("ONU0001").length).toBeGreaterThanOrEqual(2);
+    });
+    expect(screen.getAllByText("ONU-WAN-001").length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText("Create an IPoE WAN")).toBeInTheDocument();
     expect(screen.getByText("MA5800-X7")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "ONU0001" }).parentElement)
       .toHaveTextContent("快照版本 1");
-    expect(screen.getByText("ONU-WAN-001").parentElement?.parentElement)
+    const caseCode = screen.getAllByText("ONU-WAN-001").find(
+      (element) => element.classList.contains("mono")
+    );
+    expect(caseCode?.parentElement?.parentElement)
       .toHaveTextContent("快照版本 1");
   });
 

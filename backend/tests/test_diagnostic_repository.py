@@ -7,6 +7,7 @@ from app.models.test_execution import RunResult, TestProject, TestRun
 def make_result(db_session) -> RunResult:
     project = TestProject(name="Repo", version="1", description=None)
     run = TestRun(
+        run_no="RUN-000001",
         project=project,
         device_source_id="device-1",
         device_snapshot={"vendor": "Huawei", "model": "HG8245"},

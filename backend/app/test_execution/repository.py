@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import func, select
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.test_execution import (
@@ -13,6 +13,11 @@ from app.models.test_execution import (
     TestRun,
 )
 from app.models.environment import RunEnvironmentSnapshot
+from app.test_execution.run_numbers import (
+    RunNumberConflictError,
+    is_run_number_conflict,
+    next_run_no,
+)
 
 
 class TestExecutionRepository:
@@ -97,6 +102,7 @@ class TestExecutionRepository:
         environment_snapshot: Mapping[str, Any] | None = None,
     ) -> TestRun:
         run = TestRun(
+            run_no=next_run_no(self.session),
             project_id=project_id,
             device_source_id=device_source_id,
             device_snapshot=dict(device_snapshot),
@@ -122,6 +128,13 @@ class TestExecutionRepository:
         self.session.add(run)
         try:
             self.session.commit()
+        except IntegrityError as exception:
+            self.session.rollback()
+            if is_run_number_conflict(exception):
+                raise RunNumberConflictError(
+                    "Run number allocation conflict"
+                ) from exception
+            raise
         except SQLAlchemyError:
             self.session.rollback()
             raise

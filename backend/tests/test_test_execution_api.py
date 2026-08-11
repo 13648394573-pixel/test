@@ -65,6 +65,41 @@ def create_sources(client: TestClient):
     return device, test_case, environment
 
 
+def test_run_number_conflict_returns_409_and_rolls_back(
+    client: TestClient,
+    monkeypatch,
+) -> None:
+    device, test_case, environment = create_sources(client)
+    project = client.post(
+        "/api/test-projects",
+        json={
+            "name": "Concurrent runs",
+            "version": "V1",
+            "description": None,
+            "case_source_ids": [test_case["id"]],
+        },
+    ).json()
+    payload = {
+        "device_source_id": device["id"],
+        "environment_profile_id": environment["id"],
+    }
+    first = client.post(f"/api/test-projects/{project['id']}/runs", json=payload)
+    assert first.status_code == 201
+    monkeypatch.setattr(
+        "app.test_execution.repository.next_run_no",
+        lambda _session: "RUN-000001",
+    )
+
+    conflict = client.post(
+        f"/api/test-projects/{project['id']}/runs",
+        json=payload,
+    )
+
+    assert conflict.status_code == 409
+    assert conflict.json() == {"detail": "Run number allocation conflict"}
+    assert len(client.get(f"/api/test-projects/{project['id']}/runs").json()) == 1
+
+
 def test_execution_api_supports_project_run_result_and_history_lifecycle(
     client: TestClient,
 ) -> None:

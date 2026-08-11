@@ -22,6 +22,7 @@ NOW = datetime(2026, 7, 30, 18, 0, 0)
 def create_completed_run(db_session, tmp_path):
     project = TestProject(name="ONU Release", version="R1")
     run = TestRun(
+        run_no="RUN-000001",
         project=project,
         device_source_id="device-1",
         device_snapshot={
@@ -104,6 +105,7 @@ def test_service_generates_versioned_immutable_report_snapshot(
 def test_service_rejects_unfinished_or_unlocked_run(db_session, tmp_path) -> None:
     project = TestProject(name="Draft", version="R1")
     run = TestRun(
+        run_no="RUN-000001",
         project=project,
         device_source_id="device-1",
         device_snapshot={},
@@ -158,3 +160,22 @@ def test_service_detects_report_and_evidence_tampering(
     evidence_path.write_bytes(b"tampered evidence")
     with pytest.raises(ReportArtifactConflictError):
         service.create_archive(report.id)
+
+
+def test_archive_snapshot_deduplicates_shared_evidence() -> None:
+    evidence = {
+        "id": "evidence-1",
+        "original_name": "shared.log",
+        "storage_path": "run_result/result-1/shared.log",
+        "sha256": "a" * 64,
+        "file_size": 4,
+    }
+    snapshot = {
+        "results": [
+            {"evidences": [evidence]},
+            {"evidences": [dict(evidence)]},
+        ],
+        "defects": [],
+    }
+
+    assert ReportService._snapshot_evidences(snapshot) == [evidence]

@@ -98,6 +98,18 @@ export const testExecutionApi: TestExecutionApi = {
       body: form
     });
   },
+  uploadBatchEvidence: (resultIds, files, category, description) => {
+    const form = new FormData();
+    resultIds.forEach((id) => form.append("run_result_ids", id));
+    files.forEach((file) => form.append("files", file));
+    form.set("category", category);
+    if (description) form.set("description", description);
+    return request<Evidence[]>("/api/evidences/batch", {
+      method: "POST",
+      headers: {},
+      body: form
+    });
+  },
   deleteEvidence: (evidenceId) =>
     request<void>(`/api/evidences/${evidenceId}`, {
       method: "DELETE",

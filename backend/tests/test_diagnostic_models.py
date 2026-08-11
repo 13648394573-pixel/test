@@ -36,6 +36,7 @@ def test_attempt_rejects_updates_after_persistence(db_session) -> None:
 
     project = TestProject(name="P", version="1", description=None)
     run = TestRun(
+        run_no="RUN-000001",
         project=project,
         device_source_id="device-1",
         device_snapshot={"vendor": "Huawei", "model": "ONT"},

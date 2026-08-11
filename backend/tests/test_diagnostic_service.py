@@ -37,6 +37,7 @@ class SequenceAdapter:
 def make_result(db_session, *, locked=False) -> RunResult:
     project = TestProject(name="Service", version="1", description=None)
     run = TestRun(
+        run_no="RUN-000001",
         project=project,
         device_source_id="device-1",
         device_snapshot={"vendor": "Huawei", "model": "HG8245"},

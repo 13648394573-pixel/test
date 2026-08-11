@@ -106,6 +106,7 @@ class TestRunRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
+    run_no: str
     project_id: str
     device_source_id: str
     device_snapshot: DeviceSnapshotRead

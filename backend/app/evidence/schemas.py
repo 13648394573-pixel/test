@@ -10,6 +10,7 @@ class EvidenceRead(BaseModel):
     id: str
     run_result_id: str | None
     defect_id: str | None
+    run_result_ids: list[str]
     category: Literal["SCREENSHOT", "LOG", "CONFIG", "OTHER"]
     original_name: str
     storage_path: str

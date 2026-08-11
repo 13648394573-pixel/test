@@ -51,6 +51,33 @@ def list_result_evidence(result_id: str, service: ServiceDependency):
 
 
 @router.post(
+    "/evidences/batch",
+    response_model=list[EvidenceRead],
+    status_code=status.HTTP_201_CREATED,
+)
+def upload_batch_evidence(
+    service: ServiceDependency,
+    run_result_ids: Annotated[list[str], Form()],
+    files: Annotated[list[UploadFile], File()],
+    category: Annotated[Category, Form()],
+    description: Annotated[str | None, Form()] = None,
+):
+    return service.create_batch_for_results(
+        run_result_ids,
+        [
+            {
+                "original_name": file.filename or "",
+                "media_type": file.content_type or "application/octet-stream",
+                "stream": file.file,
+            }
+            for file in files
+        ],
+        category=category,
+        description=description,
+    )
+
+
+@router.post(
     "/run-results/{result_id}/evidences",
     response_model=EvidenceRead,
     status_code=status.HTTP_201_CREATED,

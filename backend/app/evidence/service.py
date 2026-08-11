@@ -83,6 +83,71 @@ class EvidenceService:
             **values,
         )
 
+    def create_batch_for_results(
+        self,
+        result_ids: list[str],
+        files: list[dict],
+        *,
+        category: str,
+        description: str | None,
+    ) -> list[Evidence]:
+        unique_ids = list(dict.fromkeys(result_ids))
+        if not 1 <= len(unique_ids) <= 50:
+            raise InvalidEvidenceError("Select between 1 and 50 results")
+        if not 1 <= len(files) <= 20:
+            raise InvalidEvidenceError("Upload between 1 and 20 files")
+        if category not in self.CATEGORIES:
+            raise InvalidEvidenceError("Invalid evidence category")
+        results = self.repository.get_run_results(unique_ids)
+        if len(results) != len(unique_ids):
+            raise EvidenceOwnerNotFoundError("run result")
+        if len({result.run_id for result in results}) != 1:
+            raise EvidenceConflictError("Evidence targets must belong to one run")
+        if any(result.integrity_status != "DRAFT" for result in results):
+            raise EvidenceConflictError("Locked result evidence is read-only")
+
+        stored_items = []
+        values_list = []
+        try:
+            for item in files:
+                safe_name = Path(str(item["original_name"]).strip()).name
+                if not safe_name:
+                    raise InvalidEvidenceError("Filename is required")
+                stored = self.storage.store(
+                    "run-results",
+                    unique_ids[0],
+                    safe_name,
+                    item["stream"],
+                )
+                stored_items.append(stored)
+                values_list.append(
+                    {
+                        "run_result_id": unique_ids[0],
+                        "defect_id": None,
+                        "category": category,
+                        "original_name": safe_name,
+                        "storage_path": stored.storage_path,
+                        "media_type": item.get("media_type")
+                        or "application/octet-stream",
+                        "file_size": stored.file_size,
+                        "sha256": stored.sha256,
+                        "description": (
+                            description.strip()
+                            if description and description.strip()
+                            else None
+                        ),
+                    }
+                )
+            return self.repository.create_batch(values_list, unique_ids)
+        except EvidenceFileTooLargeError as exception:
+            for stored in stored_items:
+                self.storage.delete(stored.storage_path)
+            raise EvidenceTooLargeError from exception
+        except Exception:
+            for stored in stored_items:
+                self.storage.delete(stored.storage_path)
+            raise
+
     def get_download(self, evidence_id: str) -> tuple[Evidence, object]:
         evidence = self._get(evidence_id)
         try:
@@ -94,10 +159,13 @@ class EvidenceService:
     def delete(self, evidence_id: str) -> None:
         evidence = self._get(evidence_id)
         if evidence.run_result_id:
-            owner = self.repository.get_run_result(evidence.run_result_id)
-            if owner is None:
+            owners = [item.run_result for item in evidence.result_links]
+            if not owners:
+                owner = self.repository.get_run_result(evidence.run_result_id)
+                owners = [owner] if owner is not None else []
+            if not owners:
                 raise EvidenceOwnerNotFoundError(evidence.run_result_id)
-            if owner.integrity_status != "DRAFT":
+            if any(owner.integrity_status != "DRAFT" for owner in owners):
                 raise EvidenceConflictError(
                     "Locked result evidence is read-only"
                 )

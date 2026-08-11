@@ -34,6 +34,7 @@ def test_upgrade_creates_test_execution_tables_and_constraints(tmp_path) -> None
     } == {"project_id", "case_source_id"}
     assert {column["name"] for column in inspector.get_columns("test_runs")} == {
         "id",
+        "run_no",
         "project_id",
         "device_source_id",
         "device_snapshot",

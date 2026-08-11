@@ -105,3 +105,11 @@ command.upgrade(config, 'head')
 4. 文件清单及SHA256。
 
 恢复后至少执行`PRAGMA quick_check`、`PRAGMA foreign_key_check`、业务表计数、Evidence/Report/Archive hash校验和API下载检查。
+
+## Migration 20260811_0010
+
+- `test_runs.run_no`：非空唯一可读编号，格式 `RUN-000001`；历史数据按 `started_at, id` 回填。
+- `evidence_run_result_links`：Evidence 与 RunResult 的多对多关联表，复合主键为 `(evidence_id, run_result_id)`。
+- 索引：Run 编号唯一索引、Run 开始时间索引、项目/状态/开始时间复合索引、Evidence Link 的 Result 索引。
+
+`evidences.run_result_id` 保留为主归属以兼容旧数据和存储路径。迁移为既有 Result Evidence 自动创建主 Link；Defect Evidence 不受影响。

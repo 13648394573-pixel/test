@@ -111,3 +111,9 @@ COMPLETED且全部LOCKED Run
 SQLite只保存文件元数据和相对路径；Evidence、HTML和ZIP保存在配置的本地目录。备份必须同时包含数据库、Evidence根和Report根。
 
 历史Beta数据曾使用不同存储根命名空间，恢复时需要按数据库记录的`storage_path`和SHA256合并到统一根。详情见[V1备份恢复演练](V1_BACKUP_RESTORE_DRILL.md)。
+
+## V1.1 History & Evidence Efficiency
+
+历史查询与比较位于只读 `run_history` 上下文，继续采用 Router → Schema → Service → Repository → Model。比较只读取 TestRun、RunResult 和既有 Snapshot，不保存 Comparison 数据。
+
+Evidence 文件仍只存储一次；`EvidenceRunResultLink` 表达同一 Run 内多个结果的共享关联。新 Report Snapshot 可在多个结果下引用相同 Evidence，Archive 按 Evidence ID 去重后写入单份文件并继续执行 SHA256 校验。

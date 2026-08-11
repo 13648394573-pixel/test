@@ -11,8 +11,9 @@ from sqlalchemy import (
     UniqueConstraint,
     event,
     func,
+    inspect,
 )
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 
@@ -62,10 +63,37 @@ class Evidence(Base):
         nullable=False,
         server_default=func.current_timestamp(),
     )
+    result_links = relationship(
+        "EvidenceRunResultLink",
+        back_populates="evidence",
+        cascade="all, delete-orphan",
+        order_by="EvidenceRunResultLink.created_at, EvidenceRunResultLink.run_result_id",
+    )
+
+    @property
+    def run_result_ids(self) -> list[str]:
+        linked = [item.run_result_id for item in self.result_links]
+        if linked:
+            return linked
+        return [self.run_result_id] if self.run_result_id else []
 
 
-def _reject_metadata_mutation(*_args: object, **_kwargs: object) -> None:
-    raise ValueError("Evidence metadata is immutable")
+def _reject_metadata_mutation(_mapper, _connection, target: Evidence) -> None:
+    state = inspect(target)
+    metadata_fields = (
+        "run_result_id",
+        "defect_id",
+        "category",
+        "original_name",
+        "storage_path",
+        "media_type",
+        "file_size",
+        "sha256",
+        "description",
+        "created_at",
+    )
+    if any(state.attrs[field].history.has_changes() for field in metadata_fields):
+        raise ValueError("Evidence metadata is immutable")
 
 
 event.listen(Evidence, "before_update", _reject_metadata_mutation)

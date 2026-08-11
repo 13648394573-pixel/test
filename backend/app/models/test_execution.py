@@ -8,6 +8,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     JSON,
     String,
@@ -71,6 +72,13 @@ class TestRun(Base):
             "status IN ('IN_PROGRESS', 'COMPLETED')",
             name="ck_test_runs_status",
         ),
+        Index("ix_test_runs_started_at", "started_at"),
+        Index(
+            "ix_test_runs_project_status_started",
+            "project_id",
+            "status",
+            "started_at",
+        ),
     )
     __test__ = False
 
@@ -78,6 +86,9 @@ class TestRun(Base):
         String(36),
         primary_key=True,
         default=lambda: str(uuid4()),
+    )
+    run_no: Mapped[str] = mapped_column(
+        String(20), nullable=False, unique=True
     )
     project_id: Mapped[str] = mapped_column(
         String(36),
@@ -168,6 +179,11 @@ class RunResult(Base):
     executed_at: Mapped[datetime | None] = mapped_column(DateTime)
     locked_at: Mapped[datetime | None] = mapped_column(DateTime)
     run: Mapped[TestRun] = relationship(back_populates="results")
+    evidence_links = relationship(
+        "EvidenceRunResultLink",
+        back_populates="run_result",
+        cascade="all, delete-orphan",
+    )
 
 
 def _keep_snapshot_immutable(
@@ -182,6 +198,7 @@ def _keep_snapshot_immutable(
 
 
 for snapshot_attribute in (
+    TestRun.run_no,
     TestRun.device_snapshot,
     TestRun.snapshot_version,
     RunResult.case_snapshot,
@@ -249,3 +266,4 @@ event.listen(
 
 
 from app.models.environment import RunEnvironmentSnapshot  # noqa: E402
+from app.models.evidence_link import EvidenceRunResultLink  # noqa: E402, F401

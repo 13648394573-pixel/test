@@ -6,6 +6,7 @@ export interface Evidence {
   id: string;
   run_result_id: string | null;
   defect_id: string | null;
+  run_result_ids?: string[];
   category: EvidenceCategory;
   original_name: string;
   storage_path: string;
@@ -113,6 +114,7 @@ export interface RunResult {
 
 export interface TestRun {
   id: string;
+  run_no?: string;
   project_id: string;
   device_source_id: string;
   device_snapshot: DeviceSnapshot;
@@ -149,6 +151,12 @@ export interface TestExecutionApi {
     file: File,
     description: string | null
   ): Promise<Evidence>;
+  uploadBatchEvidence?(
+    resultIds: string[],
+    files: File[],
+    category: EvidenceCategory,
+    description: string | null
+  ): Promise<Evidence[]>;
   deleteEvidence(evidenceId: string): Promise<void>;
   evidenceDownloadUrl(evidenceId: string): string;
 }

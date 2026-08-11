@@ -230,9 +230,21 @@ class ReportService:
 
     @staticmethod
     def _snapshot_evidences(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
-        evidences = []
+        evidences: dict[str, dict[str, Any]] = {}
         for result in snapshot["results"]:
-            evidences.extend(result["evidences"])
+            for item in result["evidences"]:
+                existing = evidences.get(item["id"])
+                if existing is not None and existing != item:
+                    raise ReportArtifactConflictError(
+                        f"Conflicting Evidence snapshot {item['id']}"
+                    )
+                evidences[item["id"]] = item
         for defect in snapshot["defects"]:
-            evidences.extend(defect["evidences"])
-        return sorted(evidences, key=lambda item: item["id"])
+            for item in defect["evidences"]:
+                existing = evidences.get(item["id"])
+                if existing is not None and existing != item:
+                    raise ReportArtifactConflictError(
+                        f"Conflicting Evidence snapshot {item['id']}"
+                    )
+                evidences[item["id"]] = item
+        return [evidences[item_id] for item_id in sorted(evidences)]

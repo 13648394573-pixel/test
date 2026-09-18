@@ -83,6 +83,11 @@ from app.test_execution.service import (
     TestRunNotFoundError,
 )
 from app.test_execution.run_numbers import RunNumberConflictError
+from app.skill_catalog.router import router as skill_catalog_router
+from app.skill_catalog.service import (
+    CatalogVersionConflictError,
+    SkillCatalogNotFoundError,
+)
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -356,6 +361,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
 
     application.add_exception_handler(
+        SkillCatalogNotFoundError,
+        lambda _request, _exception: JSONResponse(
+            status_code=404, content={"detail": "Skill not found"}
+        ),
+    )
+    application.add_exception_handler(
+        CatalogVersionConflictError,
+        lambda _request, exception: JSONResponse(
+            status_code=409, content={"detail": str(exception)}
+        ),
+    )
+
+    application.add_exception_handler(
         EnvironmentProfileNotFoundError,
         lambda _request, _exception: JSONResponse(
             status_code=404,
@@ -465,6 +483,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     application.include_router(
         focused_regression_router,
+        prefix=application_settings.api_prefix,
+    )
+    application.include_router(
+        skill_catalog_router,
         prefix=application_settings.api_prefix,
     )
 

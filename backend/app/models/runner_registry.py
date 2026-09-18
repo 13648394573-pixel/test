@@ -118,7 +118,7 @@ class SkillRunnerBinding(Base):
     required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
     display_order: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.current_timestamp())
-    skill = relationship("TestSkill")
+    skill = relationship("TestSkill", back_populates="runner_bindings")
     skill_step = relationship("SkillStep")
     runner_action: Mapped[RunnerAction] = relationship()
 

@@ -94,6 +94,11 @@ class TestSkill(Base):
     case_bindings: Mapped[list[SkillCase]] = relationship(
         back_populates="skill", cascade="all, delete-orphan"
     )
+    runner_bindings = relationship(
+        "SkillRunnerBinding",
+        back_populates="skill",
+        cascade="all, delete-orphan",
+    )
 
 
 class SkillParameter(Base):

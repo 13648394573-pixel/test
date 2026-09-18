@@ -39,6 +39,7 @@ def create_result(client: TestClient) -> str:
 def test_diagnostic_api_creates_executes_and_lists_session(tmp_path) -> None:
     settings = Settings(
         _env_file=None,
+        allow_metadata_create_all=True,
         database_url=f"sqlite:///{(tmp_path / 'api.db').as_posix()}",
         log_file=str(tmp_path / "api.log"),
         evidence_root=str(tmp_path / "evidence"),
@@ -74,6 +75,7 @@ def test_diagnostic_api_creates_executes_and_lists_session(tmp_path) -> None:
 def test_diagnostic_api_rejects_invalid_policy(tmp_path) -> None:
     settings = Settings(
         _env_file=None,
+        allow_metadata_create_all=True,
         database_url=f"sqlite:///{(tmp_path / 'invalid.db').as_posix()}",
         log_file=str(tmp_path / "api.log"),
     )
@@ -94,6 +96,7 @@ def test_application_restart_interrupts_running_diagnostic(tmp_path) -> None:
 
     settings = Settings(
         _env_file=None,
+        allow_metadata_create_all=True,
         database_url=f"sqlite:///{(tmp_path / 'recovery.db').as_posix()}",
         log_file=str(tmp_path / "recovery.log"),
         evidence_root=str(tmp_path / "evidence"),

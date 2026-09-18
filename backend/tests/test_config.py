@@ -7,6 +7,7 @@ def test_settings_use_safe_local_defaults() -> None:
     assert settings.app_name == "Test Workbench"
     assert settings.database_url == "sqlite:///./data/test_workbench.db"
     assert settings.log_file == "./logs/test-workbench.log"
+    assert settings.allow_metadata_create_all is False
 
 
 def test_settings_read_prefixed_environment_variables(monkeypatch) -> None:

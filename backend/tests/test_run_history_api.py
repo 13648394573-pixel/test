@@ -13,6 +13,7 @@ def make_client(tmp_path):
         create_app(
             Settings(
                 _env_file=None,
+                allow_metadata_create_all=True,
                 database_url=f"sqlite:///{(tmp_path / 'history-api.db').as_posix()}",
                 log_file=str(tmp_path / "history-api.log"),
             )

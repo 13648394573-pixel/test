@@ -7,6 +7,7 @@ from app.main import create_app
 def test_health_endpoint_reports_local_application_status(tmp_path) -> None:
     settings = Settings(
         _env_file=None,
+        allow_metadata_create_all=True,
         database_url=f"sqlite:///{(tmp_path / 'health.db').as_posix()}",
         log_file=str(tmp_path / "health.log"),
     )

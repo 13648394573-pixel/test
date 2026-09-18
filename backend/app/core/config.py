@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     evidence_root: str = "./data/evidence"
     evidence_max_size_mb: int = 50
     report_root: str = "./data/reports"
+    allow_metadata_create_all: bool = False
 
 
 @lru_cache

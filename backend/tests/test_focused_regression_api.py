@@ -9,6 +9,7 @@ from app.main import create_app
 def client(tmp_path):
     settings = Settings(
         _env_file=None,
+        allow_metadata_create_all=True,
         database_url=f"sqlite:///{(tmp_path / 'api.db').as_posix()}",
         log_file=str(tmp_path / "api.log"),
         evidence_root=str(tmp_path / "evidence"),

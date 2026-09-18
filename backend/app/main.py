@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
 from app.db.base import Base
+from app.db.schema_guard import require_database_health, resolve_expected_revision
 from app.db.session import create_database_engine, create_session_factory
 from app.defects.router import router as defect_router
 from app.defects.service import (
@@ -94,7 +95,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             application_settings.log_level,
         )
         engine = create_database_engine(application_settings.database_url)
-        Base.metadata.create_all(engine)
+        if application_settings.allow_metadata_create_all:
+            Base.metadata.create_all(engine)
+        else:
+            require_database_health(engine, resolve_expected_revision())
         application.state.engine = engine
         application.state.session_factory = create_session_factory(engine)
         with application.state.session_factory() as session:

@@ -1,8 +1,8 @@
 # Test Workbench
 
-Test Workbench 面向 ONU、OLT、光猫等网络设备测试场景，长期目标是建设供测试工程师本地使用的个人自动化测试平台。当前 `v1.0.0` 已完成 Sprint 0–7，交付设备、用例、环境、手工执行记录、Evidence、缺陷回归及报告归档闭环，为后续自动化执行提供稳定的数据与流程基础。
+Test Workbench 面向 ONU、OLT、光猫等网络设备测试场景。V2 在完整保留 V1 Test Management 闭环的基础上，升级为“ONU 测试能力管理 + 测试执行闭环工作台”：用 Test Skill 沉淀测试目标、参数、步骤、判定标准和证据要求，并以版本化标准库提供 PASS/FAIL/BLOCKED 判断依据。
 
-`v1.0.0` 尚未包含脚本自动执行；自动化能力将在后续版本中根据真实测试流程逐步规划和实现。当前版本仍保持单用户、本地B/S架构，不包含 AI、多用户权限、企业协作或云部署。
+当前分支已完成 V2 Sprint 0 的数据库与领域基础，尚未开放 Skill 管理页面或真实 Runner 执行。系统仍保持单用户、本地 B/S、离线可运行定位；不包含 AI 自动测试、自动控制 OLT、自动登录 ONU、云平台或多用户权限。
 
 ## 当前能力
 
@@ -14,6 +14,10 @@ Test Workbench 面向 ONU、OLT、光猫等网络设备测试场景，长期目�
 - Defect & Regression：缺陷状态机、追加式回归和结果联动。
 - Environment Snapshot：环境模板、参数和 Run 创建时的不可变快照。
 - Report & Archive：不可变HTML报告、单一ZIP归档和完整性校验。
+- Test Standards：版本化测试标准、标准要求、产品/客户标准 Profile。
+- Test Intelligence：Skill、参数、步骤、执行规则、证据规则及标准绑定。
+- Skill Case & Template：Skill 到 Test Case 的实现映射，以及可冻结版本的执行模板。
+- Execution Foundation：不可变执行快照、受控 Runner 注册表、执行事件、人工交互和恢复任务模型。
 
 ## 技术栈
 
@@ -28,7 +32,7 @@ Test Workbench 面向 ONU、OLT、光猫等网络设备测试场景，长期目�
 backend/
   app/core/              配置与日志
   app/db/                Engine、Session、ORM Base和依赖
-  app/models/            全部SQLAlchemy模型
+  app/models/            V1模型及V2 Standard、Skill、Runner、Execution模型
   app/devices/           设备库
   app/test_cases/        测试用例库
   app/test_execution/    项目、Run、Result和Snapshot
@@ -69,13 +73,15 @@ Set-Location ..
 
 ## 数据库迁移
 
-默认迁移目标为 `data/test_workbench.db`：
+默认迁移目标为 `data/test_workbench.db`。生产启动不会再用 ORM 元数据静默建表；数据库必须先迁移到 Alembic head：
 
 ```powershell
 .\.venv\Scripts\python -m alembic -c backend\alembic.ini upgrade head
 ```
 
 当前 Alembic 通过 `backend/alembic.ini`读取迁移URL，不会自动使用`TEST_WORKBENCH_DATABASE_URL`切换目标。对自定义数据库执行迁移时，应通过Alembic Config显式覆盖URL；示例见[数据库文档](docs/DATABASE.md)。
+
+`TEST_WORKBENCH_ALLOW_METADATA_CREATE_ALL` 仅用于测试或明确的本地开发初始化，禁止作为生产迁移替代品。
 
 ## 启动
 
@@ -108,6 +114,7 @@ npm.cmd run dev
 - `TEST_WORKBENCH_EVIDENCE_ROOT`
 - `TEST_WORKBENCH_EVIDENCE_MAX_SIZE_MB`
 - `TEST_WORKBENCH_REPORT_ROOT`
+- `TEST_WORKBENCH_ALLOW_METADATA_CREATE_ALL`（仅测试/开发）
 
 凭据不得写入`.env.example`、文档、Evidence或Git。`.env`、数据库、附件、日志、备份、测试临时目录和构建产物均应保持Git忽略。
 
@@ -122,10 +129,10 @@ npm.cmd run build
 
 Windows环境建议固定Vitest单worker，避免Node/Vitest worker内存不足。
 
-## 发布状态
+## V2 Sprint 0 状态
 
-- 功能基线：Sprint 0–7已完成。
-- 最新自动验证：后端117项、前端39项、生产构建通过。
-- Beta：真实ONU online、O5、IPoE、PPPoE和网络连通闭环通过。
-- Stable：`v1.0.0`已于2026-08-08正式发布，最终验证与批准记录见[发布批准文档](docs/V1_RELEASE_FINAL_APPROVAL.md)。
-- 后续方向：基于维护期真实使用数据规划自动化测试能力，不在`v1.0.0`维护阶段直接扩展核心范围。
+- V1 Test Management：原有设备、项目、环境、执行、证据、缺陷、回归、报告能力及历史数据均保留。
+- V2 数据基础：Alembic `20260918_0020`，覆盖 Standard、Skill、Template、Runner 与 Execution Foundation。
+- 兼容原则：历史 Run/Result 不推断不存在的 Skill 或 Standard，使用明确的 `MANUAL` 来源与空 V2 快照。
+- 下一阶段：Sprint 1 实现 Skill 管理能力；随后由测试人员共同封装 VLAN 端口绑定、QoS、IPv6 等真实 Skill。
+- V1 稳定版记录仍见[发布批准文档](docs/V1_RELEASE_FINAL_APPROVAL.md)。

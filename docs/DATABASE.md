@@ -13,7 +13,7 @@ Session使用`autoflush=False`、`expire_on_commit=False`。业务事务由Repos
 
 ## 表与关系
 
-空库迁移至head后共有20张表（含`alembic_version`）。
+空库迁移至 `20260918_0020` 后共有44张表（含`alembic_version`）。原 V1 表与关系保持不变，V2 以新增表、可空外键和带明确默认值的新字段扩展。
 
 | 表 | 关键字段/规则 | 关系 |
 |---|---|---|
@@ -38,6 +38,30 @@ Session使用`autoflush=False`、`expire_on_commit=False`。业务事务由Repos
 | `focused_regression_runs` | `test_run_id`唯一；Defect Snapshot JSON；version=1 | TestRun/Defect/来源Result均RESTRICT |
 | `alembic_version` | 当前revision | Alembic内部表 |
 
+### V2 Test Standard 与 Test Intelligence
+
+| 表组 | 表 | 用途 |
+|---|---|---|
+| Standard | `test_standards`、`standard_requirements` | 版本化标准及可计算的 PASS/FAIL/BLOCKED 要求 |
+| Standard Profile | `standard_profiles`、`standard_profile_items`、`project_standard_profiles` | 按产品、客户、地区组合标准，并绑定项目 |
+| Skill | `test_skills`、`skill_parameters`、`skill_steps` | 测试能力定义、输入参数和操作步骤 |
+| Skill Rules | `skill_execution_rules`、`skill_evidence_rules`、`skill_standard_bindings` | 判定逻辑、证据要求和标准依据 |
+| Case Mapping | `skill_cases` | Skill 与 V1 Test Case 的版本化实现映射 |
+| Template | `templates`、`template_cases` | 可冻结、可复用的执行模板与用例顺序 |
+
+### V2 Execution Foundation
+
+| 表组 | 表 | 用途 |
+|---|---|---|
+| Runner Registry | `runner_plugins`、`runner_actions`、`skill_runner_bindings` | 仅登记受控插件和动作标识，不在数据库保存任意脚本正文或命令文本 |
+| Execution | `execution_sessions`、`execution_events` | 执行状态机与追加式事件时间线 |
+| Human-in-the-loop | `operator_interactions` | 对无法自动化的步骤发出操作提示并记录确认 |
+| Recovery | `recovery_tasks` | 中断或失败后的恢复动作与状态 |
+| Configuration | `configuration_snapshots` | 执行时使用的非秘密配置快照 |
+| Credentials | `credential_references` | 只保存外部凭据引用，不保存用户名密码或令牌原文 |
+
+`test_runs`、`run_results` 新增的 V2 来源、快照和执行关联字段均允许 V1 历史记录使用兼容默认值。迁移不会根据旧用例名称猜测 Skill 或 Standard。
+
 ## 不变性规则
 
 - `device_snapshot`、`case_snapshot`、`profile_snapshot`创建后不可修改。
@@ -48,6 +72,9 @@ Session使用`autoflush=False`、`expire_on_commit=False`。业务事务由Repos
 - Evidence元数据不可更新，文件内容通过SHA256验证。
 - Report和Archive记录不可更新或删除；文件hash不匹配时拒绝下载或归档。
 - Focused Regression关联及Defect Snapshot不可更新或删除；每次回归必须产生新的TestRun。
+- PUBLISHED/RETIRED 的 Standard、Profile、Skill、Template 和 Runner 定义采用版本化演进，不原地篡改历史语义。
+- Execution Event 追加写入；活动执行会话具有唯一性约束，终态记录可长期保留。
+- 数据库模型不包含脚本正文、任意命令文本、Web选择器或秘密凭据字段。
 
 ## 迁移历史
 
@@ -62,12 +89,25 @@ Session使用`autoflush=False`、`expire_on_commit=False`。业务事务由Repos
 | `20260730_0007` | reports、archives |
 | `20260808_0008` | diagnostic sessions、attempts和Evidence关联 |
 | `20260810_0009` | focused_regression_runs及不可变Defect Snapshot |
+| `20260811_0010` | Run可读编号、历史索引、Evidence与Result多对多关联基础 |
+| `20260918_0011` | V1基线守卫；确认升级起点和完整性 |
+| `20260918_0012` | 版本化测试标准、要求和标准Profile |
+| `20260918_0013` | Skill、参数和步骤 |
+| `20260918_0014` | Skill执行规则、证据规则和标准绑定 |
+| `20260918_0015` | Skill Case映射与Template |
+| `20260918_0016` | V2 Run/Result不可变快照与兼容来源字段 |
+| `20260918_0017` | 恢复项目规划元数据 |
+| `20260918_0018` | 受控Runner Plugin/Action注册表 |
+| `20260918_0019` | Execution Session/Event、人工交互与恢复任务 |
+| `20260918_0020` | 凭据引用、配置快照及执行状态关联 |
 
 默认数据库升级：
 
 ```powershell
 python -m alembic -c backend\alembic.ini upgrade head
 ```
+
+生产应用启动前必须完成迁移并处于 Alembic head。应用不会对空库或旧库静默执行 `Base.metadata.create_all()`；`TEST_WORKBENCH_ALLOW_METADATA_CREATE_ALL=true` 只允许测试或明确的本地开发初始化使用。
 
 查看当前版本：
 
@@ -93,7 +133,7 @@ command.upgrade(config, 'head')
 '@ | python -
 ```
 
-该差异已列为RC1技术债，不能假设`TEST_WORKBENCH_DATABASE_URL`会改变Alembic CLI目标。
+不能假设`TEST_WORKBENCH_DATABASE_URL`会改变Alembic CLI目标；安装器/双击启动器中的自动迁移编排属于后续 Sprint，不在 Sprint 0 范围内。
 
 ## 备份要求
 
@@ -105,6 +145,8 @@ command.upgrade(config, 'head')
 4. 文件清单及SHA256。
 
 恢复后至少执行`PRAGMA quick_check`、`PRAGMA foreign_key_check`、业务表计数、Evidence/Report/Archive hash校验和API下载检查。
+
+V1→V2 升级还应核对 Run、Result、Evidence、Defect、Regression、Report、Archive 的数量与关键 SHA256，并确认历史记录保持 `source/result_source='MANUAL'`、V2 快照为空且没有被自动绑定到任何 Skill 或 Standard。
 
 ## Migration 20260811_0010
 

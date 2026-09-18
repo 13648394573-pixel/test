@@ -63,3 +63,34 @@ def test_skill_downgrade_rejects_published_skill(tmp_path) -> None:
     with pytest.raises(RuntimeError, match="published Skill history"):
         command.downgrade(config, "20260918_0012")
     assert "test_skills" in inspect(engine).get_table_names()
+
+
+def test_template_migration_and_active_downgrade_protection(tmp_path) -> None:
+    database_path = tmp_path / "templates.db"
+    config = migration_config(database_path)
+    command.upgrade(config, "20260918_0015")
+    engine = create_engine(f"sqlite:///{database_path.as_posix()}")
+    inspector = inspect(engine)
+    assert {"skill_cases", "templates", "template_cases"} <= set(
+        inspector.get_table_names()
+    )
+    assert inspector.get_pk_constraint("template_cases")["constrained_columns"] == [
+        "template_id",
+        "test_case_id",
+    ]
+    assert any(
+        constraint["column_names"] == ["template_id", "display_order"]
+        for constraint in inspector.get_unique_constraints("template_cases")
+    )
+
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO templates "
+                "(id, template_code, name, status, version) VALUES "
+                "('template-1', 'ONU-SMOKE', 'Smoke', 'ACTIVE', 1)"
+            )
+        )
+    with pytest.raises(RuntimeError, match="active Template history"):
+        command.downgrade(config, "20260918_0014")
+    assert "templates" in inspect(engine).get_table_names()

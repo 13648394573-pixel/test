@@ -4,12 +4,16 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 
 from app.models.test_intelligence import (
+    SkillCase,
     SkillEvidenceRule,
     SkillExecutionRule,
     SkillParameter,
     SkillStep,
+    Template,
+    TemplateCase,
     TestSkill,
 )
+from app.models.test_case import TestCase
 
 
 def make_skill(**overrides) -> TestSkill:
@@ -29,6 +33,10 @@ def make_skill(**overrides) -> TestSkill:
     }
     values.update(overrides)
     return TestSkill(**values)
+
+
+def make_case(code: str) -> TestCase:
+    return TestCase(case_code=code, title=code, category="ONU")
 
 
 def test_skill_semantic_identity_is_unique(db_session) -> None:
@@ -183,5 +191,58 @@ def test_evidence_rule_rejects_maximum_below_minimum(db_session) -> None:
     )
     db_session.add(skill)
 
+    with pytest.raises(IntegrityError):
+        db_session.commit()
+
+
+def test_skill_case_allows_many_cases_but_only_one_binding_per_case(db_session) -> None:
+    skill = make_skill()
+    first_case = make_case("CASE-1")
+    second_case = make_case("CASE-2")
+    skill.case_bindings.extend(
+        [
+            SkillCase(test_case=first_case, parameter_values={"vlan_id": 100}),
+            SkillCase(test_case=second_case, parameter_values={"vlan_id": 200}),
+        ]
+    )
+    db_session.add(skill)
+    db_session.commit()
+    assert len(skill.case_bindings) == 2
+
+    another_skill = make_skill(skill_code="ONU-VLAN-OTHER")
+    another_skill.case_bindings.append(
+        SkillCase(test_case_id=first_case.id, parameter_values={})
+    )
+    db_session.add(another_skill)
+    with pytest.raises(IntegrityError):
+        db_session.commit()
+
+
+def test_template_code_and_version_are_unique(db_session) -> None:
+    db_session.add_all(
+        [
+            Template(template_code="ONU-SMOKE", version=1, name="Smoke"),
+            Template(template_code="ONU-SMOKE", version=1, name="Duplicate"),
+        ]
+    )
+
+    with pytest.raises(IntegrityError):
+        db_session.commit()
+
+
+def test_template_case_order_is_unique_and_case_delete_is_restricted(db_session) -> None:
+    first_case = make_case("TPL-CASE-1")
+    second_case = make_case("TPL-CASE-2")
+    template = Template(template_code="ONU-FULL", version=1, name="Full")
+    template.cases.extend(
+        [
+            TemplateCase(test_case=first_case, display_order=1, required=True),
+            TemplateCase(test_case=second_case, display_order=2, required=True),
+        ]
+    )
+    db_session.add(template)
+    db_session.commit()
+
+    db_session.delete(first_case)
     with pytest.raises(IntegrityError):
         db_session.commit()

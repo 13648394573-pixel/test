@@ -29,11 +29,14 @@ from app.models.test_standard import (
     TestStandard,
 )
 from app.models.test_intelligence import (
+    SkillCase,
     SkillEvidenceRule,
     SkillExecutionRule,
     SkillParameter,
     SkillStandardBinding,
     SkillStep,
+    Template,
+    TemplateCase,
     TestSkill,
 )
 
@@ -64,9 +67,12 @@ __all__ = [
     "StandardRequirement",
     "TestStandard",
     "SkillEvidenceRule",
+    "SkillCase",
     "SkillExecutionRule",
     "SkillParameter",
     "SkillStandardBinding",
     "SkillStep",
+    "Template",
+    "TemplateCase",
     "TestSkill",
 ]

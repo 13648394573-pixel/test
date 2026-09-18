@@ -91,6 +91,9 @@ class TestSkill(Base):
         cascade="all, delete-orphan",
         order_by="SkillEvidenceRule.display_order",
     )
+    case_bindings: Mapped[list[SkillCase]] = relationship(
+        back_populates="skill", cascade="all, delete-orphan"
+    )
 
 
 class SkillParameter(Base):
@@ -264,3 +267,67 @@ class SkillEvidenceRule(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.current_timestamp())
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.current_timestamp(), onupdate=func.current_timestamp())
     skill: Mapped[TestSkill] = relationship(back_populates="evidence_rules")
+
+
+class SkillCase(Base):
+    __tablename__ = "skill_cases"
+    __table_args__ = (
+        CheckConstraint("binding_version >= 1", name="ck_skill_cases_binding_version"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    skill_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("test_skills.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    test_case_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("test_cases.id", ondelete="RESTRICT"), nullable=False, unique=True
+    )
+    parameter_values: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    binding_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.current_timestamp())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.current_timestamp(), onupdate=func.current_timestamp())
+    skill: Mapped[TestSkill] = relationship(back_populates="case_bindings")
+    test_case = relationship("TestCase")
+
+
+class Template(Base):
+    __tablename__ = "templates"
+    __table_args__ = (
+        UniqueConstraint("template_code", "version", name="uq_templates_code_version"),
+        CheckConstraint("status IN ('DRAFT','ACTIVE','RETIRED')", name="ck_templates_status"),
+        CheckConstraint("version >= 1", name="ck_templates_version"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    template_code: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="DRAFT", server_default="DRAFT", index=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.current_timestamp())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.current_timestamp(), onupdate=func.current_timestamp())
+    cases: Mapped[list[TemplateCase]] = relationship(
+        back_populates="template",
+        cascade="all, delete-orphan",
+        order_by="TemplateCase.display_order",
+    )
+
+
+class TemplateCase(Base):
+    __tablename__ = "template_cases"
+    __table_args__ = (
+        UniqueConstraint("template_id", "display_order", name="uq_template_cases_order"),
+        CheckConstraint("display_order >= 1", name="ck_template_cases_order"),
+    )
+
+    template_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("templates.id", ondelete="CASCADE"), primary_key=True
+    )
+    test_case_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("test_cases.id", ondelete="RESTRICT"), primary_key=True
+    )
+    display_order: Mapped[int] = mapped_column(Integer, nullable=False)
+    required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.current_timestamp())
+    template: Mapped[Template] = relationship(back_populates="cases")
+    test_case = relationship("TestCase")

@@ -101,6 +101,12 @@ class TestRun(Base):
             "execution_schema_version >= 1",
             name="ck_test_runs_execution_schema_version",
         ),
+        CheckConstraint(
+            "execution_status IS NULL OR execution_status IN "
+            "('CREATED','PREFLIGHT','RUNNING','WAITING_OPERATOR','EVALUATING',"
+            "'RESTORING','COMPLETED','BLOCKED','ERROR','CANCELLED','RECOVERY_REQUIRED')",
+            name="ck_test_runs_execution_status",
+        ),
         Index("ix_test_runs_started_at", "started_at"),
         Index(
             "ix_test_runs_project_status_started",
@@ -142,6 +148,7 @@ class TestRun(Base):
         String(36), ForeignKey("standard_profiles.id", ondelete="RESTRICT")
     )
     standard_snapshot: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    execution_status: Mapped[str | None] = mapped_column(String(30))
     snapshot_version: Mapped[int] = mapped_column(
         Integer,
         nullable=False,
@@ -189,6 +196,16 @@ class RunResult(Base):
             "integrity_status IN ('DRAFT', 'LOCKED')",
             name="ck_run_results_integrity_status",
         ),
+        CheckConstraint(
+            "functional_verdict IS NULL OR functional_verdict IN "
+            "('PASS','FAIL','BLOCKED','NOT_EVALUATED')",
+            name="ck_run_results_functional_verdict",
+        ),
+        CheckConstraint(
+            "recovery_status IS NULL OR recovery_status IN "
+            "('NOT_REQUIRED','PENDING','VERIFIED','FAILED','MANUAL_REQUIRED')",
+            name="ck_run_results_recovery_status",
+        ),
     )
 
     id: Mapped[str] = mapped_column(
@@ -216,6 +233,11 @@ class RunResult(Base):
     result_source: Mapped[str] = mapped_column(
         String(20), nullable=False, default="MANUAL", server_default="MANUAL"
     )
+    execution_session_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("execution_sessions.id", ondelete="SET NULL"), unique=True
+    )
+    functional_verdict: Mapped[str | None] = mapped_column(String(20))
+    recovery_status: Mapped[str | None] = mapped_column(String(30))
     snapshot_version: Mapped[int] = mapped_column(
         Integer,
         nullable=False,

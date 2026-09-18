@@ -1,4 +1,5 @@
 from app.models.device import Device
+from app.models.credential import CredentialReference
 from app.models.diagnostic import (
     DiagnosticAttempt,
     DiagnosticAttemptEvidence,
@@ -7,6 +8,13 @@ from app.models.diagnostic import (
 from app.models.defect import Defect, Regression
 from app.models.evidence import Evidence
 from app.models.evidence_link import EvidenceRunResultLink
+from app.models.execution_session import (
+    ConfigurationSnapshot,
+    ExecutionEvent,
+    ExecutionSession,
+    OperatorInteraction,
+    RecoveryTask,
+)
 from app.models.focused_regression import FocusedRegressionRun
 from app.models.report import Archive, Report
 from app.models.runner_registry import RunnerAction, RunnerPlugin, SkillRunnerBinding
@@ -43,6 +51,8 @@ from app.models.test_intelligence import (
 
 __all__ = [
     "CaseStep",
+    "ConfigurationSnapshot",
+    "CredentialReference",
     "Archive",
     "Device",
     "DiagnosticAttempt",
@@ -51,13 +61,17 @@ __all__ = [
     "Defect",
     "Evidence",
     "EvidenceRunResultLink",
+    "ExecutionEvent",
+    "ExecutionSession",
     "FocusedRegressionRun",
     "EnvironmentParameter",
     "EnvironmentProfile",
     "ProjectCaseSelection",
+    "OperatorInteraction",
     "RunResult",
     "RunEnvironmentSnapshot",
     "Regression",
+    "RecoveryTask",
     "Report",
     "RunnerAction",
     "RunnerPlugin",

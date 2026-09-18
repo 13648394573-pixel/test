@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 from uuid import uuid4
 
 from sqlalchemy import (
     CheckConstraint,
+    Date,
     DateTime,
     ForeignKey,
     Index,
@@ -24,6 +25,12 @@ from app.db.base import Base
 
 class TestProject(Base):
     __tablename__ = "test_projects"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('DRAFT','ACTIVE','COMPLETED','ON_HOLD','CANCELLED')",
+            name="ck_test_projects_status",
+        ),
+    )
     __test__ = False
 
     id: Mapped[str] = mapped_column(
@@ -31,9 +38,23 @@ class TestProject(Base):
         primary_key=True,
         default=lambda: str(uuid4()),
     )
+    project_code: Mapped[str] = mapped_column(
+        String(40),
+        nullable=False,
+        unique=True,
+        default=lambda: f"PRJ-{uuid4().hex[:12].upper()}",
+    )
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     version: Mapped[str] = mapped_column(String(100), nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
+    requirement: Mapped[str | None] = mapped_column(Text)
+    target_version: Mapped[str | None] = mapped_column(String(100))
+    scope: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="DRAFT", server_default="DRAFT"
+    )
+    planned_start_date: Mapped[date | None] = mapped_column(Date)
+    planned_end_date: Mapped[date | None] = mapped_column(Date)
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
         nullable=False,
@@ -72,6 +93,14 @@ class TestRun(Base):
             "status IN ('IN_PROGRESS', 'COMPLETED')",
             name="ck_test_runs_status",
         ),
+        CheckConstraint(
+            "source IN ('MANUAL','LOCAL_RUNNER','HYBRID')",
+            name="ck_test_runs_source",
+        ),
+        CheckConstraint(
+            "execution_schema_version >= 1",
+            name="ck_test_runs_execution_schema_version",
+        ),
         Index("ix_test_runs_started_at", "started_at"),
         Index(
             "ix_test_runs_project_status_started",
@@ -98,6 +127,21 @@ class TestRun(Base):
     )
     device_source_id: Mapped[str] = mapped_column(String(36), nullable=False)
     device_snapshot: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    template_source_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("templates.id", ondelete="RESTRICT")
+    )
+    template_snapshot: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    execution_plan_snapshot: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    execution_schema_version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
+    source: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="MANUAL", server_default="MANUAL"
+    )
+    standard_profile_source_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("standard_profiles.id", ondelete="RESTRICT")
+    )
+    standard_snapshot: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     snapshot_version: Mapped[int] = mapped_column(
         Integer,
         nullable=False,
@@ -160,6 +204,18 @@ class RunResult(Base):
     )
     case_source_id: Mapped[str] = mapped_column(String(36), nullable=False)
     case_snapshot: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    skill_source_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("test_skills.id", ondelete="RESTRICT")
+    )
+    skill_snapshot: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    parameter_snapshot: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    observations: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    matched_rule_codes: Mapped[list[str] | None] = mapped_column(JSON)
+    standard_evaluations: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON)
+    evidence_validation: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    result_source: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="MANUAL", server_default="MANUAL"
+    )
     snapshot_version: Mapped[int] = mapped_column(
         Integer,
         nullable=False,
@@ -201,8 +257,23 @@ for snapshot_attribute in (
     TestRun.run_no,
     TestRun.device_snapshot,
     TestRun.snapshot_version,
+    TestRun.template_source_id,
+    TestRun.template_snapshot,
+    TestRun.execution_plan_snapshot,
+    TestRun.execution_schema_version,
+    TestRun.source,
+    TestRun.standard_profile_source_id,
+    TestRun.standard_snapshot,
     RunResult.case_snapshot,
     RunResult.snapshot_version,
+    RunResult.skill_source_id,
+    RunResult.skill_snapshot,
+    RunResult.parameter_snapshot,
+    RunResult.observations,
+    RunResult.matched_rule_codes,
+    RunResult.standard_evaluations,
+    RunResult.evidence_validation,
+    RunResult.result_source,
 ):
     event.listen(
         snapshot_attribute,

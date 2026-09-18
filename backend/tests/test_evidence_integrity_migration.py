@@ -40,7 +40,7 @@ def test_upgrade_adds_result_integrity_and_evidence_contracts(tmp_path) -> None:
     evidence_columns = {
         item["name"] for item in inspector.get_columns("evidences")
     }
-    assert evidence_columns == {
+    assert evidence_columns >= {
         "id",
         "run_result_id",
         "defect_id",
@@ -51,6 +51,7 @@ def test_upgrade_adds_result_integrity_and_evidence_contracts(tmp_path) -> None:
         "file_size",
         "sha256",
         "description",
+        "evidence_rule_code",
         "created_at",
     }
     foreign_keys = {

@@ -141,8 +141,9 @@ def test_downgrade_rejects_shared_evidence_without_partial_schema_changes(
     with engine.begin() as connection:
         connection.execute(
             text(
-                "INSERT INTO test_projects (id, name, version, description) "
-                "VALUES ('project-1', 'Release', 'V1', NULL)"
+                "INSERT INTO test_projects "
+                "(id, project_code, name, version, description) "
+                "VALUES ('project-1', 'LEGACY-TEST-001', 'Release', 'V1', NULL)"
             )
         )
         connection.execute(

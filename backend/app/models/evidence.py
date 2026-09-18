@@ -58,6 +58,7 @@ class Evidence(Base):
     file_size: Mapped[int] = mapped_column(Integer, nullable=False)
     sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
+    evidence_rule_code: Mapped[str | None] = mapped_column(String(100))
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
         nullable=False,
@@ -90,6 +91,7 @@ def _reject_metadata_mutation(_mapper, _connection, target: Evidence) -> None:
         "file_size",
         "sha256",
         "description",
+        "evidence_rule_code",
         "created_at",
     )
     if any(state.attrs[field].history.has_changes() for field in metadata_fields):

@@ -148,8 +148,14 @@ def test_service_creates_versioned_snapshots_at_run_creation(
     historical = service.get_run(run.id)
 
     assert historical.snapshot_version == 1
+    assert historical.execution_schema_version == 1
+    assert historical.source == "MANUAL"
+    assert historical.template_snapshot is None
+    assert historical.standard_snapshot is None
     assert historical.device_snapshot["software_version"] == "V5R020"
     assert historical.results[0].snapshot_version == 1
+    assert historical.results[0].result_source == "MANUAL"
+    assert historical.results[0].skill_snapshot is None
     assert historical.results[0].case_snapshot["title"] == "Verify WAN"
     assert historical.results[0].case_snapshot["steps"][0]["action"] == "Create WAN"
 

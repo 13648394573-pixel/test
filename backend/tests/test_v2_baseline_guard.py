@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 from alembic import command
 from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import text
 
 from app.db.schema_guard import (
@@ -26,17 +27,23 @@ def migration_config(database_path: Path) -> Config:
 
 
 def test_resolve_expected_revision_returns_single_alembic_head() -> None:
-    assert resolve_expected_revision(BACKEND_ROOT / "alembic.ini") == "20260918_0011"
+    config = Config(BACKEND_ROOT / "alembic.ini")
+    config.set_main_option("script_location", str(BACKEND_ROOT / "migrations"))
+
+    assert resolve_expected_revision(BACKEND_ROOT / "alembic.ini") == (
+        ScriptDirectory.from_config(config).get_current_head()
+    )
 
 
 def test_require_database_health_accepts_migrated_database(tmp_path) -> None:
     database_path = tmp_path / "healthy.db"
     command.upgrade(migration_config(database_path), "head")
     engine = create_database_engine(f"sqlite:///{database_path.as_posix()}")
+    expected_revision = resolve_expected_revision(BACKEND_ROOT / "alembic.ini")
 
-    health = require_database_health(engine, "20260918_0011")
+    health = require_database_health(engine, expected_revision)
 
-    assert health.revision == "20260918_0011"
+    assert health.revision == expected_revision
     assert health.quick_check == "ok"
     assert health.foreign_key_errors == ()
 

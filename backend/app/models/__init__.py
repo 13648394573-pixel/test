@@ -21,6 +21,13 @@ from app.models.test_execution import (
     TestRun,
 )
 from app.models.test_case import CaseStep, TestCase
+from app.models.test_standard import (
+    ProjectStandardProfile,
+    StandardProfile,
+    StandardProfileItem,
+    StandardRequirement,
+    TestStandard,
+)
 
 __all__ = [
     "CaseStep",
@@ -43,4 +50,9 @@ __all__ = [
     "TestCase",
     "TestProject",
     "TestRun",
+    "ProjectStandardProfile",
+    "StandardProfile",
+    "StandardProfileItem",
+    "StandardRequirement",
+    "TestStandard",
 ]

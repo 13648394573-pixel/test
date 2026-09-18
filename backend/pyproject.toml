@@ -10,6 +10,9 @@ requires-python = ">=3.12"
 dependencies = [
   "alembic>=1.16,<2",
   "fastapi>=0.116,<1",
+  "keyring>=25,<26",
+  "paramiko>=3.5,<4",
+  "pillow>=11,<12",
   "python-multipart>=0.0.20,<1",
   "pydantic-settings>=2.10,<3",
   "playwright>=1.55,<2",

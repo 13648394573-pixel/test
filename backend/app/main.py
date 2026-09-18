@@ -88,9 +88,20 @@ from app.skill_catalog.service import (
     CatalogVersionConflictError,
     SkillCatalogNotFoundError,
 )
+from app.local_runner.credential_router import router as local_credential_router
+from app.local_runner.credentials import (
+    CredentialResolver,
+    InvalidCredentialReferenceError,
+    KeyringCredentialStore,
+    UnavailableCredentialError,
+)
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None,
+    *,
+    credential_resolver: CredentialResolver | None = None,
+) -> FastAPI:
     application_settings = settings or get_settings()
 
     @asynccontextmanager
@@ -118,6 +129,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=lifespan,
     )
     application.state.settings = application_settings
+    application.state.credential_resolver = credential_resolver or CredentialResolver(
+        KeyringCredentialStore(), application_settings.credential_service_name
+    )
 
     @application.get(f"{application_settings.api_prefix}/health")
     def health() -> dict[str, str]:
@@ -372,6 +386,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             status_code=409, content={"detail": str(exception)}
         ),
     )
+    application.add_exception_handler(
+        InvalidCredentialReferenceError,
+        lambda _request, _exception: JSONResponse(
+            status_code=422, content={"detail": "Invalid credential reference"}
+        ),
+    )
+    application.add_exception_handler(
+        UnavailableCredentialError,
+        lambda _request, _exception: JSONResponse(
+            status_code=404, content={"detail": "Credential is unavailable"}
+        ),
+    )
 
     application.add_exception_handler(
         EnvironmentProfileNotFoundError,
@@ -487,6 +513,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     application.include_router(
         skill_catalog_router,
+        prefix=application_settings.api_prefix,
+    )
+    application.include_router(
+        local_credential_router,
         prefix=application_settings.api_prefix,
     )
 

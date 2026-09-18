@@ -28,6 +28,14 @@ from app.models.test_standard import (
     StandardRequirement,
     TestStandard,
 )
+from app.models.test_intelligence import (
+    SkillEvidenceRule,
+    SkillExecutionRule,
+    SkillParameter,
+    SkillStandardBinding,
+    SkillStep,
+    TestSkill,
+)
 
 __all__ = [
     "CaseStep",
@@ -55,4 +63,10 @@ __all__ = [
     "StandardProfileItem",
     "StandardRequirement",
     "TestStandard",
+    "SkillEvidenceRule",
+    "SkillExecutionRule",
+    "SkillParameter",
+    "SkillStandardBinding",
+    "SkillStep",
+    "TestSkill",
 ]

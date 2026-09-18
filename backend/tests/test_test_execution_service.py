@@ -20,6 +20,7 @@ from app.test_execution.service import (
     TestProjectNotFoundError,
     TestRunNotFoundError,
 )
+from app.models.test_execution import seal_result_derived_snapshots
 
 
 DEVICE_DATA = {
@@ -312,3 +313,39 @@ def test_service_preserves_history_and_reports_missing_resources(
         service.get_run("missing")
     with pytest.raises(RunResultNotFoundError):
         service.update_result(run.id, "missing", {"result": "FAIL"})
+
+
+def test_result_derived_snapshots_can_be_sealed_once(db_session: Session) -> None:
+    service, device_repository, case_repository = build_service(db_session)
+    device = device_repository.create(DEVICE_DATA)
+    test_case = case_repository.create(CASE_DATA, STEPS)
+    project = service.create_project(
+        {
+            "name": "Derived snapshots",
+            "version": "V2",
+            "description": None,
+            "case_source_ids": [test_case.id],
+        }
+    )
+    result = create_run(service, project.id, device.id).results[0]
+
+    seal_result_derived_snapshots(
+        result,
+        observations={"ipoe.ip": "192.0.2.10"},
+        matched_rule_codes=["IPOE_HAS_IP"],
+        standard_evaluations=[{"code": "IPOE_HAS_IP", "verdict": "PASS"}],
+        evidence_validation={"complete": True},
+    )
+    db_session.commit()
+
+    with pytest.raises(ValueError, match="already sealed"):
+        seal_result_derived_snapshots(
+            result,
+            observations={},
+            matched_rule_codes=[],
+            standard_evaluations=[],
+            evidence_validation={"complete": False},
+        )
+
+    with pytest.raises(ValueError, match="immutable"):
+        result.observations = {"ipoe.ip": "192.0.2.11"}

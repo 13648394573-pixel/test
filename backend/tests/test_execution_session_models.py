@@ -9,6 +9,7 @@ from app.models.execution_session import (
     OperatorInteraction,
     RecoveryTask,
 )
+from app.models.evidence import Evidence
 from app.models.test_execution import RunResult, TestProject, TestRun
 
 
@@ -151,6 +152,66 @@ def test_operator_snapshot_and_recovery_constraints(db_session) -> None:
     db_session.add(session)
     with pytest.raises(IntegrityError):
         db_session.commit()
+
+
+def test_operator_interaction_records_structured_risk_and_response(db_session) -> None:
+    result = make_run_result(db_session)
+    session = ExecutionSession(
+        test_run_id=result.run_id,
+        run_result_id=result.id,
+        mode="FORMAL",
+        status="WAITING_OPERATOR",
+    )
+    interaction = OperatorInteraction(
+        interaction_ref="confirm-delete-registration",
+        interaction_type="CONFIRMATION",
+        risk_level="HIGH",
+        title="Confirm registration replacement",
+        instructions="Review the existing ONU before replacement.",
+        completion_condition="Operator selects continue or cancel.",
+        options_json=["CONTINUE", "CANCEL"],
+        impact_preview={"registration": "will be replaced"},
+        response_json={"selected": "CONTINUE"},
+        status="COMPLETED",
+        required=True,
+    )
+    session.operator_interactions.append(interaction)
+    db_session.add(session)
+    db_session.commit()
+
+    assert interaction.risk_level == "HIGH"
+    assert interaction.response_json == {"selected": "CONTINUE"}
+
+
+def test_generated_evidence_records_step_and_redaction(db_session) -> None:
+    result = make_run_result(db_session)
+    session = ExecutionSession(
+        test_run_id=result.run_id,
+        run_result_id=result.id,
+        mode="DEVELOPMENT",
+        status="RUNNING",
+    )
+    db_session.add(session)
+    db_session.flush()
+    evidence = Evidence(
+        run_result_id=result.id,
+        execution_session_id=session.id,
+        step_ref="IPOE_ADDRESS",
+        evidence_rule_code="E3_IPOE_ADDRESS",
+        capture_method="OLT_RENDER",
+        redacted=True,
+        category="SCREENSHOT",
+        original_name="ipoe.png",
+        storage_path="runs/run-1/ipoe.png",
+        media_type="image/png",
+        file_size=10,
+        sha256="a" * 64,
+    )
+    db_session.add(evidence)
+    db_session.commit()
+
+    assert evidence.step_ref == "IPOE_ADDRESS"
+    assert evidence.redacted is True
 
 
 @pytest.mark.parametrize(

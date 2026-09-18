@@ -2,9 +2,11 @@ from datetime import datetime
 from uuid import uuid4
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -34,6 +36,7 @@ class Evidence(Base):
             "storage_path",
             name="uq_evidences_storage_path",
         ),
+        Index("ix_evidences_execution_session_step", "execution_session_id", "step_ref"),
     )
 
     id: Mapped[str] = mapped_column(
@@ -59,6 +62,19 @@ class Evidence(Base):
     sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
     evidence_rule_code: Mapped[str | None] = mapped_column(String(100))
+    execution_session_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("execution_sessions.id", ondelete="SET NULL"),
+        index=True,
+    )
+    step_ref: Mapped[str | None] = mapped_column(String(100))
+    capture_method: Mapped[str | None] = mapped_column(String(30))
+    redacted: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="0",
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
         nullable=False,
@@ -92,6 +108,10 @@ def _reject_metadata_mutation(_mapper, _connection, target: Evidence) -> None:
         "sha256",
         "description",
         "evidence_rule_code",
+        "execution_session_id",
+        "step_ref",
+        "capture_method",
+        "redacted",
         "created_at",
     )
     if any(state.attrs[field].history.has_changes() for field in metadata_fields):

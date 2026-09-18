@@ -117,6 +117,14 @@ class OperatorInteraction(Base):
             "status IN ('PENDING','COMPLETED','UNABLE','CANCELLED')",
             name="ck_operator_interactions_status",
         ),
+        CheckConstraint(
+            "interaction_type IN ('CONFIRMATION','INSTRUCTION','SELECTION','EVIDENCE')",
+            name="ck_operator_interactions_type",
+        ),
+        CheckConstraint(
+            "risk_level IN ('LOW','MEDIUM','HIGH')",
+            name="ck_operator_interactions_risk_level",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
@@ -124,9 +132,20 @@ class OperatorInteraction(Base):
         String(36), ForeignKey("execution_sessions.id", ondelete="CASCADE"), nullable=False, index=True
     )
     interaction_ref: Mapped[str] = mapped_column(String(100), nullable=False)
+    interaction_type: Mapped[str] = mapped_column(
+        String(30), nullable=False, default="INSTRUCTION", server_default="INSTRUCTION"
+    )
+    risk_level: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="LOW", server_default="LOW"
+    )
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     instructions: Mapped[str] = mapped_column(Text, nullable=False)
     completion_condition: Mapped[str] = mapped_column(Text, nullable=False)
+    options_json: Mapped[list[Any]] = mapped_column(
+        JSON, nullable=False, default=list, server_default="[]"
+    )
+    impact_preview: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    response_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="PENDING", server_default="PENDING")
     required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
     responder_name: Mapped[str | None] = mapped_column(String(200))

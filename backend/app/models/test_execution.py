@@ -275,6 +275,37 @@ def _keep_snapshot_immutable(
     return value
 
 
+def _keep_derived_snapshot_immutable_after_seal(
+    _target: object,
+    value: Any,
+    old_value: Any,
+    _initiator: object,
+) -> Any:
+    if old_value is not attributes.NO_VALUE and old_value is not None and value != old_value:
+        raise ValueError("Result derived snapshots are immutable after sealing")
+    return value
+
+
+def seal_result_derived_snapshots(
+    result: RunResult,
+    *,
+    observations: dict[str, Any],
+    matched_rule_codes: list[str],
+    standard_evaluations: list[dict[str, Any]],
+    evidence_validation: dict[str, Any],
+) -> None:
+    fields = {
+        "observations": observations,
+        "matched_rule_codes": matched_rule_codes,
+        "standard_evaluations": standard_evaluations,
+        "evidence_validation": evidence_validation,
+    }
+    if any(getattr(result, name) is not None for name in fields):
+        raise ValueError("Result derived snapshots are already sealed")
+    for name, value in fields.items():
+        setattr(result, name, value)
+
+
 for snapshot_attribute in (
     TestRun.run_no,
     TestRun.device_snapshot,
@@ -291,16 +322,27 @@ for snapshot_attribute in (
     RunResult.skill_source_id,
     RunResult.skill_snapshot,
     RunResult.parameter_snapshot,
-    RunResult.observations,
-    RunResult.matched_rule_codes,
-    RunResult.standard_evaluations,
-    RunResult.evidence_validation,
     RunResult.result_source,
 ):
     event.listen(
         snapshot_attribute,
         "set",
         _keep_snapshot_immutable,
+        retval=True,
+        active_history=True,
+    )
+
+
+for derived_snapshot_attribute in (
+    RunResult.observations,
+    RunResult.matched_rule_codes,
+    RunResult.standard_evaluations,
+    RunResult.evidence_validation,
+):
+    event.listen(
+        derived_snapshot_attribute,
+        "set",
+        _keep_derived_snapshot_immutable_after_seal,
         retval=True,
         active_history=True,
     )

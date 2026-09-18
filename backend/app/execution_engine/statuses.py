@@ -1,0 +1,45 @@
+from enum import StrEnum
+
+
+class ExecutionStatus(StrEnum):
+    CREATED = "CREATED"
+    PREFLIGHT = "PREFLIGHT"
+    RUNNING = "RUNNING"
+    WAITING_OPERATOR = "WAITING_OPERATOR"
+    EVALUATING = "EVALUATING"
+    RESTORING = "RESTORING"
+    COMPLETED = "COMPLETED"
+    BLOCKED = "BLOCKED"
+    ERROR = "ERROR"
+    CANCELLED = "CANCELLED"
+    RECOVERY_REQUIRED = "RECOVERY_REQUIRED"
+
+
+class FunctionalVerdict(StrEnum):
+    PASS = "PASS"
+    FAIL = "FAIL"
+    BLOCKED = "BLOCKED"
+    NOT_EVALUATED = "NOT_EVALUATED"
+
+
+class RecoveryStatus(StrEnum):
+    NOT_REQUIRED = "NOT_REQUIRED"
+    PENDING = "PENDING"
+    VERIFIED = "VERIFIED"
+    FAILED = "FAILED"
+    MANUAL_REQUIRED = "MANUAL_REQUIRED"
+
+
+class ExecutionMode(StrEnum):
+    MANUAL = "MANUAL"
+    DEVELOPMENT = "DEVELOPMENT"
+    FORMAL = "FORMAL"
+
+
+class ActionPhase(StrEnum):
+    PREFLIGHT = "PREFLIGHT"
+    SNAPSHOT = "SNAPSHOT"
+    EXECUTE = "EXECUTE"
+    VERIFY = "VERIFY"
+    RESTORE = "RESTORE"
+    RESTORE_VERIFY = "RESTORE_VERIFY"

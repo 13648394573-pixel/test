@@ -9,6 +9,7 @@ from app.models.evidence import Evidence
 from app.models.evidence_link import EvidenceRunResultLink
 from app.models.focused_regression import FocusedRegressionRun
 from app.models.report import Archive, Report
+from app.models.runner_registry import RunnerAction, RunnerPlugin, SkillRunnerBinding
 from app.models.environment import (
     EnvironmentParameter,
     EnvironmentProfile,
@@ -58,6 +59,9 @@ __all__ = [
     "RunEnvironmentSnapshot",
     "Regression",
     "Report",
+    "RunnerAction",
+    "RunnerPlugin",
+    "SkillRunnerBinding",
     "TestCase",
     "TestProject",
     "TestRun",

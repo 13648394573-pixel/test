@@ -76,6 +76,7 @@ CATALOG = CatalogDefinition(
         ActionDefinition("register_ont", "EXECUTE", "REGISTER", 120, False, "RESTORE_VERIFY"),
         ActionDefinition("provision_ipoe", "EXECUTE", "IPOE_ADDRESS", 120, False, "RESTORE_VERIFY"),
         ActionDefinition("read_wan_info", "VERIFY", "IPOE_ADDRESS", 90, True, "NONE", ("ipoe.address.valid", "pppoe.address.valid")),
+        ActionDefinition("pc_connectivity_probe", "VERIFY", "IPOE_PING", 60, True, "NONE", ("ipoe.internet.pass", "pppoe.internet.pass")),
         ActionDefinition("remove_test_services", "RESTORE", "PPPOE_ADDRESS", 120, False, "RESTORE_VERIFY"),
         ActionDefinition("provision_pppoe", "EXECUTE", "PPPOE_ADDRESS", 120, False, "RESTORE_VERIFY"),
         ActionDefinition("restore_snapshot", "RESTORE", "FINISH", 180, False, "RESTORE_VERIFY"),

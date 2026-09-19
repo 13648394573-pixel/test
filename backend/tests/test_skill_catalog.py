@@ -62,6 +62,7 @@ def test_catalog_definition_covers_approved_modes_and_evidence() -> None:
         "remove_test_services",
         "restore_snapshot",
         "verify_restore",
+        "pc_connectivity_probe",
     } <= action_codes
 
     serialized = json.dumps(CATALOG.to_dict(), ensure_ascii=False).lower()

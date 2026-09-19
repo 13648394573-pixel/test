@@ -95,12 +95,15 @@ from app.local_runner.credentials import (
     KeyringCredentialStore,
     UnavailableCredentialError,
 )
+from app.lab_compatibility.router import router as lab_compatibility_router
+from app.lab_compatibility.service import LabCompatibilityService
 
 
 def create_app(
     settings: Settings | None = None,
     *,
     credential_resolver: CredentialResolver | None = None,
+    lab_compatibility_service: LabCompatibilityService | None = None,
 ) -> FastAPI:
     application_settings = settings or get_settings()
 
@@ -132,6 +135,7 @@ def create_app(
     application.state.credential_resolver = credential_resolver or CredentialResolver(
         KeyringCredentialStore(), application_settings.credential_service_name
     )
+    application.state.lab_compatibility_service = lab_compatibility_service
 
     @application.get(f"{application_settings.api_prefix}/health")
     def health() -> dict[str, str]:
@@ -517,6 +521,10 @@ def create_app(
     )
     application.include_router(
         local_credential_router,
+        prefix=application_settings.api_prefix,
+    )
+    application.include_router(
+        lab_compatibility_router,
         prefix=application_settings.api_prefix,
     )
 

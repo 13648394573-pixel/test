@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     log_file: str = "./logs/test-workbench.log"
     evidence_root: str = "./data/evidence"
     local_runner_evidence_root: str = "./data/runner-evidence"
+    lab_compatibility_root: str = "./data/runner-evidence/lab-compatibility"
     credential_service_name: str = "ONU Test Workbench"
     evidence_max_size_mb: int = 50
     report_root: str = "./data/reports"

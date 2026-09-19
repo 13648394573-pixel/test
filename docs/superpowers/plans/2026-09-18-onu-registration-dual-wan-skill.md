@@ -575,6 +575,12 @@ git commit -m "feat(runner): add PC connectivity evidence"
 
 ---
 
+### Required checkpoint before Task 8
+
+Complete `docs/superpowers/plans/2026-09-19-read-only-lab-compatibility-check.md` and review its first real `READY/PARTIAL/BLOCKED` report with the user before implementing or running any formal configuration-changing Skill path. This checkpoint reuses Tasks 4–7 and does not renumber or replace the remaining tasks.
+
+---
+
 ### Task 8: Persist and evaluate a resumable Skill execution
 
 **Files:**

@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import hashlib
 import re
 import time
-from typing import Callable, Protocol
+from typing import Any, Callable, Protocol
 
 import paramiko
 
@@ -32,27 +32,158 @@ class ShellChannel(Protocol):
     def recv(self, size: int) -> bytes: ...
 
 
-_SAFE_COMMANDS: dict[str, Callable[[tuple[str, ...]], str]] = {
-    "display_autofind": lambda arguments: "display ont autofind all"
-    if not arguments
-    else _invalid_arguments("display_autofind"),
-}
-
-
 def _invalid_arguments(action_code: str):
     raise ValueError(f"Invalid arguments for allow-listed action: {action_code}")
+
+
+def _int_arg(value: Any, *, maximum: int = 4095) -> int:
+    if isinstance(value, bool):
+        raise ValueError("Boolean is not a valid numeric command argument")
+    if isinstance(value, int):
+        result = value
+    elif isinstance(value, str) and value.isascii() and value.isdigit():
+        result = int(value)
+    else:
+        raise ValueError("Unsafe numeric command argument")
+    if not 0 <= result <= maximum:
+        raise ValueError("Numeric command argument is out of range")
+    return result
+
+
+def _serial_arg(value: Any) -> str:
+    serial = str(value).upper()
+    if not re.fullmatch(r"[0-9A-F]{16}", serial):
+        raise ValueError("Unsafe ONU serial number")
+    return serial
+
+
+def _fsp_arg(value: Any) -> str:
+    fsp = str(value).replace(" ", "")
+    if not re.fullmatch(r"\d+/\d+/\d+", fsp):
+        raise ValueError("Unsafe F/S/P argument")
+    return fsp
+
+
+def _secret_arg(value: Any) -> str:
+    reveal = getattr(value, "reveal", None)
+    if not callable(reveal):
+        raise ValueError("Sensitive command argument must be SecretValue")
+    secret = reveal()
+    if not secret or not re.fullmatch(r"[A-Za-z0-9._@%+=:,/#~-]+", secret):
+        raise ValueError("Unsafe sensitive command argument")
+    return secret
+
+
+def _no_args(code: str, text: str):
+    def build(arguments: tuple[Any, ...]) -> str:
+        if arguments:
+            return _invalid_arguments(code)
+        return text
+    return build
+
+
+def _display_ont_by_sn(arguments: tuple[Any, ...]) -> str:
+    if len(arguments) != 1:
+        return _invalid_arguments("display_ont_by_sn")
+    return f"display ont info by-sn {_serial_arg(arguments[0])}"
+
+
+def _display_ont_port(arguments: tuple[Any, ...]) -> str:
+    if len(arguments) != 1:
+        return _invalid_arguments("display_ont_port")
+    return f"display ont info {_int_arg(arguments[0], maximum=255)} all"
+
+
+def _display_wan_info(arguments: tuple[Any, ...]) -> str:
+    if len(arguments) != 2:
+        return _invalid_arguments("display_wan_info")
+    return f"display ont wan-info {_int_arg(arguments[0], maximum=255)} {_int_arg(arguments[1], maximum=255)}"
+
+
+def _display_service_ports(arguments: tuple[Any, ...]) -> str:
+    if len(arguments) != 2:
+        return _invalid_arguments("display_service_ports")
+    return f"display service-port port {_fsp_arg(arguments[0])} ont {_int_arg(arguments[1], maximum=255)}"
+
+
+def _delete_ont(arguments: tuple[Any, ...]) -> str:
+    if len(arguments) != 2:
+        return _invalid_arguments("delete_ont")
+    return f"ont delete {_int_arg(arguments[0], maximum=255)} {_int_arg(arguments[1], maximum=255)}"
+
+
+def _register_ont(arguments: tuple[Any, ...]) -> str:
+    if len(arguments) != 6:
+        return _invalid_arguments("register_ont")
+    port, ont_id, serial, line_profile, service_profile, auth_mode = arguments
+    if auth_mode != "sn-auth":
+        raise ValueError("Only SN authentication is allow-listed")
+    return (
+        f"ont add {_int_arg(port, maximum=255)} {_int_arg(ont_id, maximum=255)} "
+        f"sn-auth {_serial_arg(serial)} omci "
+        f"ont-lineprofile-id {_int_arg(line_profile)} "
+        f"ont-srvprofile-id {_int_arg(service_profile)}"
+    )
+
+
+def _provision_ipoe(arguments: tuple[Any, ...]) -> str:
+    if len(arguments) != 3:
+        return _invalid_arguments("provision_ipoe")
+    port, ont_id, vlan = arguments
+    return (
+        f"ont ipconfig {_int_arg(port, maximum=255)} {_int_arg(ont_id, maximum=255)} "
+        f"ip-index 1 dhcp vlan {_int_arg(vlan)} priority 0"
+    )
+
+
+def _provision_pppoe(arguments: tuple[Any, ...]) -> str:
+    if len(arguments) != 5:
+        return _invalid_arguments("provision_pppoe")
+    port, ont_id, username, password, vlan = arguments
+    return (
+        f"ont ipconfig {_int_arg(port, maximum=255)} {_int_arg(ont_id, maximum=255)} "
+        f"pppoe user-account username {_secret_arg(username)} password {_secret_arg(password)} "
+        f"vlan {_int_arg(vlan)}"
+    )
+
+
+def _remove_service_port(arguments: tuple[Any, ...]) -> str:
+    if len(arguments) != 1:
+        return _invalid_arguments("remove_service_port")
+    return f"undo service-port {_int_arg(arguments[0], maximum=65535)}"
+
+
+_SAFE_COMMANDS: dict[str, Callable[[tuple[Any, ...]], str]] = {
+    "enable": _no_args("enable", "enable"),
+    "disable_paging": _no_args("disable_paging", "screen-length 0 temporary"),
+    "enter_config": _no_args("enter_config", "config"),
+    "display_autofind": _no_args("display_autofind", "display ont autofind all"),
+    "display_ont_by_sn": _display_ont_by_sn,
+    "display_ont_port": _display_ont_port,
+    "display_wan_info": _display_wan_info,
+    "display_service_ports": _display_service_ports,
+    "delete_ont": _delete_ont,
+    "register_ont": _register_ont,
+    "provision_ipoe": _provision_ipoe,
+    "provision_pppoe": _provision_pppoe,
+    "remove_service_port": _remove_service_port,
+}
 
 
 @dataclass(frozen=True)
 class SafeMA5800Command:
     action_code: str
-    arguments: tuple[str, ...]
+    arguments: tuple[Any, ...]
 
     def render(self) -> str:
         builder = _SAFE_COMMANDS.get(self.action_code)
         if builder is None:
             raise ValueError(f"Command is not allow-listed: {self.action_code}")
         return builder(self.arguments)
+
+    @property
+    def text(self) -> str:
+        return self.render()
 
 
 @dataclass(frozen=True)

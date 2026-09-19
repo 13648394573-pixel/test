@@ -49,6 +49,20 @@ def test_catalog_definition_covers_approved_modes_and_evidence() -> None:
         "E5_PPPOE_ADDRESS",
         "E6_PPPOE_PING",
     )
+    action_codes = {item.code for item in CATALOG.actions}
+    assert {
+        "discover_onts",
+        "snapshot_ont",
+        "find_free_ont_id",
+        "delete_ont",
+        "register_ont",
+        "provision_ipoe",
+        "provision_pppoe",
+        "read_wan_info",
+        "remove_test_services",
+        "restore_snapshot",
+        "verify_restore",
+    } <= action_codes
 
     serialized = json.dumps(CATALOG.to_dict(), ensure_ascii=False).lower()
     for forbidden in ("password", "secret", "192.168.", "10.0.", "username"):
@@ -100,4 +114,3 @@ def test_catalog_install_rejects_same_version_with_unknown_definition(db_session
 
     with pytest.raises(CatalogVersionConflictError):
         build_catalog_service(db_session).install_onu_registration_dual_wan_draft()
-

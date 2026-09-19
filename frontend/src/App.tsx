@@ -18,6 +18,9 @@ import type { TestCaseApi } from "./testCases/types";
 import TestExecutionPage from "./testExecution/TestExecutionPage";
 import { testExecutionApi as defaultTestExecutionApi } from "./testExecution/api";
 import type { TestExecutionApi } from "./testExecution/types";
+import LabCompatibilityPage from "./labCompatibility/LabCompatibilityPage";
+import { labCompatibilityApi as defaultLabCompatibilityApi } from "./labCompatibility/api";
+import type { LabCompatibilityApi } from "./labCompatibility/types";
 
 
 interface AppProps {
@@ -27,6 +30,7 @@ interface AppProps {
   defectApi?: DefectApi;
   environmentApi?: EnvironmentApi;
   reportApi?: ReportApi;
+  labCompatibilityApi?: LabCompatibilityApi;
 }
 
 
@@ -36,7 +40,8 @@ function App({
   testExecutionApi = defaultTestExecutionApi,
   defectApi = defaultDefectApi,
   environmentApi = defaultEnvironmentApi,
-  reportApi = defaultReportApi
+  reportApi = defaultReportApi,
+  labCompatibilityApi = defaultLabCompatibilityApi
 }: AppProps) {
   const [activeModule, setActiveModule] = useState<
     | "devices"
@@ -45,6 +50,7 @@ function App({
     | "defects"
     | "environments"
     | "reports"
+    | "lab-compatibility"
   >("devices");
 
   return (
@@ -57,6 +63,13 @@ function App({
         <span className="local-badge">本地工作区</span>
       </header>
       <nav className="module-nav" aria-label="业务模块">
+        <button
+          type="button"
+          className={activeModule === "lab-compatibility" ? "active" : ""}
+          onClick={() => setActiveModule("lab-compatibility")}
+        >
+          现场检查
+        </button>
         <button
           type="button"
           className={activeModule === "devices" ? "active" : ""}
@@ -116,6 +129,8 @@ function App({
           <DefectPage api={defectApi} executionApi={testExecutionApi} />
         ) : activeModule === "environments" ? (
           <EnvironmentProfilePage api={environmentApi} />
+        ) : activeModule === "lab-compatibility" ? (
+          <LabCompatibilityPage api={labCompatibilityApi} />
         ) : (
           <ReportArchivePage
             api={reportApi}

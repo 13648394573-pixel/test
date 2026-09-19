@@ -118,6 +118,139 @@ h3 {
   padding: 42px 0 64px;
 }
 
+.lab-compatibility {
+  width: min(1440px, calc(100% - 40px));
+  margin: 0 auto;
+  padding: 42px 0 64px;
+}
+
+.lab-safety {
+  margin: 20px 0;
+  padding: 16px 18px;
+  border: 1px solid #b8cdf1;
+  border-radius: 10px;
+  color: #173c76;
+  background: #edf4ff;
+  font-weight: 700;
+}
+
+.lab-step {
+  margin-top: 18px;
+  padding: 22px;
+  border: 1px solid #d8e0ec;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.lab-step h3 {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 18px;
+}
+
+.lab-step h3 > span {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  background: #315fa8;
+}
+
+.lab-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.lab-grid label,
+.credential-row label {
+  display: grid;
+  gap: 6px;
+  color: #4b5d78;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.lab-grid input,
+.credential-row input {
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid #c9d3e2;
+  border-radius: 7px;
+}
+
+.fingerprint-row,
+.confirm-line,
+.credential-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.fingerprint-row {
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+
+.fingerprint-row code {
+  overflow-wrap: anywhere;
+}
+
+.credential-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto 70px;
+  margin-top: 12px;
+}
+
+.stage-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.stage-card {
+  padding: 14px;
+  border: 1px solid #d8e0ec;
+  border-left: 5px solid #98a6ba;
+  border-radius: 8px;
+}
+
+.stage-card > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.stage-card p {
+  margin: 8px 0 0;
+  color: #617089;
+}
+
+.status-verified { border-left-color: #2f855a; }
+.status-needs_input { border-left-color: #c68a16; }
+.status-blocked { border-left-color: #c53030; }
+
+.overall-status { margin: 0; font-weight: 800; }
+.overall-ready { color: #276749; }
+.overall-partial { color: #9c6a10; }
+.overall-blocked, .form-error, .field-warning { color: #b42318; }
+
+.evidence-list { padding-left: 20px; }
+.evidence-list li { margin-top: 8px; }
+.evidence-list code { display: block; overflow-wrap: anywhere; color: #617089; }
+
+@media (max-width: 820px) {
+  .lab-grid,
+  .stage-grid,
+  .credential-row {
+    grid-template-columns: 1fr;
+  }
+}
+
 .page-heading,
 .form-heading {
   display: flex;

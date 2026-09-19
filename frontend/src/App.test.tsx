@@ -7,6 +7,7 @@ import type { DeviceApi } from "./devices/types";
 import type { EnvironmentApi } from "./environments/types";
 import type { TestCaseApi } from "./testCases/types";
 import type { TestExecutionApi } from "./testExecution/types";
+import type { LabCompatibilityApi } from "./labCompatibility/types";
 
 
 const emptyApi: DeviceApi = {
@@ -98,6 +99,15 @@ const emptyDefectApi: DefectApi = {
   evidenceDownloadUrl: (id) => `/api/evidences/${id}/download`
 };
 
+const emptyLabCompatibilityApi: LabCompatibilityApi = {
+  previewHostKey: async () => "SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+  credentialStatus: async (reference) => ({ reference, available: false }),
+  enrollCredential: async (reference) => ({ reference, available: true }),
+  createCheck: async () => { throw new Error("not used"); },
+  getCheck: async () => { throw new Error("not used"); },
+  listEvidence: async () => []
+};
+
 afterEach(cleanup);
 
 
@@ -158,5 +168,17 @@ describe("application", () => {
     expect(
       await screen.findByRole("heading", { name: "缺陷闭环" })
     ).toBeInTheDocument();
+  });
+
+  it("opens the read-only lab compatibility module", async () => {
+    render(
+      <App
+        api={emptyApi}
+        testCaseApi={emptyTestCaseApi}
+        labCompatibilityApi={emptyLabCompatibilityApi}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "现场检查" }));
+    expect(await screen.findByRole("heading", { name: "现场兼容性检查" })).toBeInTheDocument();
   });
 });

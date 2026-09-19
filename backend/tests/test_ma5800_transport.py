@@ -9,6 +9,7 @@ from app.local_runner.ma5800.transport import (
     PinnedHostKeyPolicy,
     SafeMA5800Command,
     MA5800Transport,
+    MA5800SSHConnector,
 )
 
 
@@ -33,6 +34,21 @@ class FakeKey:
 
     def asbytes(self) -> bytes:
         return self.raw
+
+
+class FakeParamikoTransport:
+    def __init__(self, address):
+        self.address = address
+        self.closed = False
+
+    def start_client(self, timeout):
+        self.timeout = timeout
+
+    def get_remote_server_key(self):
+        return FakeKey(b"lab-key")
+
+    def close(self):
+        self.closed = True
 
 
 def test_transport_handles_more_and_cr_prompts() -> None:
@@ -80,3 +96,37 @@ def test_host_key_policy_rejects_mismatched_fingerprint() -> None:
 def test_safe_command_rejects_unknown_action_code() -> None:
     with pytest.raises(ValueError, match="allow-listed"):
         SafeMA5800Command("raw_cli", ("display current-configuration",)).render()
+
+
+def test_interface_context_accepts_only_numeric_frame_and_slot() -> None:
+    assert SafeMA5800Command("enter_gpon_interface", (0, 2)).render() == (
+        "interface gpon 0/2"
+    )
+    with pytest.raises(ValueError, match="numeric"):
+        SafeMA5800Command("enter_gpon_interface", ("0", "2;save")).render()
+
+
+def test_synchronize_drains_banner_without_sending_input() -> None:
+    channel = FakeChannel(["Welcome\r\nMA5800-X7>"])
+    transport = MA5800Transport(channel, timeout_seconds=1, sleeper=lambda _n: None)
+
+    assert transport.synchronize() == "MA5800-X7>"
+    assert channel.sent == []
+
+
+def test_preview_host_key_rejects_public_ip_and_closes_transport() -> None:
+    created = []
+
+    def factory(address):
+        transport = FakeParamikoTransport(address)
+        created.append(transport)
+        return transport
+
+    connector = MA5800SSHConnector(transport_factory=factory)
+    fingerprint = connector.preview_host_key("192.168.87.204", 22)
+
+    assert fingerprint.startswith("SHA256:")
+    assert created[0].address == ("192.168.87.204", 22)
+    assert created[0].closed is True
+    with pytest.raises(ValueError, match="private"):
+        connector.preview_host_key("8.8.8.8", 22)

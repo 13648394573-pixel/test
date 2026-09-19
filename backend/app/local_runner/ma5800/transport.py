@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 from dataclasses import dataclass
 import hashlib
+from ipaddress import ip_address
 import re
 import time
 from typing import Any, Callable, Protocol
@@ -106,6 +107,14 @@ def _display_service_ports(arguments: tuple[Any, ...]) -> str:
     return f"display service-port port {_fsp_arg(arguments[0])} ont {_int_arg(arguments[1], maximum=255)}"
 
 
+def _enter_gpon_interface(arguments: tuple[Any, ...]) -> str:
+    if len(arguments) != 2:
+        return _invalid_arguments("enter_gpon_interface")
+    frame = _int_arg(arguments[0], maximum=15)
+    slot = _int_arg(arguments[1], maximum=31)
+    return f"interface gpon {frame}/{slot}"
+
+
 def _delete_ont(arguments: tuple[Any, ...]) -> str:
     if len(arguments) != 2:
         return _invalid_arguments("delete_ont")
@@ -157,6 +166,7 @@ _SAFE_COMMANDS: dict[str, Callable[[tuple[Any, ...]], str]] = {
     "enable": _no_args("enable", "enable"),
     "disable_paging": _no_args("disable_paging", "screen-length 0 temporary"),
     "enter_config": _no_args("enter_config", "config"),
+    "enter_gpon_interface": _enter_gpon_interface,
     "display_autofind": _no_args("display_autofind", "display ont autofind all"),
     "display_ont_by_sn": _display_ont_by_sn,
     "display_ont_port": _display_ont_port,
@@ -245,6 +255,19 @@ class MA5800Transport:
                 raise CommandTimeoutError(command.action_code)
             self.sleeper(0.05)
 
+    def synchronize(self) -> str:
+        started = self.monotonic()
+        chunks: list[str] = []
+        while True:
+            if self.channel.recv_ready():
+                chunks.append(self.channel.recv(65535).decode("utf-8", errors="replace"))
+                match = PROMPT.search("".join(chunks))
+                if match:
+                    return match.group(1)
+            if self.monotonic() - started >= self.timeout_seconds:
+                raise CommandTimeoutError("synchronize")
+            self.sleeper(0.05)
+
 
 def host_key_fingerprint(key) -> str:
     digest = hashlib.sha256(key.asbytes()).digest()
@@ -278,8 +301,34 @@ class PinnedHostKeyPolicy(paramiko.MissingHostKeyPolicy):
 
 
 class MA5800SSHConnector:
-    def __init__(self, client_factory: Callable[[], paramiko.SSHClient] = paramiko.SSHClient):
+    def __init__(
+        self,
+        client_factory: Callable[[], paramiko.SSHClient] = paramiko.SSHClient,
+        transport_factory: Callable[[tuple[str, int]], Any] = paramiko.Transport,
+    ):
         self.client_factory = client_factory
+        self.transport_factory = transport_factory
+
+    def preview_host_key(
+        self,
+        hostname: str,
+        port: int,
+        timeout_seconds: float = 10,
+    ) -> str:
+        try:
+            address = ip_address(hostname)
+        except ValueError as exception:
+            raise ValueError("OLT host must be a private IP address") from exception
+        if not (address.is_private or address.is_loopback or address.is_link_local):
+            raise ValueError("OLT host must be a private IP address")
+        if not 1 <= port <= 65535:
+            raise ValueError("OLT port is out of range")
+        transport = self.transport_factory((hostname, port))
+        try:
+            transport.start_client(timeout=timeout_seconds)
+            return host_key_fingerprint(transport.get_remote_server_key())
+        finally:
+            transport.close()
 
     def connect(
         self,

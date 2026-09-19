@@ -46,6 +46,17 @@ def test_huawei_adapter_parses_success_and_passes_wan_mode() -> None:
     assert observation.latency_avg_ms == Decimal("1.5")
 
 
+def test_huawei_ping_parser_is_reusable_by_local_runner() -> None:
+    from app.diagnostics.adapters.huawei import parse_huawei_ping_output
+
+    observation = parse_huawei_ping_output(
+        "sent=4 received=4 loss=0% min=2ms avg=3ms max=5ms"
+    )
+    assert observation.status == "PASS"
+    assert observation.packets_sent == 4
+    assert observation.latency_avg_ms == Decimal("3")
+
+
 def test_huawei_adapter_marks_packet_loss_failed_and_redacts_credentials() -> None:
     from app.diagnostics.adapters.huawei import HuaweiPingAdapter
     from app.diagnostics.contracts import DiagnosticContext, PingRequest

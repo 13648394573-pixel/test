@@ -295,49 +295,46 @@ class HuaweiPingAdapter:
         return str(device_snapshot.get("vendor", "")).strip().casefold() == "huawei"
 
     def ping(self, context: DiagnosticContext, request: PingRequest) -> PingObservation:
-        raw_output = _SECRET.sub(
-            r"\1[REDACTED]",
-            self._executor(context, request),
-        )[:65536]
-        packet_match = _PACKETS.search(raw_output)
-        if packet_match is not None:
-            sent = int(packet_match.group("sent"))
-            received = int(packet_match.group("received"))
-            loss = Decimal(packet_match.group("loss"))
-        else:
-            busybox_match = _BUSYBOX_PACKETS.search(raw_output)
-            if busybox_match is None:
-                raise HuaweiOutputError("Huawei Ping output is not complete")
-            sent = int(busybox_match.group("sent"))
-            received = int(busybox_match.group("received"))
-            loss = (
-                (
-                    Decimal(sent - received)
-                    * Decimal("100")
-                    / Decimal(sent)
-                ).quantize(Decimal("0.01"))
-                if sent
-                else Decimal("100")
+        return parse_huawei_ping_output(self._executor(context, request))
+
+
+def parse_huawei_ping_output(value: str) -> PingObservation:
+    raw_output = _SECRET.sub(r"\1[REDACTED]", value)[:65536]
+    packet_match = _PACKETS.search(raw_output)
+    if packet_match is not None:
+        sent = int(packet_match.group("sent"))
+        received = int(packet_match.group("received"))
+        loss = Decimal(packet_match.group("loss"))
+    else:
+        busybox_match = _BUSYBOX_PACKETS.search(raw_output)
+        if busybox_match is None:
+            raise HuaweiOutputError("Huawei Ping output is not complete")
+        sent = int(busybox_match.group("sent"))
+        received = int(busybox_match.group("received"))
+        loss = (
+            (Decimal(sent - received) * Decimal("100") / Decimal(sent)).quantize(
+                Decimal("0.01")
             )
-        latency_match = _LATENCY.search(raw_output) or _BUSYBOX_LATENCY.search(
-            raw_output
+            if sent
+            else Decimal("100")
         )
-        latency = (
-            (
-                Decimal(latency_match.group("min")),
-                Decimal(latency_match.group("avg")),
-                Decimal(latency_match.group("max")),
-            )
-            if latency_match
-            else (None, None, None)
+    latency_match = _LATENCY.search(raw_output) or _BUSYBOX_LATENCY.search(raw_output)
+    latency = (
+        (
+            Decimal(latency_match.group("min")),
+            Decimal(latency_match.group("avg")),
+            Decimal(latency_match.group("max")),
         )
-        return PingObservation(
-            status="PASS" if sent > 0 and received == sent and loss == 0 else "FAIL",
-            packets_sent=sent,
-            packets_received=received,
-            loss_percent=loss,
-            latency_min_ms=latency[0],
-            latency_avg_ms=latency[1],
-            latency_max_ms=latency[2],
-            raw_output=raw_output,
-        )
+        if latency_match
+        else (None, None, None)
+    )
+    return PingObservation(
+        status="PASS" if sent > 0 and received == sent and loss == 0 else "FAIL",
+        packets_sent=sent,
+        packets_received=received,
+        loss_percent=loss,
+        latency_min_ms=latency[0],
+        latency_avg_ms=latency[1],
+        latency_max_ms=latency[2],
+        raw_output=raw_output,
+    )

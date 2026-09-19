@@ -1,8 +1,9 @@
 from app.lab_compatibility.contracts import CreateCompatibilityCheck
-from app.lab_compatibility.olt_probe import OLTProbeResult
+from app.lab_compatibility.olt_probe import OLTProbeBlocked, OLTProbeResult
 from app.lab_compatibility.service import ActiveCompatibilityCheckExists, LabCompatibilityService
 from app.lab_compatibility.store import CompatibilityReportStore
 from app.local_runner.contracts import ActionOutcome
+from app.local_runner.ma5800.transport import CommandTranscript
 from app.local_runner.credentials import CredentialResolver, FakeCredentialStore
 from app.local_runner.onu_web.contracts import ONUWebCompatibilityResult
 from app.local_runner.pc_probe import PingProbeResult, ProbeObservation
@@ -24,6 +25,18 @@ class FakeONUAdapter:
     def check_compatibility(self, _context):
         passed = ActionOutcome("PASS", (), ())
         return ONUWebCompatibilityResult(passed, passed)
+
+
+class UnsupportedOLTProbe(FakeOLTProbe):
+    def run(self, _request, _username, _password):
+        transcript = CommandTranscript(
+            "display_autofind",
+            "Password: local-secret\nunsupported",
+            "Password: local-secret\nunsupported",
+            "MA5800-X7#",
+            "hash",
+        )
+        raise OLTProbeBlocked("ValueError", (transcript,))
 
 
 class FakePCProbe:
@@ -105,3 +118,17 @@ def test_second_pending_check_is_rejected(tmp_path) -> None:
         pass
     else:
         raise AssertionError("second active check must be rejected")
+
+
+def test_unsupported_olt_output_keeps_redacted_evidence(tmp_path) -> None:
+    service = build_service(tmp_path, olt_probe=UnsupportedOLTProbe())
+
+    view = service.execute(service.create(command()).check_id)
+
+    stage = next(item for item in view.stages if item.code == "OLT_CONNECT")
+    assert stage.status == "BLOCKED"
+    assert {item.media_type for item in stage.evidence} == {"text/plain", "image/png"}
+    text_path = tmp_path / view.check_id / next(
+        item.storage_path for item in stage.evidence if item.media_type == "text/plain"
+    )
+    assert "local-secret" not in text_path.read_text(encoding="utf-8")

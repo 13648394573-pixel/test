@@ -140,7 +140,11 @@ class NeutralONUWebAdapter:
             except (ONUWebSelectorError, HuaweiSelectorError) as exception:
                 stage = getattr(exception, "stage", "WAN_NAVIGATION")
                 wan = ActionOutcome(
-                    "BLOCKED", (), (), "ONU_WEB_SELECTOR_UNSUPPORTED", f"Selector stage: {stage}"
+                    "BLOCKED",
+                    (),
+                    self._capture_failure_artifacts(surface, context, "onu-wan-page-blocked"),
+                    "ONU_WEB_SELECTOR_UNSUPPORTED",
+                    f"Selector stage: {stage}",
                 )
                 return ONUWebCompatibilityResult(
                     wan,
@@ -160,7 +164,11 @@ class NeutralONUWebAdapter:
             except (ONUWebSelectorError, HuaweiSelectorError) as exception:
                 stage = getattr(exception, "stage", "PING_PAGE")
                 ping = ActionOutcome(
-                    "BLOCKED", (), (), "ONU_WEB_SELECTOR_UNSUPPORTED", f"Selector stage: {stage}"
+                    "BLOCKED",
+                    (),
+                    self._capture_failure_artifacts(surface, context, "onu-ping-page-blocked"),
+                    "ONU_WEB_SELECTOR_UNSUPPORTED",
+                    f"Selector stage: {stage}",
                 )
             return ONUWebCompatibilityResult(wan, ping)
         except ONUWebAuthenticationError:
@@ -200,6 +208,14 @@ class NeutralONUWebAdapter:
             ArtifactPayload(f"{stem}.png", "image/png", content=surface.screenshot(), redacted=True),
             ArtifactPayload(f"{stem}.txt", "text/plain", content=text.encode("utf-8"), redacted=True),
         )
+
+    def _capture_failure_artifacts(
+        self, surface: ONUWebSurface, context: ActionContext, stem: str
+    ) -> tuple[ArtifactPayload, ...]:
+        try:
+            return self._capture_artifacts(surface, context, stem)
+        except Exception:
+            return ()
 
     @staticmethod
     def _field_value(key: str, value: str):
@@ -332,13 +348,30 @@ class NeutralPlaywrightSurface:
             raise ONUWebSelectorError(exception.stage, str(exception)) from exception
 
     def mask_sensitive_controls(self) -> None:
-        for selector in (*HuaweiSelectorStrategy.LOGIN_USERNAME, *HuaweiSelectorStrategy.LOGIN_PASSWORD):
-            try:
-                locator = self.page.locator(selector).first
-                if locator.count():
-                    locator.fill("[REDACTED]")
-            except Exception:
-                continue
+        selectors = (
+            *HuaweiSelectorStrategy.LOGIN_USERNAME,
+            *HuaweiSelectorStrategy.LOGIN_PASSWORD,
+            "input[type='password']",
+            "input[name*='password' i]",
+            "input[name*='passwd' i]",
+            "input[name*='pwd' i]",
+            "input[name*='token' i]",
+            "input[name*='secret' i]",
+            "input[name*='loid' i]",
+            "input[name*='user' i]",
+        )
+        scopes = []
+        for candidate in (self.page, self.surface):
+            if candidate is not None and all(candidate is not scope for scope in scopes):
+                scopes.append(candidate)
+        for scope in scopes:
+            for selector in selectors:
+                try:
+                    locators = scope.locator(selector)
+                    for index in range(locators.count()):
+                        locators.nth(index).fill("[REDACTED]")
+                except Exception:
+                    continue
 
     def page_text(self) -> str:
         return self.surface.locator("body").inner_text()

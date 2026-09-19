@@ -37,7 +37,7 @@ describe("LabCompatibilityPage", () => {
 
   it("requires explicit confirmation of the previewed host key", async () => {
     render(<LabCompatibilityPage api={fakeApi()} />);
-    fireEvent.change(screen.getByLabelText("OLT 地址"), { target: { value: "192.168.87.204" } });
+    fireEvent.change(screen.getByLabelText("OLT 地址"), { target: { value: "10.0.0.2" } });
     fireEvent.change(screen.getByLabelText("ONU Web 地址"), { target: { value: "http://192.168.1.1" } });
     fireEvent.change(screen.getByLabelText("电脑网卡"), { target: { value: "Ethernet" } });
     fireEvent.change(screen.getByLabelText("电脑源地址"), { target: { value: "192.168.1.20" } });
@@ -48,5 +48,17 @@ describe("LabCompatibilityPage", () => {
     expect(screen.getByRole("button", { name: "开始只读检查" })).toBeDisabled();
     fireEvent.click(screen.getByLabelText("我已核对 OLT 主机指纹"));
     await waitFor(() => expect(screen.getByRole("button", { name: "开始只读检查" })).toBeEnabled());
+  });
+
+  it("checks whether an existing local credential reference is available", async () => {
+    const api = fakeApi();
+    render(<LabCompatibilityPage api={api} />);
+
+    fireEvent.click(screen.getAllByRole("button", { name: "检查已有凭据" })[0]);
+
+    await waitFor(() => {
+      expect(api.credentialStatus).toHaveBeenCalledWith("olt.lab.username");
+      expect(screen.getByText("本机已有")).toBeInTheDocument();
+    });
   });
 });

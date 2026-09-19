@@ -40,6 +40,13 @@ class ReadOnlyCommandViolation(Exception):
     pass
 
 
+class OLTProbeBlocked(Exception):
+    def __init__(self, reason: str, transcripts: tuple[CommandTranscript, ...]):
+        self.reason = reason
+        self.transcripts = transcripts
+        super().__init__(reason)
+
+
 class CommandExecutor(Protocol):
     def run(self, command: SafeMA5800Command) -> CommandTranscript: ...
 
@@ -194,6 +201,10 @@ class MA5800ReadOnlyProbe:
                 registration_found,
                 wan_found,
             )
+        except Exception as exception:
+            raise OLTProbeBlocked(
+                type(exception).__name__, tuple(transcripts)
+            ) from exception
         finally:
             close_channel = getattr(channel, "close", None)
             if callable(close_channel):

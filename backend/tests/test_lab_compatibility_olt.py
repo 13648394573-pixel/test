@@ -4,6 +4,7 @@ import pytest
 
 from app.lab_compatibility.olt_probe import (
     MA5800ReadOnlyProbe,
+    OLTProbeBlocked,
     OLTProbeRequest,
     ReadOnlyCommandViolation,
     ReadOnlyMA5800Executor,
@@ -49,6 +50,15 @@ class NoRegistrationTransport(FakeTransport):
         if command.action_code == "display_ont_by_sn":
             self.commands.append(command.action_code)
             output = "Failure: The ONT does not exist\nMA5800-X7#"
+            return CommandTranscript(command.action_code, output, output, "MA5800-X7#", "hash")
+        return super().run(command)
+
+
+class UnsupportedRegistrationTransport(FakeTransport):
+    def run(self, command):
+        if command.action_code == "display_ont_by_sn":
+            self.commands.append(command.action_code)
+            output = "Failure: Unknown device response\nMA5800-X7#"
             return CommandTranscript(command.action_code, output, output, "MA5800-X7#", "hash")
         return super().run(command)
 
@@ -174,4 +184,29 @@ def test_probe_treats_explicit_missing_registration_as_observation() -> None:
     result = probe.run(request, SecretValue("operator"), SecretValue("secret"))
 
     assert result.current_registration_found is False
+    assert connector.client.closed is True
+
+
+def test_probe_preserves_read_only_transcripts_when_output_is_unsupported() -> None:
+    connector = FakeConnector()
+    transport = UnsupportedRegistrationTransport()
+    probe = MA5800ReadOnlyProbe(
+        connector=connector,
+        transport_factory=lambda _channel: transport,
+    )
+    request = OLTProbeRequest(
+        host="10.0.0.2",
+        port=22,
+        expected_fingerprint="SHA256:approved",
+        onu_serial_number="AABBCCDDEEFF0011",
+        frame=None,
+        slot=None,
+        pon_port=None,
+        ont_id=None,
+    )
+
+    with pytest.raises(OLTProbeBlocked) as captured:
+        probe.run(request, SecretValue("operator"), SecretValue("secret"))
+
+    assert [item.action_code for item in captured.value.transcripts][-1] == "display_ont_by_sn"
     assert connector.client.closed is True

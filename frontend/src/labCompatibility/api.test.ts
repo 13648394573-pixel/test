@@ -4,7 +4,7 @@ import { labCompatibilityApi } from "./api";
 import type { CompatibilityCheckInput } from "./types";
 
 const input: CompatibilityCheckInput = {
-  olt_host: "192.168.87.204",
+  olt_host: "10.0.0.2",
   olt_port: 22,
   expected_host_key_fingerprint: "SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
   olt_username_ref: "olt.lab.username",

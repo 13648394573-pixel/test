@@ -11,7 +11,7 @@ from app.lab_compatibility.contracts import (
     OverallStatus,
     StageCode,
 )
-from app.lab_compatibility.olt_probe import MA5800ReadOnlyProbe, OLTProbeRequest
+from app.lab_compatibility.olt_probe import MA5800ReadOnlyProbe, OLTProbeBlocked, OLTProbeRequest
 from app.lab_compatibility.store import CompatibilityReportStore
 from app.local_runner.contracts import ActionContext, ActionOutcome, ArtifactPayload
 from app.local_runner.credentials import CredentialResolver
@@ -178,6 +178,22 @@ class LabCompatibilityService:
                 view, "OLT_CONNECT", "BLOCKED", "OLT 主机指纹与已确认值不一致，请停止并核对设备"
             )
             return self._complete(view)
+        except OLTProbeBlocked as exception:
+            artifacts = self._write_olt_evidence(
+                check_id,
+                exception.transcripts,
+                (olt_username.reveal(), olt_password.reveal()),
+            )
+            first = next((item.code for item in view.stages if item.status == "NOT_RUN"), None)
+            if first is not None:
+                view = self._set_stage(
+                    view,
+                    first,
+                    "BLOCKED",
+                    self._safe_olt_error(exception.reason),
+                    artifacts,
+                )
+            return self._complete(view)
         except Exception as exception:
             first = next((item.code for item in view.stages if item.status == "NOT_RUN"), None)
             if first is not None:
@@ -261,3 +277,11 @@ class LabCompatibilityService:
             "PermissionError": "本地证据目录不可写",
         }
         return messages.get(name, f"兼容性检查受阻：{name}")
+
+    @staticmethod
+    def _safe_olt_error(reason: str) -> str:
+        messages = {
+            "CommandTimeoutError": "OLT 查询超时，请检查网络和设备状态",
+            "ValueError": "OLT 查询输出暂不兼容，已保留脱敏证据供适配",
+        }
+        return messages.get(reason, f"OLT 只读检查受阻：{reason}")

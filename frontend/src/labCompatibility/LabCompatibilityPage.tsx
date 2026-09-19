@@ -78,6 +78,12 @@ export default function LabCompatibilityPage({ api }: Props) {
     onu_web_username_ref: false,
     onu_web_password_ref: false
   });
+  const [credentialChecked, setCredentialChecked] = useState<Record<CredentialKey, boolean>>({
+    olt_username_ref: false,
+    olt_password_ref: false,
+    onu_web_username_ref: false,
+    onu_web_password_ref: false
+  });
   const [check, setCheck] = useState<CompatibilityCheck | null>(null);
   const [evidence, setEvidence] = useState<CompatibilityEvidence[]>([]);
   const [error, setError] = useState("");
@@ -114,6 +120,11 @@ export default function LabCompatibilityPage({ api }: Props) {
 
   function update(key: keyof FormState, value: string) {
     setForm((current) => ({ ...current, [key]: value }));
+    if (credentialRows.some((row) => row.key === key)) {
+      const credentialKey = key as CredentialKey;
+      setCredentialReady((current) => ({ ...current, [credentialKey]: false }));
+      setCredentialChecked((current) => ({ ...current, [credentialKey]: false }));
+    }
     if (key === "olt_host" || key === "olt_port") {
       setFingerprint("");
       setFingerprintConfirmed(false);
@@ -136,9 +147,20 @@ export default function LabCompatibilityPage({ api }: Props) {
     try {
       const result = await api.enrollCredential(form[key], secret);
       setCredentialReady((current) => ({ ...current, [key]: result.available }));
+      setCredentialChecked((current) => ({ ...current, [key]: true }));
       setCredentialSecrets((current) => ({ ...current, [key]: "" }));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "凭据保存失败");
+    }
+  }
+
+  async function checkCredential(key: CredentialKey) {
+    try {
+      const result = await api.credentialStatus(form[key]);
+      setCredentialReady((current) => ({ ...current, [key]: result.available }));
+      setCredentialChecked((current) => ({ ...current, [key]: true }));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "凭据状态检查失败");
     }
   }
 
@@ -219,8 +241,9 @@ export default function LabCompatibilityPage({ api }: Props) {
             <div className="credential-row" key={key}>
               <label>{label}引用<input value={form[key]} onChange={(e) => update(key, e.target.value)} /></label>
               <label>{label}秘密<input type="password" value={credentialSecrets[key]} onChange={(e) => setCredentialSecrets((current) => ({ ...current, [key]: e.target.value }))} /></label>
+              <button className="button" type="button" onClick={() => checkCredential(key)}>检查已有凭据</button>
               <button className="button" type="button" onClick={() => saveCredential(key)}>保存到本机</button>
-              <span>{credentialReady[key] ? "已保存" : "待确认"}</span>
+              <span>{credentialReady[key] ? "本机已有" : credentialChecked[key] ? "本机未找到" : "待确认"}</span>
             </div>
           ))}
         </div>

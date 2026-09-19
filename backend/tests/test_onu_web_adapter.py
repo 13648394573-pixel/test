@@ -8,7 +8,7 @@ from app.local_runner.onu_web.contracts import (
     ONUWebUnavailableError,
     ONUWebWanNotVisibleError,
 )
-from app.local_runner.onu_web.neutral import NeutralONUWebAdapter
+from app.local_runner.onu_web.neutral import NeutralONUWebAdapter, NeutralPlaywrightSurface
 from app.local_runner.onu_web.selectors import (
     ONUWebAdapterRegistry,
     UnknownONUWebAdapterError,
@@ -208,4 +208,52 @@ def test_compatibility_probe_preserves_wan_when_ping_selector_is_missing() -> No
     assert result.wan_outcome.status == "PASS"
     assert result.ping_page_outcome.status == "BLOCKED"
     assert result.ping_page_outcome.error_code == "ONU_WEB_SELECTOR_UNSUPPORTED"
+    assert {item.media_type for item in result.ping_page_outcome.artifacts} == {
+        "image/png",
+        "text/plain",
+    }
     assert surface.ping_runs == 0
+
+
+class _SensitiveControl:
+    def __init__(self) -> None:
+        self.value = "customer-secret"
+
+    def fill(self, value: str) -> None:
+        self.value = value
+
+
+class _LocatorList:
+    def __init__(self, controls: list[_SensitiveControl]) -> None:
+        self.controls = controls
+
+    def count(self) -> int:
+        return len(self.controls)
+
+    def nth(self, index: int) -> _SensitiveControl:
+        return self.controls[index]
+
+
+class _SensitivePage:
+    def __init__(self) -> None:
+        self.pppoe_password = _SensitiveControl()
+        self.pppoe_username = _SensitiveControl()
+
+    def locator(self, selector: str) -> _LocatorList:
+        if selector == "input[type='password']":
+            return _LocatorList([self.pppoe_password])
+        if selector == "input[name*='user' i]":
+            return _LocatorList([self.pppoe_username])
+        return _LocatorList([])
+
+
+def test_playwright_surface_masks_wan_credentials_before_screenshot() -> None:
+    surface = NeutralPlaywrightSurface("http://192.168.1.1")
+    wan_page = _SensitivePage()
+    surface.page = wan_page
+    surface.surface = wan_page
+
+    surface.mask_sensitive_controls()
+
+    assert wan_page.pppoe_password.value == "[REDACTED]"
+    assert wan_page.pppoe_username.value == "[REDACTED]"

@@ -1,0 +1,10 @@
+display ont autofind all
+{ <cr>||<K> }:
+
+F/S/P               : 0/2/10
+Ont SN              : 48575443DD91BBBB
+Password            : [REDACTED]
+Ont EquipmentID     : ONU-4GE-DUALBAND
+Ont autofind time   : 2026-09-18 10:00:00+08:00
+The number of GPON autofind ONT is 1
+MA5800-X7#

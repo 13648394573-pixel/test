@@ -1,0 +1,12 @@
+display ont wan-info 10 36
+WAN index           : 1
+Service type        : INTERNET
+IPv4 access type    : DHCP
+L2 encap-type       : IPoE
+VLAN                : 1000
+Connection status   : Connected
+IPv4 address        : 192.0.2.10
+IPv4 subnet mask    : 255.255.255.0
+IPv4 default gateway: 192.0.2.1
+IPv4 Primary DNS    : 203.0.113.53
+MA5800-X7(config-if-gpon-0/2)#

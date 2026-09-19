@@ -1,0 +1,3 @@
+display ont wan-info 10 99
+Failure: The ONT does not exist
+MA5800-X7(config-if-gpon-0/2)#

@@ -1,0 +1,10 @@
+display ont info by-sn 48575443DD91BBBB
+F/S/P               : 0/2/10
+ONT-ID              : 36
+SN                  : 48575443DD91BBBB
+Run state           : online
+Config state        : normal
+Match state         : match
+Line profile ID     : 10
+Service profile ID  : 10
+MA5800-X7#

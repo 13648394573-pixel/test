@@ -1,0 +1,12 @@
+display ont wan-info 10 36
+WAN index           : 0
+Service type        : INTERNET
+IPv4 access type    : PPPoE
+L2 encap-type       : PPPoE
+VLAN                : 1000
+Connection status   : Connected
+IPv4 address        : 198.51.100.20
+IPv4 subnet mask    : 255.255.255.255
+IPv4 default gateway: 198.51.100.1
+User name           : [REDACTED]
+MA5800-X7(config-if-gpon-0/2)#

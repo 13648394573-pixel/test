@@ -25,6 +25,7 @@ from app.local_runner.onu_web.contracts import (
     ONUWebSurface,
     ONUWebUnavailableError,
     ONUWebWanNotVisibleError,
+    ONUWebCompatibilityResult,
 )
 from app.local_runner.onu_web.selectors import NEUTRAL_V1
 
@@ -118,6 +119,56 @@ class NeutralONUWebAdapter:
             return ActionOutcome("FAIL", (), (), "WAN_NOT_VISIBLE")
         except HuaweiOutputError as exception:
             return ActionOutcome("BLOCKED", (), (), "ONU_WEB_PING_OUTPUT_INCOMPLETE", str(exception))
+        finally:
+            if surface is not None:
+                surface.close()
+
+    def check_compatibility(
+        self, context: ActionContext
+    ) -> ONUWebCompatibilityResult:
+        surface = None
+        try:
+            surface = self.surface_factory(context)
+            self._authenticate(surface, context)
+            try:
+                surface.open_wan_page()
+                wan = ActionOutcome(
+                    "PASS",
+                    (Observation("onu_web.wan_page_available", True, "ONU_WEB"),),
+                    self._capture_artifacts(surface, context, "onu-wan-page"),
+                )
+            except (ONUWebSelectorError, HuaweiSelectorError) as exception:
+                stage = getattr(exception, "stage", "WAN_NAVIGATION")
+                wan = ActionOutcome(
+                    "BLOCKED", (), (), "ONU_WEB_SELECTOR_UNSUPPORTED", f"Selector stage: {stage}"
+                )
+                return ONUWebCompatibilityResult(
+                    wan,
+                    ActionOutcome(
+                        "BLOCKED", (), (), "ONU_WEB_PREREQUISITE_BLOCKED", "WAN page navigation failed"
+                    ),
+                )
+
+            try:
+                surface.open_ping_page()
+                surface.assert_ping_controls()
+                ping = ActionOutcome(
+                    "PASS",
+                    (Observation("onu_web.ping_page_available", True, "ONU_WEB"),),
+                    self._capture_artifacts(surface, context, "onu-ping-page"),
+                )
+            except (ONUWebSelectorError, HuaweiSelectorError) as exception:
+                stage = getattr(exception, "stage", "PING_PAGE")
+                ping = ActionOutcome(
+                    "BLOCKED", (), (), "ONU_WEB_SELECTOR_UNSUPPORTED", f"Selector stage: {stage}"
+                )
+            return ONUWebCompatibilityResult(wan, ping)
+        except ONUWebAuthenticationError:
+            blocked = ActionOutcome("BLOCKED", (), (), "ONU_WEB_CREDENTIAL_REJECTED")
+            return ONUWebCompatibilityResult(blocked, blocked)
+        except ONUWebUnavailableError:
+            blocked = ActionOutcome("BLOCKED", (), (), "ONU_WEB_UNREACHABLE")
+            return ONUWebCompatibilityResult(blocked, blocked)
         finally:
             if surface is not None:
                 surface.close()
@@ -245,6 +296,17 @@ class NeutralPlaywrightSurface:
             ).click()
             self.page.wait_for_timeout(500)
             self.surface = self.page.frame(name="contentIframe") or self.page
+        except HuaweiSelectorError as exception:
+            raise ONUWebSelectorError(exception.stage, str(exception)) from exception
+
+    def assert_ping_controls(self) -> None:
+        try:
+            HuaweiSelectorStrategy.first_usable(
+                self.surface, NEUTRAL_V1.ping_target, "PING_TARGET"
+            )
+            HuaweiSelectorStrategy.first_usable(
+                self.surface, NEUTRAL_V1.ping_start, "PING_START"
+            )
         except HuaweiSelectorError as exception:
             raise ONUWebSelectorError(exception.stage, str(exception)) from exception
 

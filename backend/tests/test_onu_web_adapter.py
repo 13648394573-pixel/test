@@ -16,13 +16,17 @@ from app.local_runner.onu_web.selectors import (
 
 
 class FakeSurface:
-    def __init__(self, *, error=None, ping_text=None):
+    def __init__(self, *, error=None, ping_control_error=None, ping_text=None):
         self.error = error
+        self.ping_control_error = ping_control_error
         self.ping_text = ping_text or (
             "sent=3 received=3 loss=0% min=1.0ms avg=1.5ms max=2.0ms"
         )
         self.selected = None
         self.masked = False
+        self.opened_pages = []
+        self.ping_controls_checked = False
+        self.ping_runs = 0
 
     def authenticate(self, username, password):
         assert username.reveal() == "operator"
@@ -35,6 +39,7 @@ class FakeSurface:
     def open_wan_page(self):
         if isinstance(self.error, ONUWebSelectorError):
             raise self.error
+        self.opened_pages.append("wan")
 
     def select_wan(self, wan_mode):
         self.selected = wan_mode
@@ -53,9 +58,15 @@ class FakeSurface:
         }
 
     def open_ping_page(self):
-        return None
+        self.opened_pages.append("ping")
+
+    def assert_ping_controls(self):
+        if self.ping_control_error is not None:
+            raise self.ping_control_error
+        self.ping_controls_checked = True
 
     def run_ping(self, target, packet_count):
+        self.ping_runs += 1
         assert target == "example.com"
         assert packet_count == 3
         return self.ping_text
@@ -159,3 +170,42 @@ def test_invalid_or_remote_management_url_is_blocked_before_browser_start() -> N
     outcome = NeutralONUWebAdapter().capture_wan(invalid, "IPOE")
     assert outcome.status == "BLOCKED"
     assert outcome.error_code == "ONU_WEB_UNREACHABLE"
+
+
+def test_compatibility_probe_checks_pages_without_running_ping() -> None:
+    surface = FakeSurface()
+
+    result = NeutralONUWebAdapter(
+        lambda _context: surface
+    ).check_compatibility(context())
+
+    assert result.wan_outcome.status == "PASS"
+    assert result.ping_page_outcome.status == "PASS"
+    assert surface.opened_pages == ["wan", "ping"]
+    assert surface.ping_controls_checked is True
+    assert surface.ping_runs == 0
+    assert {
+        artifact.original_name
+        for outcome in (result.wan_outcome, result.ping_page_outcome)
+        for artifact in outcome.artifacts
+    } == {
+        "onu-wan-page.png",
+        "onu-wan-page.txt",
+        "onu-ping-page.png",
+        "onu-ping-page.txt",
+    }
+
+
+def test_compatibility_probe_preserves_wan_when_ping_selector_is_missing() -> None:
+    surface = FakeSurface(
+        ping_control_error=ONUWebSelectorError("PING_TARGET")
+    )
+
+    result = NeutralONUWebAdapter(
+        lambda _context: surface
+    ).check_compatibility(context())
+
+    assert result.wan_outcome.status == "PASS"
+    assert result.ping_page_outcome.status == "BLOCKED"
+    assert result.ping_page_outcome.error_code == "ONU_WEB_SELECTOR_UNSUPPORTED"
+    assert surface.ping_runs == 0

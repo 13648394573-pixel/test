@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+import re
 from typing import Callable, Protocol
 
 from app.local_runner.contracts import Observation
 from app.local_runner.credentials import SecretValue
 from app.local_runner.ma5800.parsers import (
     parse_autofind,
+    parse_command_result,
     parse_ont_state,
     parse_service_ports,
     parse_wan_info,
@@ -140,11 +142,21 @@ class MA5800ReadOnlyProbe:
                 registration = execute(
                     "display_ont_by_sn", (request.onu_serial_number,)
                 )
-                state = parse_ont_state(registration.normalized_output)
-                registration_found = True
-                observations.append(
-                    Observation("olt.registration", asdict(state), "MA5800")
+                command_result = parse_command_result(registration.normalized_output)
+                missing_registration = re.search(
+                    r"(?i)ONT.*(?:does not exist|not exist|not found)",
+                    registration.normalized_output,
                 )
+                if command_result.success:
+                    state = parse_ont_state(registration.normalized_output)
+                    registration_found = True
+                    observations.append(
+                        Observation("olt.registration", asdict(state), "MA5800")
+                    )
+                elif not missing_registration:
+                    raise ValueError(
+                        command_result.message or "OLT registration output is unsupported"
+                    )
 
             if all(value is not None for value in target):
                 execute("enter_config")

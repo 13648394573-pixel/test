@@ -4,6 +4,7 @@ import pytest
 from PIL import Image
 
 from app.local_runner.evidence import GeneratedEvidenceWriter, UnsafeArtifactPathError
+from app.local_runner.contracts import ArtifactPayload
 
 
 def test_generated_evidence_is_redacted_hashed_and_rendered(tmp_path) -> None:
@@ -45,3 +46,24 @@ def test_register_screenshot_writes_only_below_root(tmp_path) -> None:
     )
     assert payload.storage_path == "runs/run-1/session-1/onu.png"
     assert (tmp_path / payload.storage_path).is_file()
+
+
+def test_register_artifact_preserves_redaction_and_requires_content(tmp_path) -> None:
+    writer = GeneratedEvidenceWriter(tmp_path)
+    payload = writer.register_artifact(
+        "onu/status.txt",
+        ArtifactPayload(
+            "status.txt",
+            "text/plain",
+            content=b"redacted status",
+            redacted=True,
+        ),
+    )
+
+    assert payload.storage_path == "onu/status.txt"
+    assert payload.redacted is True
+    assert payload.sha256
+    with pytest.raises(ValueError, match="content"):
+        writer.register_artifact(
+            "onu/empty.txt", ArtifactPayload("empty.txt", "text/plain")
+        )

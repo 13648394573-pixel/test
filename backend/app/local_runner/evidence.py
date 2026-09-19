@@ -67,6 +67,23 @@ class GeneratedEvidenceWriter:
         path.write_bytes(content)
         return self._payload(path, "image/png", content, False)
 
+    def register_artifact(
+        self, relative_path: str, payload: ArtifactPayload
+    ) -> ArtifactPayload:
+        if payload.content is None:
+            raise ValueError("Artifact content is required")
+        relative = self._safe_relative(relative_path)
+        if payload.media_type == "image/png" and not payload.content.startswith(
+            b"\x89PNG\r\n\x1a\n"
+        ):
+            raise ValueError("Screenshot must be PNG data")
+        path = self._absolute(relative)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(payload.content)
+        return self._payload(
+            path, payload.media_type, payload.content, payload.redacted
+        )
+
     def _redact(self, value: str, explicit_values: tuple[str, ...]) -> str:
         redacted = value
         for secret in sorted((item for item in explicit_values if item), key=len, reverse=True):

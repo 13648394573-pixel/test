@@ -44,6 +44,15 @@ class FakeTransport(RecordingExecutor):
         return CommandTranscript(command.action_code, output, output, "MA5800-X7#", "hash")
 
 
+class NoRegistrationTransport(FakeTransport):
+    def run(self, command):
+        if command.action_code == "display_ont_by_sn":
+            self.commands.append(command.action_code)
+            output = "Failure: The ONT does not exist\nMA5800-X7#"
+            return CommandTranscript(command.action_code, output, output, "MA5800-X7#", "hash")
+        return super().run(command)
+
+
 class FakeClient:
     def __init__(self):
         self.channel = object()
@@ -142,3 +151,27 @@ def test_probe_rejects_partial_target_before_connecting() -> None:
         probe.run(request, SecretValue("operator"), SecretValue("secret"))
 
     assert connector.calls == []
+
+
+def test_probe_treats_explicit_missing_registration_as_observation() -> None:
+    connector = FakeConnector()
+    transport = NoRegistrationTransport()
+    probe = MA5800ReadOnlyProbe(
+        connector=connector,
+        transport_factory=lambda _channel: transport,
+    )
+    request = OLTProbeRequest(
+        host="192.168.87.204",
+        port=22,
+        expected_fingerprint="SHA256:approved",
+        onu_serial_number="48575443DD91BBBB",
+        frame=None,
+        slot=None,
+        pon_port=None,
+        ont_id=None,
+    )
+
+    result = probe.run(request, SecretValue("operator"), SecretValue("secret"))
+
+    assert result.current_registration_found is False
+    assert connector.client.closed is True

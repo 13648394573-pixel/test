@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-10 — 项目进度同步
+
+- 新增 PROJECT_PROGRESS.md，核对 main baae7b2 的平台、Runner 与现场检查进度。
+- 修正 README 阶段说明，标注 ROADMAP 的历史适用范围。
+- 明确正式 Skill 待验收事项和旧 worktree 未提交状态。
+- 本次仅更新文档，未重新执行产品测试或真实设备验收。
+
 ## V1 Release Preparation
 
 - 准备日期：2026-08-08

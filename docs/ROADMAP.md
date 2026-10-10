@@ -1,5 +1,7 @@
 # Test Workbench Roadmap
 
+> 2026-10-10：下方是 V1 Alpha 的历史规划，并非当前状态。V1.0.0 已交付，main 已推进 V1.1、V2 和本地自动化 Runner。当前进度以 [PROJECT_PROGRESS.md](PROJECT_PROGRESS.md) 为准。
+
 ## 产品定位
 
 Test Workbench 是面向个人网络设备测试工程师的本地测试记录闭环平台，服务于 ONU、OLT、光猫等设备的手工测试。当前版本定义为 **V1 Alpha**，不是完整 V1，也不是自动化测试平台。

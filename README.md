@@ -2,7 +2,9 @@
 
 Test Workbench 面向 ONU、OLT、光猫等网络设备测试场景。V2 在完整保留 V1 Test Management 闭环的基础上，升级为“ONU 测试能力管理 + 测试执行闭环工作台”：用 Test Skill 沉淀测试目标、参数、步骤、判定标准和证据要求，并以版本化标准库提供 PASS/FAIL/BLOCKED 判断依据。
 
-当前分支已完成 V2 Sprint 0 的数据库与领域基础，尚未开放 Skill 管理页面或真实 Runner 执行。系统仍保持单用户、本地 B/S、离线可运行定位；不包含 AI 自动测试、自动控制 OLT、自动登录 ONU、云平台或多用户权限。
+当前 main 已包含 V2 领域基础、ONU/OLT 本地 Runner 和中文现场检查入口。已具备受控 OLT 动作、ONU Web WAN/Ping 与 PC 连通性证据采集；正式 Skill 执行闭环和真实设备验收仍需完成。系统保持单用户、本地 B/S 定位。
+
+当前阶段与待验收事项见[项目进度](docs/PROJECT_PROGRESS.md)；现场操作见[兼容性检查说明](docs/ONU_LAB_COMPATIBILITY_CHECK.md)。
 
 ## 当前能力
 

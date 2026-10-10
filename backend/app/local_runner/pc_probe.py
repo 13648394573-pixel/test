@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import http.client
+import json
 from ipaddress import ip_address
 import locale
 import re
@@ -257,17 +258,33 @@ class PCProbe:
 
     @staticmethod
     def _local_interfaces() -> Sequence[InterfaceAddress]:
-        names = [name for _index, name in socket.if_nameindex()]
-        addresses = {
-            item[4][0]
-            for item in socket.getaddrinfo(socket.gethostname(), None)
-            if item[0] in {socket.AF_INET, socket.AF_INET6}
-        }
-        return [
-            InterfaceAddress(name, address, True)
-            for name in names
-            for address in addresses
-        ]
+        script = (
+            "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); "
+            "$ErrorActionPreference = 'Stop'; $adapters = @{}; "
+            "Get-NetAdapter | ForEach-Object { $adapters[$_.ifIndex] = $_ }; "
+            "$rows = @(Get-NetIPAddress | ForEach-Object { "
+            "$adapter = $adapters[$_.InterfaceIndex]; if ($null -ne $adapter) { "
+            "[pscustomobject]@{InterfaceAlias=$adapter.Name; IPAddress=$_.IPAddress; "
+            "IsUp=($adapter.Status -eq 'Up')} } }); "
+            "ConvertTo-Json -InputObject $rows -Compress"
+        )
+        try:
+            completed = subprocess.run(
+                ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script],
+                shell=False, capture_output=True, text=True, encoding="utf-8",
+                errors="strict", timeout=15,
+            )
+            if completed.returncode != 0:
+                return ()
+            rows = json.loads(completed.stdout)
+            if not isinstance(rows, list):
+                return ()
+            return tuple(
+                InterfaceAddress(row["InterfaceAlias"], row["IPAddress"], row["IsUp"] is True)
+                for row in rows
+            )
+        except (OSError, subprocess.SubprocessError, ValueError, KeyError, TypeError):
+            return ()
 
     @staticmethod
     def _resolve_dns(name: str) -> Sequence[str]:

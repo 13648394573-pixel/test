@@ -10,6 +10,7 @@ from app.local_runner.ma5800.parsers import (
     parse_autofind,
     parse_command_result,
     parse_ont_state,
+    parse_ont_port_target,
     parse_service_ports,
     parse_wan_info,
 )
@@ -27,6 +28,7 @@ READ_ONLY_ACTIONS = frozenset(
         "disable_paging",
         "enter_config",
         "enter_gpon_interface",
+        "leave_gpon_interface",
         "display_autofind",
         "display_ont_by_sn",
         "display_ont_port",
@@ -132,6 +134,16 @@ class MA5800ReadOnlyProbe:
             def execute(action_code: str, arguments: tuple = ()) -> CommandTranscript:
                 transcript = executor.run(SafeMA5800Command(action_code, arguments))
                 transcripts.append(transcript)
+                if action_code != "display_ont_by_sn":
+                    result = parse_command_result(transcript.normalized_output)
+                    if not result.success:
+                        if action_code == "disable_paging" and result.message and re.search(
+                            r"(?i)unknown command", result.message
+                        ):
+                            # The transport still handles each More prompt explicitly.
+                            observations.append(Observation("olt.paging.disabled", False, "MA5800"))
+                            return transcript
+                        raise ValueError(result.message or "Unsupported OLT output")
                 return transcript
 
             execute("enable")
@@ -168,7 +180,18 @@ class MA5800ReadOnlyProbe:
             if all(value is not None for value in target):
                 execute("enter_config")
                 execute("enter_gpon_interface", (request.frame, request.slot))
-                execute("display_ont_port", (request.pon_port,))
+                port = execute("display_ont_port", (request.pon_port,))
+                if not request.onu_serial_number:
+                    state = parse_ont_port_target(
+                        port.normalized_output,
+                        f"{request.frame}/{request.slot}/{request.pon_port}",
+                        request.ont_id,
+                    )
+                    if state is not None:
+                        registration_found = True
+                        observations.append(
+                            Observation("olt.registration", asdict(state), "MA5800")
+                        )
                 wan = execute("display_wan_info", (request.pon_port, request.ont_id))
                 wan_items = parse_wan_info(wan.normalized_output)
                 wan_found = bool(wan_items)
@@ -179,6 +202,7 @@ class MA5800ReadOnlyProbe:
                         "MA5800",
                     )
                 )
+                execute("leave_gpon_interface")
                 service_ports = execute(
                     "display_service_ports",
                     (f"{request.frame}/{request.slot}/{request.pon_port}", request.ont_id),

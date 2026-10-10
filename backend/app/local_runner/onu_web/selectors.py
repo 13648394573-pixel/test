@@ -12,6 +12,8 @@ class UnknownONUWebAdapterError(Exception):
 @dataclass(frozen=True)
 class NeutralSelectorProfile:
     wan_navigation: tuple[str, ...] = (
+        "a[href='status_wan.asp']",
+        "a[href$='/status_wan.asp']",
         "a:has-text('WAN')",
         "a:has-text('Network')",
         "a[href*='wan' i]",

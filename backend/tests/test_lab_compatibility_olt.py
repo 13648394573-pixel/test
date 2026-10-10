@@ -135,6 +135,7 @@ def test_probe_runs_only_expected_queries_and_closes_client() -> None:
         "enter_gpon_interface",
         "display_ont_port",
         "display_wan_info",
+        "leave_gpon_interface",
         "display_service_ports",
     ]
     assert result.current_registration_found is True

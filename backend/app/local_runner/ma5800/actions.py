@@ -92,7 +92,16 @@ def build_delete_command(parameters: Mapping[str, Any]) -> SafeMA5800Command:
 def build_ipoe_command(parameters: Mapping[str, Any]) -> SafeMA5800Command:
     target = _validated_target(parameters)
     vlan = _integer(parameters.get("ipoe_vlan"), "ipoe_vlan", 1, 4094)
-    return SafeMA5800Command("provision_ipoe", (target["pon_port"], target["ont_id"], vlan))
+    ipoe_index, _ = _wan_indexes(parameters)
+    return SafeMA5800Command("provision_ipoe", (target["pon_port"], target["ont_id"], vlan, ipoe_index))
+
+
+def _wan_indexes(parameters: Mapping[str, Any]) -> tuple[int, int]:
+    ipoe = _integer(parameters.get("ipoe_ip_index", 1), "ipoe_ip_index", 0, 255)
+    pppoe = _integer(parameters.get("pppoe_ip_index", 0), "pppoe_ip_index", 0, 255)
+    if ipoe == pppoe:
+        raise ParameterValidationError("IPoE and PPPoE must use distinct IP Host indexes")
+    return ipoe, pppoe
 
 
 def build_pppoe_command(
@@ -100,9 +109,10 @@ def build_pppoe_command(
 ) -> SafeMA5800Command:
     target = _validated_target(parameters)
     vlan = _integer(parameters.get("pppoe_vlan"), "pppoe_vlan", 1, 4094)
+    _, pppoe_index = _wan_indexes(parameters)
     return SafeMA5800Command(
         "provision_pppoe",
-        (target["pon_port"], target["ont_id"], username, password, vlan),
+        (target["pon_port"], target["ont_id"], username, password, vlan, pppoe_index),
     )
 
 
@@ -169,9 +179,11 @@ class MA5800Actions:
         )
 
     def provision_ipoe(self, context: ActionContext) -> ActionOutcome:
+        index, _ = _wan_indexes(context.parameters)
+        vlan = _integer(context.parameters.get("ipoe_vlan"), "ipoe_vlan", 1, 4094)
         return self._guarded_mutation(
             context,
-            summary="Provision the isolated IPoE WAN on the target ONU.",
+            summary=f"Provision IPoE on IP Host {index}, VLAN {vlan}.",
             command_factory=lambda: build_ipoe_command(context.parameters),
         )
 
@@ -180,9 +192,11 @@ class MA5800Actions:
         password = context.secrets.get("pppoe_password")
         if username is None or password is None:
             return ActionOutcome("BLOCKED", (), (), "PPPOE_CREDENTIAL_UNAVAILABLE", "PPPoE credential is unavailable")
+        _, index = _wan_indexes(context.parameters)
+        vlan = _integer(context.parameters.get("pppoe_vlan"), "pppoe_vlan", 1, 4094)
         return self._guarded_mutation(
             context,
-            summary="Provision the isolated PPPoE WAN on the target ONU.",
+            summary=f"Provision PPPoE on IP Host {index}, VLAN {vlan}.",
             command_factory=lambda: build_pppoe_command(
                 context.parameters, username=username, password=password
             ),

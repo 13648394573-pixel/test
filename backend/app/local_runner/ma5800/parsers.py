@@ -145,29 +145,42 @@ def parse_ont_state(value: str) -> OntStateObservation:
 
 def parse_wan_info(value: str) -> tuple[WanObservation, ...]:
     normalized = normalize_cli_output(value)
-    starts = list(re.finditer(r"(?im)^WAN index\s*:\s*", normalized))
+    starts = list(re.finditer(r"(?im)^(?:WAN index|Index)\s*:\s*", normalized))
     observations: list[WanObservation] = []
     for index, start in enumerate(starts):
         end = starts[index + 1].start() if index + 1 < len(starts) else len(normalized)
         fields = _safe_fields(normalized[start.start():end])
         access_type = (_get(fields, "IPv4 access type", "L2 encap-type") or "").upper()
         mode = "PPPOE" if "PPPOE" in access_type else "IPOE" if access_type in {"DHCP", "IPOE"} else "UNKNOWN"
-        status = (_get(fields, "Connection status", "Status") or "UNKNOWN").upper()
+        status = (_get(fields, "IPv4 Connection status", "Connection status", "Status") or "UNKNOWN").upper()
         observations.append(
             WanObservation(
                 mode=mode,
-                ip_index=int(_required(fields, "WAN index")),
-                vlan=_optional_int(_get(fields, "VLAN", "VLAN ID")),
+                ip_index=int(_required(fields, "WAN index", "Index")),
+                vlan=_optional_int(_get(fields, "VLAN", "VLAN ID", "Manage VLAN")),
                 status=status,
                 ip_address=_get(fields, "IPv4 address", "IP address"),
                 subnet_mask=_get(fields, "IPv4 subnet mask", "Subnet mask"),
-                gateway=_get(fields, "IPv4 default gateway", "Gateway"),
+                gateway=_get(fields, "IPv4 default gateway", "Gateway", "Default gateway"),
                 primary_dns=_get(fields, "IPv4 Primary DNS", "Primary DNS"),
                 service_type=_get(fields, "Service type"),
                 raw_fields=fields,
             )
         )
     return tuple(observations)
+
+
+def parse_ont_port_target(value: str, fsp: str, ont_id: int) -> OntStateObservation | None:
+    row = re.compile(
+        r"(?im)^\s*(\d+\s*/\s*\d+\s*/\s*\d+)\s+(\d+)\s+"
+        r"([0-9a-f]{16})\s+\S+\s+(online|offline)\s+(\S+)\s+(\S+)\b"
+    )
+    for match in row.finditer(normalize_cli_output(value)):
+        port, target_id, serial, run, config, matched = match.groups()
+        if port.replace(" ", "") == fsp and int(target_id) == ont_id:
+            return OntStateObservation(fsp, ont_id, serial.upper(), run.lower(),
+                                       config.lower(), matched.lower(), None, None)
+    return None
 
 
 def parse_service_ports(value: str) -> tuple[ServicePortObservation, ...]:
@@ -192,7 +205,9 @@ def parse_service_ports(value: str) -> tuple[ServicePortObservation, ...]:
 
 def parse_command_result(value: str, *, expected_kind: str | None = None) -> CommandResult:
     normalized = normalize_cli_output(value)
-    failure = re.search(r"(?im)^(?:Failure|Error)\s*:\s*(.+)$", normalized)
+    failure = re.search(
+        r"(?im)^(?:(?:Failure|Error)\s*:\s*|%\s*)(.+)$", normalized
+    )
     if failure:
         return CommandResult(False, "OLT_COMMAND_FAILED", failure.group(1).strip(), normalized)
     if expected_kind == "AUTOFIND" and re.search(

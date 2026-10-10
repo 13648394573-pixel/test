@@ -3,6 +3,7 @@ from __future__ import annotations
 from decimal import Decimal
 from ipaddress import ip_address
 import re
+import time
 from typing import Callable
 from urllib.parse import urlparse
 
@@ -33,6 +34,18 @@ from app.local_runner.onu_web.selectors import NEUTRAL_V1
 _SECRET_FIELD = re.compile(
     r"(?i)((?:password|passwd|pwd|token|secret|loid|user(?:name)?)\s*[:=]\s*)(\S+)"
 )
+_PING_FAILURE = re.compile(r"(?im)^ping:|unknown host|network is unreachable")
+_IDENTIFIER = re.compile(
+    r"(?i)\b[0-9a-f]{16}\b|\b(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}\b|\b[0-9a-f]{4}(?:[-.][0-9a-f]{4}){2}\b"
+)
+
+
+def _has_ping_result(text: str) -> bool:
+    try:
+        parse_huawei_ping_output(text)
+        return True
+    except HuaweiOutputError:
+        return bool(_PING_FAILURE.search(text))
 
 
 class NeutralONUWebAdapter:
@@ -250,6 +263,8 @@ class NeutralPlaywrightSurface:
         self._browser = None
         self.page = None
         self.surface = None
+        self._wan_mode = None
+        self._ping_output = ""
 
     def authenticate(self, username: SecretValue, password: SecretValue) -> None:
         try:
@@ -277,7 +292,15 @@ class NeutralPlaywrightSurface:
         self.surface = self.page.frame(name="contentIframe") or self.page
 
     def open_wan_page(self) -> None:
+        self._ping_output = ""
+        self._wan_mode = None
         try:
+            if self.page.locator("a[href='status_wan.asp']").count():
+                menu = HuaweiSelectorStrategy.find_usable(
+                    self.page, ("a:has-text('Status')[href='javascript:void(0)']",)
+                )
+                if menu is not None:
+                    menu.click()
             HuaweiSelectorStrategy.first_usable(
                 self.page, NEUTRAL_V1.wan_navigation, "WAN_NAVIGATION"
             ).click()
@@ -287,6 +310,12 @@ class NeutralPlaywrightSurface:
             raise ONUWebSelectorError(exception.stage, str(exception)) from exception
 
     def select_wan(self, wan_mode: str) -> None:
+        self._wan_mode = wan_mode.upper()
+        rows = self._wan_status_rows()
+        if rows:
+            if not any(row.get("protocol", "").upper() == self._wan_mode for row in rows):
+                raise ONUWebWanNotVisibleError(wan_mode)
+            return
         try:
             HuaweiSelectorStrategy.select_wan_interface(self.surface, wan_mode)
         except HuaweiSelectorError as exception:
@@ -295,6 +324,12 @@ class NeutralPlaywrightSurface:
             raise ONUWebSelectorError(exception.stage, str(exception)) from exception
 
     def read_wan_fields(self) -> dict[str, str]:
+        rows = self._wan_status_rows()
+        if rows:
+            row = next((item for item in rows if item.get("protocol", "").upper() == self._wan_mode), None)
+            if row is None:
+                raise ONUWebWanNotVisibleError(self._wan_mode)
+            return row
         values: dict[str, str] = {}
         for key, selectors in NEUTRAL_V1.wan_fields.items():
             locator = HuaweiSelectorStrategy.find_usable(self.surface, selectors)
@@ -305,7 +340,28 @@ class NeutralPlaywrightSurface:
                     values[key] = locator.inner_text().strip()
         return values
 
+    def _wan_status_rows(self) -> list[dict[str, str]]:
+        columns = {
+            "Interface": "interface", "VLAN ID": "vlan", "Connection Type": "service_type",
+            "Protocol": "protocol", "IP Address": "ip_address", "Gateway": "gateway", "Status": "status",
+        }
+        tables = self.surface.locator("table").evaluate_all(
+            "tables => tables.map(t => Array.from(t.rows, r => Array.from(r.cells, c => c.innerText.trim())))"
+        )
+        rows = []
+        for table in tables:
+            if not table or not {"Protocol", "IP Address", "Gateway", "Status"}.issubset(table[0]):
+                continue
+            for cells in table[1:]:
+                if len(cells) != len(table[0]):
+                    continue
+                row = {columns[header]: value for header, value in zip(table[0], cells) if header in columns}
+                if row.get("protocol", "").upper() in {"IPOE", "PPPOE"}:
+                    rows.append(row)
+        return rows
+
     def open_ping_page(self) -> None:
+        self._ping_output = ""
         try:
             HuaweiSelectorStrategy.first_usable(
                 self.page, NEUTRAL_V1.diagnostics_navigation, "DIAGNOSTICS_NAV"
@@ -327,6 +383,7 @@ class NeutralPlaywrightSurface:
             raise ONUWebSelectorError(exception.stage, str(exception)) from exception
 
     def run_ping(self, target: str, packet_count: int) -> str:
+        self._ping_output = ""
         try:
             HuaweiSelectorStrategy.first_usable(
                 self.surface, NEUTRAL_V1.ping_target, "PING_TARGET"
@@ -339,13 +396,53 @@ class NeutralPlaywrightSurface:
                     count.fill(str(packet_count))
                 except Exception:
                     count.select_option(str(packet_count))
-            HuaweiSelectorStrategy.first_usable(
-                self.surface, NEUTRAL_V1.ping_start, "PING_START"
-            ).click()
-            self.page.wait_for_timeout(6000)
-            return self.page_text()
+            previous = {}
+            for frame in self._ping_frames():
+                previous[frame] = frame.locator("body").inner_text()
+            stale_frames = {frame for frame, text in previous.items() if _has_ping_result(text)}
+            navigated = set()
+            def on_navigation(frame):
+                navigated.add(frame)
+            self.page.on("framenavigated", on_navigation)
+            try:
+                HuaweiSelectorStrategy.first_usable(
+                    self.surface, NEUTRAL_V1.ping_start, "PING_START"
+                ).click()
+                deadline = time.monotonic() + 30
+                while time.monotonic() < deadline:
+                    for frame in self._ping_frames():
+                        try:
+                            text = frame.locator("body").inner_text(timeout=500)
+                        except Exception:
+                            continue
+                        if frame in stale_frames and frame not in navigated:
+                            # A label change is not proof of a new result. Require
+                            # navigation or observation of the old result clearing.
+                            if not _has_ping_result(text):
+                                stale_frames.discard(frame)
+                            continue
+                        try:
+                            result = parse_huawei_ping_output(text)
+                        except HuaweiOutputError:
+                            if _PING_FAILURE.search(text):
+                                self._ping_output = text
+                                return text
+                            continue
+                        if result.packets_sent == packet_count:
+                            self._ping_output = text
+                            return text
+                    self.page.wait_for_timeout(250)
+                raise HuaweiOutputError("No complete current Ping result within 30 seconds")
+            finally:
+                self.page.remove_listener("framenavigated", on_navigation)
         except HuaweiSelectorError as exception:
             raise ONUWebSelectorError(exception.stage, str(exception)) from exception
+
+    def _ping_frames(self):
+        frames = [self.page.main_frame if self.surface is self.page else self.surface]
+        for frame in frames:
+            frames.extend(frame.child_frames)
+        return frames
 
     def mask_sensitive_controls(self) -> None:
         selectors = (
@@ -373,8 +470,27 @@ class NeutralPlaywrightSurface:
                 except Exception:
                     continue
 
+        frames = getattr(self.page, "frames", scopes)
+        for frame in frames:
+            evaluate = getattr(frame, "evaluate", None)
+            if not callable(evaluate):
+                continue
+            evaluate("""() => {
+                const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+                let node;
+                while ((node = walker.nextNode())) {
+                    if (['SCRIPT', 'STYLE'].includes(node.parentElement?.tagName)) continue;
+                    node.nodeValue = node.nodeValue.replace(
+                        /\\b[0-9a-f]{16}\\b|\\b(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}\\b|\\b[0-9a-f]{4}(?:[-.][0-9a-f]{4}){2}\\b/gi,
+                        '[REDACTED-IDENTIFIER]'
+                    );
+                }
+            }""")
+
     def page_text(self) -> str:
-        return self.surface.locator("body").inner_text()
+        text = self.surface.locator("body").inner_text()
+        combined = f"{text}\n{self._ping_output}" if self._ping_output else text
+        return _IDENTIFIER.sub("[REDACTED-IDENTIFIER]", combined)
 
     def screenshot(self) -> bytes:
         return self.page.screenshot(full_page=True)

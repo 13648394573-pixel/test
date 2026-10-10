@@ -136,22 +136,24 @@ def _register_ont(arguments: tuple[Any, ...]) -> str:
 
 
 def _provision_ipoe(arguments: tuple[Any, ...]) -> str:
-    if len(arguments) != 3:
+    if len(arguments) not in {3, 4}:
         return _invalid_arguments("provision_ipoe")
-    port, ont_id, vlan = arguments
+    port, ont_id, vlan = arguments[:3]
+    index = _int_arg(arguments[3], maximum=255) if len(arguments) == 4 else 1
     return (
         f"ont ipconfig {_int_arg(port, maximum=255)} {_int_arg(ont_id, maximum=255)} "
-        f"ip-index 1 dhcp vlan {_int_arg(vlan)} priority 0"
+        f"ip-index {index} dhcp vlan {_int_arg(vlan)} priority 0"
     )
 
 
 def _provision_pppoe(arguments: tuple[Any, ...]) -> str:
-    if len(arguments) != 5:
+    if len(arguments) not in {5, 6}:
         return _invalid_arguments("provision_pppoe")
-    port, ont_id, username, password, vlan = arguments
+    port, ont_id, username, password, vlan = arguments[:5]
+    index = _int_arg(arguments[5], maximum=255) if len(arguments) == 6 else 0
     return (
         f"ont ipconfig {_int_arg(port, maximum=255)} {_int_arg(ont_id, maximum=255)} "
-        f"pppoe user-account username {_secret_arg(username)} password {_secret_arg(password)} "
+        f"ip-index {index} pppoe user-account username {_secret_arg(username)} password {_secret_arg(password)} "
         f"vlan {_int_arg(vlan)}"
     )
 
@@ -167,6 +169,7 @@ _SAFE_COMMANDS: dict[str, Callable[[tuple[Any, ...]], str]] = {
     "disable_paging": _no_args("disable_paging", "screen-length 0 temporary"),
     "enter_config": _no_args("enter_config", "config"),
     "enter_gpon_interface": _enter_gpon_interface,
+    "leave_gpon_interface": _no_args("leave_gpon_interface", "quit"),
     "display_autofind": _no_args("display_autofind", "display ont autofind all"),
     "display_ont_by_sn": _display_ont_by_sn,
     "display_ont_port": _display_ont_port,

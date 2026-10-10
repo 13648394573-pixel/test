@@ -1,6 +1,6 @@
 # Test Workbench 项目进度
 
-更新：2026-10-10。核对基线：main / baae7b2。
+更新：2026-10-10。修复前基线：main / 7107c8e；现场适配修复随本轮记录固化。
 
 ## 已交付
 
@@ -16,7 +16,7 @@
 
 ## 下一步
 
-1. 在真实 MA5800-X7 / ONU 环境完成只读兼容性检查，记录指纹、适配器、凭据引用、网卡和证据。
+1. 真实 MA5800-X7 / ONU 只读兼容性检查已完成；IPoE/PPPoE 状态读取及各自接口 Ping 已通过固化后的适配器验证。见[现场适配记录](ONU_VERIFIED_ADAPTER.md)。本轮同时修复旧 Ping 结果误判及缓存文本脱敏遗漏；这不等于正式 Skill 全流程验收完成。
 2. 核对并完成[正式 Skill 计划](superpowers/plans/2026-09-18-onu-registration-dual-wan-skill.md) Task 8–12：可恢复执行/判定、执行 API、向导、离线启动/报告、真实验收。
 3. 验证注册、双 WAN、ONU/PC 连通性和证据链可重复执行，完成发布回归、迁移及恢复检查。
 
@@ -24,6 +24,6 @@
 
 feature/onu-automation-engine 位于 131b119，Task 4 尚有五个未提交修复文件，未完成最终验证与整合。本次保留旧 worktree 原状；恢复前须与 main 的 local_runner/lab_compatibility 比较覆盖范围，避免重复实现。
 
-V2 Sprint 0 曾记录后端 244 passed、前端 48 passed；旧 Live Runner 曾记录后端 477 passed、1 skipped。它们属于不同基线，不能作为当前 main 的验证数字。本次仅整理文档，未重新执行全量产品测试或真实 DUT 验收。
+V2 Sprint 0 曾记录后端 244 passed、前端 48 passed；旧 Live Runner 曾记录后端 477 passed、1 skipped。它们属于不同基线，不能作为当前 main 的验证数字。本轮真实 DUT 的 WAN/Ping 验证与全量回归结果单独记录在现场适配文档中。
 
 本地保留 v1.0.0 与 v1.0.0-rc1。历史规划与未勾选步骤不单独代表当前进度；以主线代码、提交及验收记录共同判断。

@@ -88,7 +88,9 @@ class GeneratedEvidenceWriter:
         redacted = value
         for secret in sorted((item for item in explicit_values if item), key=len, reverse=True):
             redacted = redacted.replace(secret, "[REDACTED]")
-        return _SECRET_PATTERN.sub(r"\1[REDACTED]", redacted)
+        redacted = _SECRET_PATTERN.sub(r"\1[REDACTED]", redacted)
+        redacted = re.sub(r"(?i)\b[0-9a-f]{16}\b", "[REDACTED-SN]", redacted)
+        return re.sub(r"(?i)\b(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}\b|\b[0-9a-f]{4}(?:[-.][0-9a-f]{4}){2}\b", "[REDACTED-MAC]", redacted)
 
     def _render_png(self, path: Path, rendered: str) -> None:
         font = self._load_font()

@@ -64,14 +64,19 @@ def build_service(session, settings, resolver, runtime=None):
 def _local_request(request):
     host = request.app.state.settings.api_bind_host
     local = local_host = False
+    same_origin = True
     try:
         local = host.casefold() == 'localhost' or ip_address(host).is_loopback
         request_host = request.url.hostname or ''
         local_host = request_host.casefold() == 'localhost' or ip_address(request_host).is_loopback
+        origin = request.headers.get('origin')
+        if origin:
+            parsed_origin = urlparse(origin)
+            same_origin = (parsed_origin.scheme == request.url.scheme and
+                parsed_origin.netloc == request.url.netloc)
     except ValueError:
         local_host = False
-    origin = request.headers.get('origin')
-    if not local or not local_host or (origin and urlparse(origin).netloc != request.url.netloc):
+    if not local or not local_host or not same_origin:
         raise HTTPException(403, 'Skill execution requires local same-origin access')
     if request.headers.get('sec-fetch-site') == 'cross-site':
         raise HTTPException(403, 'Cross-site execution request rejected')

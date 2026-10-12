@@ -260,3 +260,41 @@ def test_rebound_host_is_rejected_even_when_origin_matches(api):
         headers={'Host': 'malicious.example', 'Origin': 'http://malicious.example'})
     assert response.status_code == 403
     assert repo.session.scalars(select(TestRun)).all() == []
+
+
+@pytest.mark.parametrize('origin', ['http://[', 'https://127.0.0.1'])
+def test_invalid_or_different_scheme_origin_is_rejected_without_mutation(api, origin):
+    client, payload, repo, *_ = api
+    response = client.post('/api/skill-executions', json=payload, headers={'Origin': origin})
+    assert response.status_code == 403
+    assert response.headers['cache-control'] == 'no-store'
+    assert repo.session.scalars(select(TestRun)).all() == []
+
+
+def test_same_origin_request_remains_allowed(api):
+    client, payload, *_ = api
+    assert client.post('/api/skill-executions', json=payload,
+        headers={'Origin': 'http://127.0.0.1'}).status_code == 201
+
+
+@pytest.mark.parametrize('storage_path,status', [('missing.txt', 410), ('../outside.txt', 409)])
+def test_legacy_skill_download_redirects_before_file_resolution(api, storage_path, status):
+    client, _, repo, *_ = api
+    view = create(api)
+    artifact = Evidence(run_result_id=view['run_result_id'], execution_session_id=view['session_id'],
+        category='LOG', original_name='fixture.txt', media_type='text/plain',
+        storage_path=storage_path, file_size=1, sha256=sha256(b'x').hexdigest(), redacted=True)
+    repo.session.add(artifact)
+    repo.session.commit()
+    alias = '/api/evidences/' + artifact.id + '/download'
+    response = client.get(alias, follow_redirects=False)
+    assert response.status_code == 307
+    assert response.headers['cache-control'] == 'no-store'
+    assert response.headers['location'] == ('/api/skill-executions/' + view['session_id'] +
+        '/evidence/' + artifact.id + '/download')
+    checked = client.get(alias)
+    assert checked.status_code == status
+    assert checked.headers['cache-control'] == 'no-store'
+    rejected = client.get(alias, headers={'Origin': 'https://malicious.example'})
+    assert rejected.status_code == 403
+    assert rejected.headers['cache-control'] == 'no-store'

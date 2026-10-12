@@ -136,14 +136,15 @@ def download_evidence(
     request: Request,
     service: ServiceDependency,
 ) -> Response:
-    evidence, path = service.get_download(evidence_id)
+    evidence = service.repository.get(evidence_id)
     execution = (service.repository.session.get(ExecutionSession, evidence.execution_session_id)
-        if evidence.execution_session_id else None)
+        if evidence is not None and evidence.execution_session_id else None)
     if (execution is not None and execution.mode == 'DEVELOPMENT' and
         (execution.plugin_snapshot or {}).get('code') == 'ONU_LOCAL_RUNNER'):
         return RedirectResponse(request.app.state.settings.api_prefix + '/skill-executions/' +
             execution.id + '/evidence/' + evidence.id + '/download',
             status_code=307, headers={'Cache-Control': 'no-store'})
+    evidence, path = service.get_download(evidence_id)
     return FileResponse(
         path,
         media_type=evidence.media_type,

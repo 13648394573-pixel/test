@@ -25,8 +25,16 @@
 
 新增 API 测试覆盖创建、冲突、审批重放、默认禁用、敏感信息投影、证据篡改/缺失、旧下载别名及启动恢复。通过测试先行复现并修复下载绕过与原始文件名暴露。独立审核无 Critical 或剩余 Important 项。
 
-最终代码验证：`python -m pytest backend/tests/test_skill_execution_api.py -q`，24 passed；全量 `python -m pytest backend/tests -q -p no:cacheprovider --basetemp=C:/Users/admin/Documents/Codex/t9-full-final-1012b`，419 passed（295.61 秒）。测试前将 PYTHONPATH 指向本 worktree 的 backend，避免使用 main 的可编辑安装。`git diff --check` 无空白错误。
+原提交 b73c725 验证：`python -m pytest backend/tests/test_skill_execution_api.py -q`，24 passed；全量 `python -m pytest backend/tests -q -p no:cacheprovider --basetemp=C:/Users/admin/Documents/Codex/t9-full-final-1012b`，419 passed（295.61 秒）。测试前将 PYTHONPATH 指向本 worktree 的 backend，避免使用 main 的可编辑安装。`git diff --check` 无空白错误。
 
-暂缓的 Minor 项：畸形 Origin 可返回 500 而非受控拒绝；同源判断尚未比较 scheme。旧下载别名在重定向前进行文件检查，缺失/非法路径的错误仍走旧处理。这些不开放默认设备执行，不作为现场验收通过依据。
+原审核暂缓的两项 Minor 已在本次整改：Origin 解析纳入校验异常处理，畸形 Origin 返回 403，同源判断同时比较 scheme 和 authority；旧下载别名先查询元数据并重定向，不再提前处理文件路径。文件缺失/非法路径由受保护接口统一返回 410/409，跨源请求返回 403，并带 no-store。普通 V1 附件仍保留原下载处理。
+
+整改采用测试先行：新增回归测试在修复前 4 failed、1 passed，失败分别复现异常解析、跨协议放行和旧入口提前处理路径。修复后 API 测试 29 passed（38.84 秒）。本次不接入 Runtime、不合并、不推送；整改变更保留在隔离分支供审核。
+
+整改全量验证：`python -m pytest backend/tests -q -p no:cacheprovider --basetemp=C:/Users/admin/Documents/Codex/t9r-full1012`，424 passed（257.27 秒），包含已有附件下载兼容性测试。`git diff --check` 无空白错误；main 保持 0e915f22 且干净。
+
+整改独立只读审核结论：四文件补丁无 Critical/Important/Minor 项，可以提交。审核未执行测试，测试结果由实施方验证。真实 Runner、设备操作、多进程、前端及完整 Origin 语法规范化不属于此次两项修复的验收范围；这些未作通过声明。
+
+提交前再次全量验证：`python -m pytest backend/tests -q -p no:cacheprovider --basetemp=C:/Users/admin/Documents/Codex/t9r-commit-full1012`，424 passed（260.00 秒）。修复提交只固化上述四文件，不合并 main、不推送远端、不开始 Task 10。
 
 无迁移、依赖及前端变更；不进行 ONU/OLT 操作。前端测试和构建本次未重跑。进程内锁仅面向当前单进程本机部署，多进程执行不在本次验收范围。真实目标解析、成对凭据映射、适配器事实生成及完整 WAN 恢复仍待联调。

@@ -183,6 +183,10 @@ class TestRun(Base):
 class RunResult(Base):
     __tablename__ = "run_results"
     __table_args__ = (
+        CheckConstraint(
+            "result_source IN ('MANUAL','RULE_ENGINE','LOCAL_RUNNER')",
+            name="ck_run_results_result_source",
+        ),
         UniqueConstraint(
             "run_id",
             "case_source_id",

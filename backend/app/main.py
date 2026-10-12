@@ -1,9 +1,12 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from threading import RLock
 from datetime import UTC, datetime
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+from fastapi.exception_handlers import request_validation_exception_handler
 
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
@@ -97,6 +100,7 @@ from app.local_runner.credentials import (
 )
 from app.lab_compatibility.router import router as lab_compatibility_router
 from app.lab_compatibility.service import LabCompatibilityService
+from app.skill_execution.router import router as skill_execution_router, build_service
 
 
 def create_app(
@@ -104,6 +108,7 @@ def create_app(
     *,
     credential_resolver: CredentialResolver | None = None,
     lab_compatibility_service: LabCompatibilityService | None = None,
+    skill_execution_runtime=None,
 ) -> FastAPI:
     application_settings = settings or get_settings()
 
@@ -124,6 +129,8 @@ def create_app(
             DiagnosticRepository(session).interrupt_running(
                 datetime.now(UTC).replace(tzinfo=None)
             )
+            build_service(session, application_settings, application.state.credential_resolver,
+                application.state.skill_execution_runtime).coordinator.recover_interrupted()
         yield
         engine.dispose()
 
@@ -136,6 +143,22 @@ def create_app(
         KeyringCredentialStore(), application_settings.credential_service_name
     )
     application.state.lab_compatibility_service = lab_compatibility_service
+    application.state.skill_execution_runtime = skill_execution_runtime
+    application.state.skill_execution_lock = RLock()
+
+    @application.middleware('http')
+    async def skill_execution_no_cache(request: Request, call_next):
+        response = await call_next(request)
+        if request.url.path.startswith(application_settings.api_prefix + '/skill-executions'):
+            response.headers['Cache-Control'] = 'no-store'
+        return response
+
+    @application.exception_handler(RequestValidationError)
+    async def safe_request_validation(request: Request, exception: RequestValidationError):
+        if request.url.path.startswith(application_settings.api_prefix + '/skill-executions'):
+            return JSONResponse(status_code=422, content={'detail': 'Invalid skill execution request'},
+                headers={'Cache-Control': 'no-store'})
+        return await request_validation_exception_handler(request, exception)
 
     @application.get(f"{application_settings.api_prefix}/health")
     def health() -> dict[str, str]:
@@ -527,6 +550,7 @@ def create_app(
         lab_compatibility_router,
         prefix=application_settings.api_prefix,
     )
+    application.include_router(skill_execution_router, prefix=application_settings.api_prefix)
 
     return application
 

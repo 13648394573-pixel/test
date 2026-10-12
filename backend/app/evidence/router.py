@@ -10,7 +10,7 @@ from fastapi import (
     UploadFile,
     status,
 )
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.db.dependencies import get_session
@@ -18,6 +18,7 @@ from app.evidence.repository import EvidenceRepository
 from app.evidence.schemas import EvidenceRead
 from app.evidence.service import EvidenceService
 from app.evidence.storage import EvidenceStorage
+from app.models.execution_session import ExecutionSession
 
 
 router = APIRouter(tags=["evidence"])
@@ -132,9 +133,17 @@ def upload_defect_evidence(
 @router.get("/evidences/{evidence_id}/download")
 def download_evidence(
     evidence_id: str,
+    request: Request,
     service: ServiceDependency,
-) -> FileResponse:
+) -> Response:
     evidence, path = service.get_download(evidence_id)
+    execution = (service.repository.session.get(ExecutionSession, evidence.execution_session_id)
+        if evidence.execution_session_id else None)
+    if (execution is not None and execution.mode == 'DEVELOPMENT' and
+        (execution.plugin_snapshot or {}).get('code') == 'ONU_LOCAL_RUNNER'):
+        return RedirectResponse(request.app.state.settings.api_prefix + '/skill-executions/' +
+            execution.id + '/evidence/' + evidence.id + '/download',
+            status_code=307, headers={'Cache-Control': 'no-store'})
     return FileResponse(
         path,
         media_type=evidence.media_type,

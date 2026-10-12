@@ -28,10 +28,12 @@ class CreateSkillExecutionCommand:
 
 
 class SkillExecutionService:
-    def __init__(self, repository: SkillExecutionRepository, *, credential_available, coordinator=None):
+    def __init__(self, repository: SkillExecutionRepository, *, credential_available, coordinator=None,
+                 binding_resolver=None):
         self.repository = repository
         self.credential_available = credential_available
         self.coordinator = coordinator
+        self.binding_resolver = binding_resolver
 
     def create_execution(self, command: CreateSkillExecutionCommand) -> ExecutionSession:
         db = self.repository.session
@@ -66,6 +68,7 @@ class SkillExecutionService:
             parameters.update({p.param_key: p.param_value for p in environment.parameters})
             parameters.update(deepcopy(command.parameters))
             self._validate_parameters(parameters, device)
+            runtime_binding = self.binding_resolver(parameters) if self.binding_resolver else None
             profile = SkillCatalogRepository(db).get_profile(CATALOG.standard_profile_code)
             if profile is None or profile.status != 'DRAFT' or not skill.case_bindings:
                 raise ValueError('Development standard and case binding required')
@@ -94,8 +97,11 @@ class SkillExecutionService:
                 profile_snapshot=build_environment_snapshot(environment, datetime.now(UTC)))
             db.add(run)
             db.flush()
+            plugin_snapshot = {'code': 'ONU_LOCAL_RUNNER', 'version': CATALOG.version}
+            if runtime_binding is not None:
+                plugin_snapshot['runtime_binding'] = runtime_binding.model_dump(mode='json')
             execution = ExecutionSession(test_run_id=run.id, run_result_id=result.id,
-                mode='DEVELOPMENT', status='CREATED', plugin_snapshot={'code': 'ONU_LOCAL_RUNNER', 'version': CATALOG.version})
+                mode='DEVELOPMENT', status='CREATED', plugin_snapshot=plugin_snapshot)
             db.add(execution)
             db.flush()
             result.execution_session_id = execution.id

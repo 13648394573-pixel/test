@@ -149,3 +149,52 @@ def load_runner_config(path: Path) -> RunnerConfig:
         return RunnerConfig.model_validate(value)
     except (OSError, ValueError, UnicodeError):
         raise RunnerConfigurationError('INVALID_RUNNER_CONFIGURATION') from None
+
+
+class RuntimeBinding(FrozenModel):
+    version: Literal[1] = 1
+    config_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
+    olt_target_ref: str
+    onu_web_target_ref: str
+    olt: OLTTarget
+    onu: ONUTarget
+    access_bindings: Mapping[str, AccessBinding]
+
+    _target_refs = field_validator('olt_target_ref', 'onu_web_target_ref')(reference)
+    _version = field_validator('version', mode='before')(RunnerConfig.strict_version.__func__)
+
+    @model_validator(mode='after')
+    def immutable_access(self):
+        if set(self.access_bindings) != {'OLT', 'ONU_WEB', 'PPPOE'}:
+            raise ValueError('INCOMPLETE_RUNTIME_BINDING')
+        if any(key != pair.kind for key, pair in self.access_bindings.items()):
+            raise ValueError('INVALID_RUNTIME_BINDING_KIND')
+        object.__setattr__(self, 'access_bindings', MappingProxyType(dict(self.access_bindings)))
+        return self
+
+    @field_serializer('access_bindings')
+    def serialize_access(self, value):
+        return {key: pair.model_dump(mode='json') for key, pair in value.items()}
+
+
+def resolve_runtime_binding(config: RunnerConfig, parameters: Mapping, pairs) -> RuntimeBinding:
+    try:
+        if not config.enabled or config.sha256 != pairs.config.sha256:
+            raise ValueError('RUNNER_DISABLED')
+        olt_ref = parameters['olt_target_ref']
+        onu_ref = parameters['onu_web_target_ref']
+        olt, onu = config.targets[olt_ref], config.targets[onu_ref]
+        if not isinstance(olt, OLTTarget) or not isinstance(onu, ONUTarget):
+            raise ValueError('TARGET_KIND_MISMATCH')
+        access = {}
+        for kind, parameter in (('OLT', 'olt_access_ref'), ('ONU_WEB', 'onu_web_access_ref'),
+                                ('PPPOE', 'pppoe_access_ref')):
+            access_ref = parameters[parameter]
+            pair = config.access_bindings[access_ref]
+            if pair.kind != kind or not pairs.available(access_ref):
+                raise ValueError('ACCESS_BINDING_UNAVAILABLE')
+            access[kind] = pair
+        return RuntimeBinding(config_sha256=config.sha256, olt_target_ref=olt_ref,
+                              onu_web_target_ref=onu_ref, olt=olt, onu=onu, access_bindings=access)
+    except (KeyError, TypeError, ValueError):
+        raise RunnerConfigurationError('RUNTIME_BINDING_INVALID') from None

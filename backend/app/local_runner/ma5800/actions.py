@@ -134,13 +134,18 @@ class MA5800Actions:
         registration_transcript = self.executor.run(
             SafeMA5800Command("display_ont_by_sn", (target["serial"],))
         )
+        if re.search(r'(?i)\bONT\b.*\b(?:does not exist|not exist|not found)\b',
+                     registration_transcript.normalized_output):
+            return self._pass("olt.configuration_snapshot",
+                              {"registration": None, "wan": [], "service_ports": []},
+                              registration_transcript)
+        registration = asdict(parse_ont_state(registration_transcript.normalized_output))
         wan_transcript = self.executor.run(
             SafeMA5800Command("display_wan_info", (target["pon_port"], target["ont_id"]))
         )
         port_transcript = self.executor.run(
             SafeMA5800Command("display_service_ports", (self._fsp(target), target["ont_id"]))
         )
-        registration = asdict(parse_ont_state(registration_transcript.normalized_output))
         wan = [asdict(item) for item in parse_wan_info(wan_transcript.normalized_output)]
         service_ports = [asdict(item) for item in parse_service_ports(port_transcript.normalized_output)]
         return self._pass(

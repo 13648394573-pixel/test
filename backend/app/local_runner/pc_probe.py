@@ -24,6 +24,7 @@ class InterfaceAddress:
     interface_name: str
     address: str
     is_up: bool
+    prefix_length: int | None = None
 
 
 @dataclass(frozen=True)
@@ -265,7 +266,7 @@ class PCProbe:
             "$rows = @(Get-NetIPAddress | ForEach-Object { "
             "$adapter = $adapters[$_.InterfaceIndex]; if ($null -ne $adapter) { "
             "[pscustomobject]@{InterfaceAlias=$adapter.Name; IPAddress=$_.IPAddress; "
-            "IsUp=($adapter.Status -eq 'Up')} } }); "
+            "IsUp=($adapter.Status -eq 'Up'); PrefixLength=$_.PrefixLength} } }); "
             "ConvertTo-Json -InputObject $rows -Compress"
         )
         try:
@@ -280,7 +281,7 @@ class PCProbe:
             if not isinstance(rows, list):
                 return ()
             return tuple(
-                InterfaceAddress(row["InterfaceAlias"], row["IPAddress"], row["IsUp"] is True)
+                InterfaceAddress(row["InterfaceAlias"], row["IPAddress"], row["IsUp"] is True, row.get("PrefixLength"))
                 for row in rows
             )
         except (OSError, subprocess.SubprocessError, ValueError, KeyError, TypeError):

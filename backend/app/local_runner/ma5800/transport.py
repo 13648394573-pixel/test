@@ -345,20 +345,27 @@ class MA5800SSHConnector:
         timeout_seconds: float = 10,
     ):
         client = self.client_factory()
-        client.load_system_host_keys()
-        client.set_missing_host_key_policy(
-            PinnedHostKeyPolicy(
-                expected_fingerprint=expected_fingerprint,
-                formal_mode=formal_mode,
+        try:
+            client.load_system_host_keys()
+            client.set_missing_host_key_policy(
+                PinnedHostKeyPolicy(
+                    expected_fingerprint=expected_fingerprint,
+                    formal_mode=formal_mode,
+                )
             )
-        )
-        client.connect(
-            hostname=hostname,
-            port=port,
-            username=username,
-            password=password,
-            timeout=timeout_seconds,
-            look_for_keys=False,
-            allow_agent=False,
-        )
-        return client
+            client.connect(
+                hostname=hostname,
+                port=port,
+                username=username,
+                password=password,
+                timeout=timeout_seconds,
+                look_for_keys=False,
+                allow_agent=False,
+            )
+            transport = client.get_transport()
+            if transport is None or host_key_fingerprint(transport.get_remote_server_key()) != expected_fingerprint:
+                raise HostKeyFingerprintMismatchError('OLT_HOST_KEY_PIN_MISMATCH')
+            return client
+        except Exception:
+            client.close()
+            raise

@@ -18,6 +18,18 @@ from test_skill_execution_repository import execution_fixture
 
 
 class Runtime:
+    def resolve_binding(self, parameters):
+        from app.local_runner.configuration import RuntimeBinding, RunnerConfig
+        from local_runner_binding_fixtures import valid_config
+        config = RunnerConfig.model_validate(valid_config())
+        return RuntimeBinding(config_sha256=config.sha256,
+            olt_target_ref=parameters['olt_target_ref'], onu_web_target_ref=parameters['onu_web_target_ref'],
+            olt=config.targets['lab.olt'], onu=config.targets['lab.onu'],
+            access_bindings={pair.kind: pair for pair in config.access_bindings.values()})
+
+    def for_binding(self, binding, history_reader):
+        return self
+
     def available(self, reference):
         return True
 

@@ -27,13 +27,18 @@ class CreateSkillExecutionCommand:
     parameters: dict[str, Any]
 
 
+class RuntimeBindingRequiredError(ValueError):
+    pass
+
+
 class SkillExecutionService:
     def __init__(self, repository: SkillExecutionRepository, *, credential_available, coordinator=None,
-                 binding_resolver=None):
+                 binding_resolver=None, runtime_factory=None):
         self.repository = repository
         self.credential_available = credential_available
         self.coordinator = coordinator
         self.binding_resolver = binding_resolver
+        self.runtime_factory = runtime_factory
 
     def create_execution(self, command: CreateSkillExecutionCommand) -> ExecutionSession:
         db = self.repository.session
@@ -155,12 +160,29 @@ class SkillExecutionService:
     def advance(self, session_id):
         if self.coordinator is None:
             raise RuntimeError('Runner coordinator is not configured')
+        self._bind_runtime(session_id)
         return self.coordinator.advance(session_id)
 
     def respond(self, session_id, interaction_id, response):
         if self.coordinator is None:
             raise RuntimeError('Runner coordinator is not configured')
+        self._bind_runtime(session_id)
         return self.coordinator.respond(session_id, interaction_id, response)
+
+    def _bind_runtime(self, session_id):
+        if self.runtime_factory is None:
+            return  # Existing lower-level offline service composition remains supported.
+        from app.local_runner.configuration import RuntimeBinding
+        execution = self.repository.get(session_id)
+        snapshot = execution.plugin_snapshot or {}
+        try:
+            binding = RuntimeBinding.model_validate(snapshot['runtime_binding'])
+        except (KeyError, ValueError, TypeError):
+            raise RuntimeBindingRequiredError('RUNTIME_BINDING_REQUIRED') from None
+        runtime = self.runtime_factory.for_binding(binding,
+            lambda: self.repository.events(session_id))
+        self.coordinator.execute = runtime.execute
+        self.coordinator.secrets_for = runtime.secrets_for
 
     def get_view(self, session_id):
         execution = self.repository.get(session_id)

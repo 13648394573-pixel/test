@@ -118,17 +118,26 @@ class BoundExecutionRuntime:
         if action == 'provision_pppoe':
             kinds.append('PPPOE')
         secrets = {}
-        for kind in kinds:
-            pair = self.binding.access_bindings[kind]
-            prefix = {'OLT': 'olt', 'ONU_WEB': 'onu_web', 'PPPOE': 'pppoe'}[kind]
-            secrets[prefix + '_username'] = self.resolver.resolve(pair.username_ref)
-            secrets[prefix + '_password'] = self.resolver.resolve(pair.password_ref)
+        try:
+            for kind in kinds:
+                pair = self.binding.access_bindings[kind]
+                prefix = {'OLT': 'olt', 'ONU_WEB': 'onu_web', 'PPPOE': 'pppoe'}[kind]
+                secrets[prefix + '_username'] = self.resolver.resolve(pair.username_ref)
+                secrets[prefix + '_password'] = self.resolver.resolve(pair.password_ref)
+        except Exception:
+            return {}  # No partial credential pair and no fallback to current configuration.
         return secrets
 
     def execute(self, context: ActionContext) -> ActionOutcome:
         action = context.action_code
         if action not in ALLOWED_ACTIONS:
             return ActionOutcome('BLOCKED', (), (), 'ACTION_NOT_ALLOWED')
+        required = ({'onu_web_username', 'onu_web_password'} if action in WEB_ACTIONS
+                    else {'olt_username', 'olt_password'} if action in OLT_ACTIONS else set())
+        if action == 'provision_pppoe':
+            required |= {'pppoe_username', 'pppoe_password'}
+        if not required <= set(context.secrets):
+            return self._blocked(context, 'CREDENTIAL_UNAVAILABLE')
         history = list(self.history_reader())
         latest = next((e.payload_json.get('ref') for e in reversed(history)
                        if e.event_type == 'ACTION_STARTED'), None)

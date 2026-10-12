@@ -101,6 +101,9 @@ from app.local_runner.credentials import (
 from app.lab_compatibility.router import router as lab_compatibility_router
 from app.lab_compatibility.service import LabCompatibilityService
 from app.skill_execution.router import router as skill_execution_router, build_service
+from app.local_runner.configuration import load_runner_config
+from app.local_runner.runtime import LocalRuntimeFactory
+from pathlib import Path
 
 
 def create_app(
@@ -143,6 +146,10 @@ def create_app(
         KeyringCredentialStore(), application_settings.credential_service_name
     )
     application.state.lab_compatibility_service = lab_compatibility_service
+    if skill_execution_runtime is None and application_settings.local_runner_config_path is not None:
+        runner_config = load_runner_config(Path(application_settings.local_runner_config_path))
+        if runner_config.enabled:
+            skill_execution_runtime = LocalRuntimeFactory(runner_config, application.state.credential_resolver)
     application.state.skill_execution_runtime = skill_execution_runtime
     application.state.skill_execution_lock = RLock()
 

@@ -20,7 +20,7 @@ from app.models.evidence import Evidence
 from app.models.test_execution import RunResult
 from app.skill_execution.coordinator import SkillCoordinator
 from app.skill_execution.repository import SkillExecutionRepository
-from app.skill_execution.service import SkillExecutionService
+from app.skill_execution.service import SkillExecutionService, RuntimeBindingRequiredError
 from app.skill_execution.schemas import (
     ExecutionCreate, ExecutionRead, InteractionResponse, ExecutionEvidenceRead,
 )
@@ -29,8 +29,8 @@ from app.skill_execution.schemas import (
 class ExecutionRuntime(Protocol):
     """Trusted, locally configured composition; never supplied by an HTTP client."""
     def available(self, reference: str) -> bool: ...
-    def secrets_for(self, parameters: dict, action: str) -> dict: ...
-    def execute(self, context: ActionContext) -> ActionOutcome: ...
+    def resolve_binding(self, parameters: dict): ...
+    def for_binding(self, binding, history_reader): ...
 
 
 router = APIRouter(prefix='/skill-executions', tags=['skill-executions'])
@@ -52,10 +52,11 @@ def _unconfigured_action(_context):
 def build_service(session, settings, resolver, runtime=None):
     repo = SkillExecutionRepository(session)
     service = SkillExecutionService(repo,
-        credential_available=runtime.available if runtime is not None else resolver.available)
+        credential_available=runtime.available if runtime is not None else resolver.available,
+        binding_resolver=runtime.resolve_binding if runtime is not None else None,
+        runtime_factory=runtime)
     service.coordinator = SkillCoordinator(repo,
-        execute=runtime.execute if runtime is not None else _unconfigured_action,
-        secrets_for=runtime.secrets_for if runtime is not None else None,
+        execute=_unconfigured_action,
         storage=EvidenceStorage(settings.evidence_root, max_bytes=settings.evidence_max_size_mb * 1024 * 1024),
         workspace=Path(settings.local_runner_evidence_root) / 'skill-executions')
     return service
@@ -145,7 +146,9 @@ def _pending(execution, result):
         if type(value) is int and 0 <= value <= 65535]
     return dict(id=pending.id, ref=pending.interaction_ref, type=pending.interaction_type,
         risk_level=pending.risk_level, title=pending.interaction_ref,
-        instructions='请核对目标及影响范围；确认后不会立即执行，需再次推进。UNABLE/CANCEL 将阻塞或转入恢复。',
+        instructions=('请连接指定测试网卡；这是接线确认，非配置修改授权。确认后需再次推进。'
+                      if step.get('action') == 'pc_connectivity_probe'
+                      else '请核对目标及影响范围；确认后不会立即执行，需再次推进。UNABLE/CANCEL 将阻塞或转入恢复。'),
         completion_condition='选择有效选项，并确认当前 preview_hash。',
         options=pending.options_json, preview_hash=preview.get('preview_hash', ''), target=target,
         action_code=step.get('action'), affected_service_ports=ports)
@@ -178,6 +181,8 @@ def _no_store(response):
 def create_execution(payload: ExecutionCreate, request: Request, response: Response, service: ServiceDependency):
     _no_store(response)
     with request.app.state.skill_execution_lock:
+        if not _configured(request):
+            raise HTTPException(422, 'Local runner is not configured')
         try:
             execution = service.create_execution(payload.to_command())
         except ValueError as error:
@@ -203,6 +208,9 @@ def _mutate(request, service, session_id, operation):
             raise HTTPException(409, 'Local runner is not configured; no action executed')
         try:
             operation()
+        except RuntimeBindingRequiredError:
+            service.repository.session.rollback()
+            raise HTTPException(409, 'RUNTIME_BINDING_REQUIRED') from None
         except (ValueError, IntegrityError):
             service.repository.session.rollback()
             raise HTTPException(409, 'Execution state or operator approval conflict') from None

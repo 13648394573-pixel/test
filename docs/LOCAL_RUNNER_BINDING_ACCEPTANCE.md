@@ -19,7 +19,7 @@
 - 真实前缀、绑定网卡、缺失/多候选/地址变化及重复等待；不意外进入异常恢复。
 - 标准事实来源、SN/FSP/Profile/online/match、同 WAN/VLAN 地址、当前探测及跨 epoch 隔离。
 - 已注册目标如实记录缺失 autofind；不为了 PASS 修改标准。
-- 新注册成功、PPPoE 功能失败、选择器/指纹失败、Evidence SHA256 和下载归属。
+- 注册/WAN 诊断收集、PPPoE 功能失败、选择器/指纹失败、Evidence SHA256 和下载归属。
 - RESTORE 不支持完整 WAN 核验时 MANUAL_REQUIRED；中断配置动作重启后不自动重放。
 - 本次绑定执行结束仍为 DRAFT；显式用户 LOCK 后原 Report/Archive 可用，HTML/ZIP hash 可验证。
 
@@ -30,7 +30,7 @@ Runtime/事实先确认模块缺失，再补边界测试复现地址消失与资
 API 先复现旧注入契约不兼容，再复现缺失凭据没有安全 outcome。
 闭环测试复现自动 LOCK、选择器失败缺证据和重复接线交互进入恢复，并用最小修复通过。
 原已满足的人工恢复阻塞、启动不重放及报告兼容样本仅作为兼容性测试，不声称经历 RED。
-本次已执行的验证：
+首次实施完成、独立审核前执行的验证（不是最终门禁）：
 
 - 后端：python -m pytest backend/tests -q -p no:cacheprovider，
   basetemp=C:/Users/admin/Documents/Codex/lrb-tests/t6-full；522 passed（274.48 秒）。
@@ -39,7 +39,44 @@ API 先复现旧注入契约不兼容，再复现缺失凭据没有安全 outcom
 - git diff --check：无空白错误。
 
 前端仅复制已存在依赖供隔离验证；锁文件按换行规范化后完全相同，没有安装或修改依赖。
-独立审核尚待执行，不能将测试通过当作审核通过。
+独立审核已执行，发现五项 Important：目标身份混用、认证晚于指纹校验、
+PNG 凭据遮挡不足、PC/WAN 归属未经证明、无法识别的读输出误判为功能失败。
+一项 Minor 暂缓：本机 enrollment CLI 未区别显示需人工恢复的安全错误码；
+异常 OS 故障后应按 setup 说明重新登记整对凭据。
+
+## 独立审核修复（2026-10-12）
+
+本次先新增真实动作、真实 Paramiko 连接流程（仅套接字/Transport 替身）、
+实际 Playwright 页面和 Runtime 回归测试；11 项首先失败，复现五项问题。
+再补一项 PPPoE 凭据供 Web 脱敏测试，首先因缺少该值失败。
+修复在同一轮完成，未另开复审、未操作现场：
+
+1. Snapshot 接受前核对 SN/FSP/ONT-ID，拒绝查询其他 ONU 的 WAN；批准后、
+   每项变更前再次核对身份，注册核对未注册/空闲 ID/autofind，删除 service-port 核对归属。
+2. 同一 SSH 连接先按 Paramiko 原机制核验 known_hosts，再校验固定指纹，
+   最后进行密码认证；错误 pin 零认证尝试，匹配 pin 才认证，不保存系统公钥。
+3. PNG 之前遮挡普通文本、readonly 控件和相关子帧；Web 同时读取冻结引用对应的
+   PPPoE pair 供脱敏。无法建立遮挡时拒绝截图，不将未知像素内容标成 redacted。
+4. 去掉唯一活跃 WAN + 源地址 Ping 推导的归属 True。保留诊断数据/证据，
+   不生成标准联网 PASS；接线等待不会重新使用旧来源生成归属。
+   **当前不具备端到端联网 PASS 的独立路径证明，不宣称全流程成功验收。**
+5. 明确的空 autofind/WAN 输出可作为真实负面/空来源；权限错误、未知格式及
+   不可识别 WAN 状态返回 BLOCKED，不生成 DUT 不匹配 False。
+
+旧的离线成功期望已按上述安全边界纠正；不是降低标准或补造路径证明。
+注册/地址/ONU Ping/PC 诊断仍可收集，标准联网项缺来源；
+若已存在明确功能失败，原 evaluator 保留 FAIL，不将其伪装成环境成功。
+修复后完整验证：
+
+- 后端：python -m pytest backend/tests -q -p no:cacheprovider，
+  basetemp=C:/Users/admin/Documents/Codex/lrb-tests/review-full1；535 passed（278.68 秒）。
+- 前端：npm.cmd test -- --reporter=dot --maxWorkers=1；24 个文件、54 项通过（76.30 秒）。
+- 生产构建：npm.cmd run build；TypeScript/Vite 构建通过。
+- git diff --check：无空白错误。没有业务表迁移、依赖更新或前端业务改动。
+
+独立审核由外部只读 reviewer 完成；修复后的验证由作者执行，不将其写成第二次独立审核。
+安全修复可提交留在隔离分支；**端到端联网 PASS/真实设备验收门禁仍 HOLD**，
+须先评审并建立独立、当前的实际路径/隔离证明。真实 DUT 仍为 NOT_EXECUTED。
 
 ## 数据及安全边界
 

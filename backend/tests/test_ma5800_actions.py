@@ -39,6 +39,8 @@ class FakeExecutor:
         }.get(command.action_code)
         if fixture:
             return transcript(command.action_code, fixture)
+        if command.action_code == "display_service_ports":
+            return CommandTranscript(command.action_code, "", "21 1000 0/2/10 36 1 1000\nMA5800-X7#", "MA5800-X7#", "b" * 64)
         return CommandTranscript(
             command.action_code,
             "Command executed successfully\nMA5800-X7#",
@@ -139,7 +141,9 @@ def test_delete_waits_for_matching_preview_approval() -> None:
         )
     )
     assert approved.status == "PASS"
-    assert executor.commands == [build_delete_command(valid_registration_parameters())]
+    assert [command.action_code for command in executor.commands] == [
+        "display_ont_by_sn", "display_service_ports", "delete_ont"]
+    assert executor.commands[-1] == build_delete_command(valid_registration_parameters())
 
 
 def test_snapshot_captures_registration_wan_and_service_port_scope() -> None:
@@ -153,7 +157,7 @@ def test_snapshot_captures_registration_wan_and_service_port_scope() -> None:
     assert snapshot["registration"]["ont_id"] == 36
     assert snapshot["registration"]["line_profile_id"] == 10
     assert snapshot["wan"][0]["mode"] == "IPOE"
-    assert snapshot["service_ports"] == []
+    assert snapshot["service_ports"][0]["service_port_id"] == 21
 
 
 def test_restore_rejects_unsupported_snapshot_without_sending_commands() -> None:

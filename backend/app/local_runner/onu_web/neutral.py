@@ -216,7 +216,7 @@ class NeutralONUWebAdapter:
     def _capture_artifacts(
         self, surface: ONUWebSurface, context: ActionContext, stem: str
     ) -> tuple[ArtifactPayload, ArtifactPayload]:
-        surface.mask_sensitive_controls()
+        surface.mask_sensitive_controls(tuple(secret.reveal() for secret in context.secrets.values()))
         text = surface.page_text()
         for secret in context.secrets.values():
             text = text.replace(secret.reveal(), "[REDACTED]")
@@ -448,7 +448,7 @@ class NeutralPlaywrightSurface:
             frames.extend(frame.child_frames)
         return frames
 
-    def mask_sensitive_controls(self) -> None:
+    def mask_sensitive_controls(self, redaction_values: tuple[str, ...] = ()) -> None:
         selectors = (
             *HuaweiSelectorStrategy.LOGIN_USERNAME,
             *HuaweiSelectorStrategy.LOGIN_PASSWORD,
@@ -470,26 +470,45 @@ class NeutralPlaywrightSurface:
                 try:
                     locators = scope.locator(selector)
                     for index in range(locators.count()):
-                        locators.nth(index).fill("[REDACTED]")
+                        locators.nth(index).evaluate("el => { el.value='[REDACTED]'; el.setAttribute('value','[REDACTED]'); }")
                 except Exception:
-                    continue
+                    raise ONUWebSelectorError("REDACTION_FAILED") from None
 
         frames = getattr(self.page, "frames", scopes)
         for frame in frames:
             evaluate = getattr(frame, "evaluate", None)
             if not callable(evaluate):
-                continue
-            evaluate("""() => {
+                raise ONUWebSelectorError("REDACTION_FAILED")
+            evaluate("""values => {
+                const clean = text => {
+                    for (const value of values) if (value) text = text.split(value).join('[REDACTED]');
+                    return text.replace(/((?:password|passwd|pwd|token|secret|loid|user(?:name)?)\\s*[:=]\\s*)(\\S+)/gi,
+                        '$1[REDACTED]');
+                };
+                for (const el of document.querySelectorAll('input,textarea,select')) {
+                    el.value = clean(el.value || '');
+                    for (const name of ['value','placeholder','title','aria-label'])
+                        if (el.hasAttribute(name)) el.setAttribute(name, clean(el.getAttribute(name)));
+                }
                 const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
                 let node;
                 while ((node = walker.nextNode())) {
                     if (['SCRIPT', 'STYLE'].includes(node.parentElement?.tagName)) continue;
-                    node.nodeValue = node.nodeValue.replace(
+                    node.nodeValue = clean(node.nodeValue).replace(
                         /\\b[0-9a-f]{16}\\b|\\b(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}\\b|\\b[0-9a-f]{4}(?:[-.][0-9a-f]{4}){2}\\b/gi,
                         '[REDACTED-IDENTIFIER]'
                     );
                 }
-            }""")
+                for (const el of document.querySelectorAll('*')) {
+                    for (const name of ['title','aria-label']) {
+                        if (el.hasAttribute(name)) el.setAttribute(name, clean(el.getAttribute(name)));
+                    }
+                }
+                const visible = document.body.innerText + Array.from(document.querySelectorAll('input,textarea,select'), el => el.value).join(' ');
+                if (values.some(value => value && visible.includes(value)))
+                    throw new Error('REDACTION_FAILED');
+                if (document.querySelector('canvas')) throw new Error('REDACTION_UNVERIFIABLE');
+            }""", list(redaction_values))
 
     def page_text(self) -> str:
         text = self.surface.locator("body").inner_text()

@@ -54,3 +54,10 @@ Runtime 复用既有 MA5800、neutral-v1 Web 与 PC Probe，并从本次解析�
 阻塞并保留 MANUAL_REQUIRED；已注册但无 autofind、证据不齐和 PC 归属不明均如实判定。
 仍不开发 Task 10 前端，不合并或推送。使用说明及离线验收见
 LOCAL_RUNNER_SETUP.md、LOCAL_RUNNER_BINDING_ACCEPTANCE.md。
+
+本机绑定独立审核后的修复：Snapshot/配置动作核对同一 ONU 身份，
+注册在批准后重查空闲 ID/autofind；固定 SSH pin 在认证前检查；Web PNG 遮挡普通文本、
+只读控件和子帧；无法识别 OLT 读取不再变成功能 FAIL。
+当前 PC 源地址探测仍不构成目标 ONU/WAN 的实际路径证明，因此删除未经证明的
+internet.pass 生成，不声称端到端联网 PASS。诊断收集、真实功能 FAIL 和证据仍保留。
+这属于保守安全门禁，不是新增路由控制或新测试功能；现场联调及路径证明仍待评审。

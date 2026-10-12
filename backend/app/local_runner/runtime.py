@@ -114,7 +114,9 @@ class BoundExecutionRuntime:
     def secrets_for(self, parameters, action):
         if action not in ALLOWED_ACTIONS or action == 'pc_connectivity_probe':
             return {}
-        kinds = ['ONU_WEB'] if action in WEB_ACTIONS else ['OLT']
+        # ONU pages may render the PPPoE account outside labelled controls.
+        # Load its frozen pair for redaction only; never persist/cache it.
+        kinds = ['ONU_WEB', 'PPPOE'] if action in WEB_ACTIONS else ['OLT']
         if action == 'provision_pppoe':
             kinds.append('PPPOE')
         secrets = {}
@@ -220,20 +222,10 @@ class BoundExecutionRuntime:
             for key in ('sent', 'received', 'loss_percent'):
                 name = {'sent': 'packets_sent', 'received': 'packets_received'}.get(key, key)
                 observations.append(Observation('pc.ping.' + name, getattr(result.ping, key), 'PC_PROBE'))
-        mode = context.parameters.get('wan_mode')
-        recent = recent_history(history)
-        data = historical_observations(recent, str(mode) + '_ADDRESS_OLT', 'MA5800')
-        items = data.get('olt.wan.items', [])
-        active = [item for item in items if isinstance(item, dict)
-                  and str(item.get('status', '')).upper() in {'CONNECTED', 'UP', 'ONLINE'}]
-        web = historical_observations(recent, str(mode) + '_ADDRESS_WEB', 'ONU_WEB')
-        prefix = str(mode).lower()
-        if (len(active) == 1 and active[0].get('mode') == mode
-                and active[0].get('vlan') == context.parameters.get(prefix + '_vlan')
-                and active[0].get('ip_index') == context.parameters.get(prefix + '_ip_index')
-                and web.get(prefix + '.address.valid') is True):
-            observations.append(Observation('pc.wan.attributed', True, 'PC_PROBE'))
-        return ActionOutcome(result.status, tuple(observations), result.artifacts, result.error_code)
+        # A source-bound ping and historical ONU WAN are not current egress proof.
+        # Retain diagnostic metrics/evidence, never credit another router to this WAN.
+        return ActionOutcome(result.status, tuple(observations), result.artifacts,
+                             result.error_code, 'PC_WAN_PATH_UNVERIFIED: diagnostic collection is not WAN success proof.')
 
     def _wait_pc(self, context, code):
         preview = dict(action_code=context.action_code, interface_name=self.binding.onu.pc_interface_name,

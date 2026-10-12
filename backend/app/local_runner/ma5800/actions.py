@@ -127,6 +127,9 @@ class MA5800Actions:
     def discover_onts(self, _context: ActionContext) -> ActionOutcome:
         transcript = self.executor.run(SafeMA5800Command("display_autofind", ()))
         items = [asdict(item) for item in parse_autofind(transcript.normalized_output)]
+        if self._read_failed(transcript) or (not items and not re.search(
+                r'(?i)The number of GPON autofind ONT is\s+0\b', transcript.normalized_output)):
+            return ActionOutcome("BLOCKED", (), (), "OLT_READ_UNRECOGNIZED")
         return self._pass("olt.autofind.items", items, transcript)
 
     def snapshot_ont(self, context: ActionContext) -> ActionOutcome:
@@ -140,6 +143,8 @@ class MA5800Actions:
                               {"registration": None, "wan": [], "service_ports": []},
                               registration_transcript)
         registration = asdict(parse_ont_state(registration_transcript.normalized_output))
+        if not self._same_identity(registration, target):
+            return ActionOutcome("BLOCKED", (), (), "OLT_TARGET_IDENTITY_MISMATCH")
         wan_transcript = self.executor.run(
             SafeMA5800Command("display_wan_info", (target["pon_port"], target["ont_id"]))
         )
@@ -147,6 +152,8 @@ class MA5800Actions:
             SafeMA5800Command("display_service_ports", (self._fsp(target), target["ont_id"]))
         )
         wan = [asdict(item) for item in parse_wan_info(wan_transcript.normalized_output)]
+        if not self._wan_read_valid(wan_transcript, wan) or self._read_failed(port_transcript):
+            return ActionOutcome("BLOCKED", (), (), "OLT_READ_UNRECOGNIZED")
         service_ports = [asdict(item) for item in parse_service_ports(port_transcript.normalized_output)]
         return self._pass(
             "olt.configuration_snapshot",
@@ -158,6 +165,8 @@ class MA5800Actions:
         transcript = self.executor.run(
             SafeMA5800Command("display_ont_port", (target["pon_port"],))
         )
+        if not self._port_read_valid(transcript, target):
+            return ActionOutcome("BLOCKED", (), (), "OLT_PORT_READ_UNRECOGNIZED")
         used = {
             int(item)
             for item in re.findall(
@@ -212,9 +221,12 @@ class MA5800Actions:
         transcript = self.executor.run(
             SafeMA5800Command("display_wan_info", (target["pon_port"], target["ont_id"]))
         )
+        items = [asdict(item) for item in parse_wan_info(transcript.normalized_output)]
+        if not self._wan_read_valid(transcript, items):
+            return ActionOutcome("BLOCKED", (), (), "OLT_READ_UNRECOGNIZED")
         return self._pass(
             "olt.wan.items",
-            [asdict(item) for item in parse_wan_info(transcript.normalized_output)],
+            items,
             transcript,
         )
 
@@ -302,11 +314,79 @@ class MA5800Actions:
                 (),
                 detail="Operator approval is required for this exact mutation preview.",
             )
+        refusal = self._revalidate_mutation(context, target)
+        if refusal:
+            return ActionOutcome("BLOCKED", (), (), refusal)
         transcript = self.executor.run(command_factory())
         result = parse_command_result(transcript.normalized_output)
         if not result.success:
             return ActionOutcome("ERROR", (), (), result.code, result.message)
         return self._pass("olt.mutation.transcript_sha256", transcript.sha256, transcript)
+
+    @staticmethod
+    def _read_failed(transcript):
+        return bool(re.search(r'(?im)^(?:Failure\s*:|Error\s*:|%\s*)',
+                              transcript.normalized_output))
+
+    @staticmethod
+    def _same_identity(registration, target):
+        return (registration.get("fsp") == MA5800Actions._fsp(target)
+                and registration.get("ont_id") == target["ont_id"]
+                and registration.get("serial_number") == target["serial"])
+
+    @classmethod
+    def _wan_read_valid(cls, transcript, items):
+        if cls._read_failed(transcript):
+            return False
+        if items:
+            return all(item["mode"] in {"IPOE", "PPPOE"}
+                       and item["status"] in {"CONNECTED", "UP", "ONLINE", "DISCONNECTED", "DOWN", "OFFLINE"}
+                       for item in items)
+        return bool(re.search(r'(?i)The number of (?:ONT )?WAN (?:entries|configurations) is\s+0\b',
+                              transcript.normalized_output))
+
+    @classmethod
+    def _port_read_valid(cls, transcript, target):
+        text = transcript.normalized_output
+        return not cls._read_failed(transcript) and bool(
+            re.search(rf'(?im)^\s*{re.escape(cls._fsp(target))}\s+\d+\s+[0-9a-f]{{16}}\b', text)
+            or re.search(r'(?i)The number of ONTs is\s+0\b', text))
+
+    def _revalidate_mutation(self, context, target):
+        transcript = self.executor.run(SafeMA5800Command("display_ont_by_sn", (target["serial"],)))
+        absent = bool(re.search(r'(?i)\bONT\b.*\b(?:does not exist|not exist|not found)\b',
+                                transcript.normalized_output))
+        if context.action_code in {"register_ont", "restore_snapshot"}:
+            if not absent:
+                return "OLT_REGISTRATION_NOT_ABSENT"
+            port = self.executor.run(SafeMA5800Command("display_ont_port", (target["pon_port"],)))
+            if not self._port_read_valid(port, target):
+                return "OLT_PORT_READ_UNRECOGNIZED"
+            if re.search(rf'(?m)^\s*{re.escape(self._fsp(target))}\s+{target["ont_id"]}\s+',
+                         port.normalized_output):
+                return "OLT_ONT_ID_IN_USE"
+            discovery = self.executor.run(SafeMA5800Command("display_autofind", ()))
+            if self._read_failed(discovery) or not any(
+                    item.fsp == self._fsp(target) and item.serial_number == target["serial"]
+                    for item in parse_autofind(discovery.normalized_output)):
+                return "OLT_AUTOFIND_IDENTITY_UNCONFIRMED"
+            return None
+        if absent or self._read_failed(transcript):
+            return "OLT_TARGET_IDENTITY_UNCONFIRMED"
+        try:
+            registration = asdict(parse_ont_state(transcript.normalized_output))
+        except ValueError:
+            return "OLT_TARGET_IDENTITY_UNCONFIRMED"
+        if not self._same_identity(registration, target):
+            return "OLT_TARGET_IDENTITY_MISMATCH"
+        requested = self._service_ports(context.parameters)
+        if requested:
+            ports = self.executor.run(SafeMA5800Command("display_service_ports", (self._fsp(target), target["ont_id"])))
+            owned = {item.service_port_id for item in parse_service_ports(ports.normalized_output)
+                     if item.fsp == self._fsp(target) and item.ont_id == target["ont_id"]}
+            if self._read_failed(ports) or not set(requested) <= owned:
+                return "OLT_SERVICE_PORT_OWNERSHIP_UNCONFIRMED"
+        return None
 
     @staticmethod
     def _service_ports(parameters: Mapping[str, Any]) -> list[int]:

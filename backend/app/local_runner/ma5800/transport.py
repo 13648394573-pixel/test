@@ -356,11 +356,10 @@ class MA5800SSHConnector:
             client.connect(
                 hostname=hostname,
                 port=port,
-                username=username,
-                password=password,
                 timeout=timeout_seconds,
-                look_for_keys=False,
-                allow_agent=False,
+                banner_timeout=timeout_seconds,
+                auth_timeout=timeout_seconds,
+                auth_strategy=_PinnedPasswordAuthentication(username, password, expected_fingerprint),
             )
             transport = client.get_transport()
             if transport is None or host_key_fingerprint(transport.get_remote_server_key()) != expected_fingerprint:
@@ -369,3 +368,15 @@ class MA5800SSHConnector:
         except Exception:
             client.close()
             raise
+
+
+class _PinnedPasswordAuthentication(paramiko.AuthStrategy):
+    """Runs after ordinary host-key validation, before any credential is sent."""
+    def __init__(self, username, password, fingerprint):
+        super().__init__(ssh_config=None)
+        self.username, self._password, self.fingerprint = username, password, fingerprint
+
+    def authenticate(self, transport):
+        if host_key_fingerprint(transport.get_remote_server_key()) != self.fingerprint:
+            raise HostKeyFingerprintMismatchError('OLT_HOST_KEY_PIN_MISMATCH')
+        return transport.auth_password(self.username, self._password)

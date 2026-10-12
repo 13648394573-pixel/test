@@ -37,7 +37,7 @@ class Lab:
 
     def cli(self, text):
         if text == 'display ont autofind all':
-            return '' if self.registered else 'F/S/P : 0/2/9\nOnt SN : AABBCCDDEEFF0011'
+            return 'The number of GPON autofind ONT is 0' if self.registered else 'F/S/P : 0/2/9\nOnt SN : AABBCCDDEEFF0011'
         if text.startswith('display ont info by-sn'):
             if not self.registered:
                 return 'Failure: The ONT does not exist'
@@ -45,7 +45,7 @@ class Lab:
                     'Run state : online\nConfig state : normal\nMatch state : match\n'
                     'Line profile ID : 10\nService profile ID : 10')
         if re.fullmatch(r'display ont info \d+ all', text):
-            return f'0/2/9 {self.ont_id} online' if self.registered else ''
+            return f'0/2/9 {self.ont_id} AABBCCDDEEFF0011 online normal match' if self.registered else 'The number of ONTs is 0'
         if text.startswith('ont delete'):
             self.registered = False
             self.mutations.append('delete')
@@ -59,6 +59,8 @@ class Lab:
                 vlan=1000, status='CONNECTED', ip_address='10.30.0.3' if mode == 'PPPOE' else '10.30.0.2')
             self.mutations.append(mode)
         if text.startswith('display ont wan-info'):
+            if not self.wans:
+                return 'The number of WAN entries is 0'
             return '\n'.join(
                 f'WAN index : {wan["ip_index"]}\nIPv4 access type : {("PPPoE" if mode == "PPPOE" else "DHCP")}\n'
                 f'VLAN : 1000\nIPv4 Connection status : {wan["status"]}\nIPv4 address : {wan["ip_address"]}'
@@ -95,6 +97,9 @@ class SSHClient:
         self.policy = value
     def connect(self, **kwargs):
         self.target = kwargs['hostname']
+        kwargs['auth_strategy'].authenticate(self)
+    def auth_password(self, username, password):
+        pass
     def get_transport(self):
         return self
     def get_remote_server_key(self):
@@ -129,7 +134,7 @@ class Surface:
     def run_ping(self, target, count):
         failed = self.lab.failure == self.mode
         return f'sent=4 received={3 if failed else 4} loss={25 if failed else 0}% min=1.0ms avg=1.5ms max=2.0ms'
-    def mask_sensitive_controls(self):
+    def mask_sensitive_controls(self, redaction_values=()):
         self.masked = True
     def page_text(self):
         return 'Password: fixture-password-sensitive'
@@ -209,9 +214,9 @@ def test_api_to_runtime_to_evidence_chain(lab_api, registered, failure):
     original = deepcopy((original_result.parameter_snapshot, original_result.run.device_snapshot,
                          original_result.run.standard_snapshot, original_result.run.environment_snapshot.profile_snapshot))
     view = drain(client, lab, response.json())
-    assert view['status'] == ('BLOCKED' if failure else 'COMPLETED')
-    assert view['result'] == ('BLOCKED' if failure else 'FAIL' if registered else 'PASS')
-    assert view['functional_verdict'] == ('FAIL' if failure or registered else 'PASS')
+    assert view['status'] == ('COMPLETED' if registered else 'BLOCKED')
+    assert view['result'] == ('FAIL' if registered else 'BLOCKED')
+    assert view['functional_verdict'] == ('FAIL' if failure or registered else 'BLOCKED')
     assert view['integrity_status'] == 'DRAFT'
     assert view['evidence_complete'] is (not bool(failure))
     result = repo.session.get(RunResult, view['run_result_id'])
@@ -273,7 +278,7 @@ def test_repeated_connection_wait_does_not_enter_recovery(lab_api):
     assert waiting['pending_interaction']['preview_hash'] != old_hash
     lab.interface_available = True
     finished = drain(client, lab, waiting)
-    assert finished['result'] == 'PASS'
+    assert finished['result'] == 'BLOCKED'  # Wiring confirmation alone does not prove WAN egress.
     assert finished['integrity_status'] == 'DRAFT'
 
 

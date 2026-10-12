@@ -237,6 +237,7 @@ class BoundExecutionRuntime:
 
     def _wait_pc(self, context, code):
         preview = dict(action_code=context.action_code, interface_name=self.binding.onu.pc_interface_name,
+                       check_id=uuid4().hex,
                        summary='请连接绑定网卡并确认唯一源地址；接线确认，非配置修改授权。',
                        target_fsp='/'.join(str(context.parameters.get(key)) for key in ('frame', 'slot', 'pon_port')),
                        ont_id=context.parameters.get('ont_id'), serial_number=context.parameters.get('onu_serial_number'),

@@ -38,3 +38,19 @@
 提交前再次全量验证：`python -m pytest backend/tests -q -p no:cacheprovider --basetemp=C:/Users/admin/Documents/Codex/t9r-commit-full1012`，424 passed（260.00 秒）。修复提交只固化上述四文件，不合并 main、不推送远端、不开始 Task 10。
 
 无迁移、依赖及前端变更；不进行 ONU/OLT 操作。前端测试和构建本次未重跑。进程内锁仅面向当前单进程本机部署，多进程执行不在本次验收范围。真实目标解析、成对凭据映射、适配器事实生成及完整 WAN 恢复仍待联调。
+
+## 后续本机绑定实施（2026-10-12）
+
+上述文字保留为 Task 9 原审核记录。后续经单独批准的本机绑定方案已接入严格 JSON 配置、
+成对 OS 凭据引用、创建时固定 runtime_binding 和逐请求绑定 Runtime。
+原接口不新增字段；默认没有配置/禁用时创建返回 422，未绑定旧会话推进返回
+409 RUNTIME_BINDING_REQUIRED，读取及受保护下载保持兼容。
+
+Runtime 复用既有 MA5800、neutral-v1 Web 与 PC Probe，并从本次解析来源生成标准事实，
+保留脱敏证据与 hash 校验。固定公钥在 known_hosts 路径也核对；接线等待不是配置授权。
+新绑定会话最终保持 DRAFT，只有用户明确使用已有 LOCK 接口后才进入报告/归档流程。
+
+完整 WAN 恢复仍未实现，也没有真实 DUT 验收声明。RESTORE/恢复核验不可证明完整恢复时
+阻塞并保留 MANUAL_REQUIRED；已注册但无 autofind、证据不齐和 PC 归属不明均如实判定。
+仍不开发 Task 10 前端，不合并或推送。使用说明及离线验收见
+LOCAL_RUNNER_SETUP.md、LOCAL_RUNNER_BINDING_ACCEPTANCE.md。

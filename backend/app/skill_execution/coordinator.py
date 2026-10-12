@@ -136,13 +136,25 @@ class SkillCoordinator:
         pending = next((i for i in execution.operator_interactions if i.interaction_ref == step['ref'] and i.status == 'PENDING'), None)
         if pending is not None:
             return pending
-        interaction = OperatorInteraction(session_id=execution.id, interaction_ref=step['ref'],
-            interaction_type='SELECTION' if 'interaction' in step else 'CONFIRMATION', risk_level='HIGH',
-            title=step['ref'], instructions='Confirm the exact target and impact; UNABLE/CANCEL blocks execution.',
-            completion_condition='Valid choice, explicit approval and exact preview hash.', options_json=choices,
-            impact_preview=deepcopy(preview))
-        db.add(interaction)
-        self.repository.append_event(execution.id,'WAITING_OPERATOR',{'ref':step['ref']},step['ref'] + ':waiting',step_ref=step['ref'])
+        connection_wait = step.get('action') == 'pc_connectivity_probe'
+        interaction = next((i for i in execution.operator_interactions
+                            if connection_wait and i.interaction_ref == step['ref']), None)
+        if interaction is None:
+            interaction = OperatorInteraction(session_id=execution.id, interaction_ref=step['ref'],
+                interaction_type='SELECTION' if 'interaction' in step else 'CONFIRMATION',
+                risk_level='LOW' if connection_wait else 'HIGH',
+                title=step['ref'], instructions='Confirm the exact target and impact; UNABLE/CANCEL blocks execution.',
+                completion_condition='Valid choice, explicit approval and exact preview hash.', options_json=choices,
+                impact_preview=deepcopy(preview))
+            db.add(interaction)
+        else:
+            # Only a non-mutating wiring check may reopen its interaction. Durable events preserve prior responses.
+            interaction.status = 'PENDING'
+            interaction.response_json = None
+            interaction.responded_at = None
+            interaction.impact_preview = deepcopy(preview)
+        waiting_key = step['ref'] + ':waiting' + (':' + preview['preview_hash'] if connection_wait else '')
+        self.repository.append_event(execution.id,'WAITING_OPERATOR',{'ref':step['ref']},waiting_key,step_ref=step['ref'])
         self._set_status(execution,'WAITING_OPERATOR')
         return interaction
 
@@ -164,8 +176,11 @@ class SkillCoordinator:
         interaction.response_json = deepcopy(response)
         interaction.responded_at = datetime.now(UTC).replace(tzinfo=None)
         interaction.status = 'CANCELLED' if choice == 'CANCEL' else 'UNABLE' if choice == 'UNABLE' else 'COMPLETED'
+        response_key = interaction.interaction_ref + ':response'
+        if (interaction.impact_preview or {}).get('action_code') == 'pc_connectivity_probe':
+            response_key += ':' + interaction.impact_preview['preview_hash']
         repo.append_event(session_id,'OPERATOR_RESPONSE',{'ref':interaction.interaction_ref,'choice':choice},
-                          interaction.interaction_ref + ':response',step_ref=interaction.interaction_ref)
+                          response_key,step_ref=interaction.interaction_ref)
         if choice in {'CANCEL','UNABLE'}:
             if execution.recovery_tasks:
                 self._recovery(execution)
@@ -346,5 +361,9 @@ class SkillCoordinator:
         self._set_status(execution,'BLOCKED' if result.result == 'BLOCKED' else 'COMPLETED')
         execution.ended_at = datetime.now(UTC).replace(tzinfo=None)
         self.repository.append_event(execution.id,'FINALIZED',{'result':result.result},'finalized')
-        TestExecutionService(TestExecutionRepository(db),None,None).lock_result(execution.test_run_id,result.id)
+        if (execution.plugin_snapshot or {}).get('runtime_binding') is not None:
+            # Bound development executions require explicit user approval to LOCK via the existing result API.
+            db.commit()
+        else:
+            TestExecutionService(TestExecutionRepository(db),None,None).lock_result(execution.test_run_id,result.id)
         return execution

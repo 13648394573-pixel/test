@@ -81,7 +81,9 @@ class NeutralONUWebAdapter:
             return ActionOutcome("BLOCKED", (), (), "ONU_WEB_UNREACHABLE")
         except (ONUWebSelectorError, HuaweiSelectorError) as exception:
             stage = getattr(exception, "stage", "UNKNOWN")
-            return ActionOutcome("BLOCKED", (), (), "ONU_WEB_SELECTOR_UNSUPPORTED", f"Selector stage: {stage}")
+            return ActionOutcome("BLOCKED", (),
+                self._capture_failure_artifacts(surface, context, f"{mode.lower()}-wan-blocked"),
+                "ONU_WEB_SELECTOR_UNSUPPORTED", f"Selector stage: {stage}")
         except ONUWebWanNotVisibleError:
             return ActionOutcome("FAIL", (), (), "WAN_NOT_VISIBLE")
         finally:
@@ -127,7 +129,9 @@ class NeutralONUWebAdapter:
             return ActionOutcome("BLOCKED", (), (), "ONU_WEB_UNREACHABLE")
         except (ONUWebSelectorError, HuaweiSelectorError) as exception:
             stage = getattr(exception, "stage", "UNKNOWN")
-            return ActionOutcome("BLOCKED", (), (), "ONU_WEB_SELECTOR_UNSUPPORTED", f"Selector stage: {stage}")
+            return ActionOutcome("BLOCKED", (),
+                self._capture_failure_artifacts(surface, context, f"{mode.lower()}-ping-blocked"),
+                "ONU_WEB_SELECTOR_UNSUPPORTED", f"Selector stage: {stage}")
         except ONUWebWanNotVisibleError:
             return ActionOutcome("FAIL", (), (), "WAN_NOT_VISIBLE")
         except HuaweiOutputError as exception:

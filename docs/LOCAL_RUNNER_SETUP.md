@@ -26,3 +26,49 @@ python -m app.local_runner.setup --config data/local-runner/config.json --access
 
 现场设备验收：NOT_EXECUTED。自动化步骤成功不等于产品测试 PASS；网络归属、恢复状态、
 历史快照与锁定结果规则必须单独验证。此阶段不包含前端接入，不自动解锁或 LOCK 结果。
+
+## 启动与执行
+
+在项目根目录、已有后端依赖环境中设置（不需要新依赖或数据库迁移）：
+
+~~~powershell
+$env:PYTHONPATH = (Join-Path (Get-Location) 'backend')
+$env:TEST_WORKBENCH_LOCAL_RUNNER_CONFIG_PATH = (Join-Path (Get-Location) 'data/local-runner/config.json')
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1
+~~~
+
+不要使用多 worker、公开网卡绑定或热更新执行配置。配置非法会以安全错误码拒绝启动；
+enabled=false 或没有指定配置路径时不启用 Runner。加载/重启不会登录设备或重放配置动作。
+关闭前应完成或明确停止当前执行；中断的 RUNNING/RESTORING 会进入人工恢复。
+
+Environment 的 olt_target_ref/onu_web_target_ref 必须匹配 targets 键；
+olt_access_ref/onu_web_access_ref/pppoe_access_ref 必须匹配三种 access_bindings 键。
+当前配置后重新创建会话；不要给旧 Run 补绑定。旧会话可以读取/下载，推进返回
+409 RUNTIME_BINDING_REQUIRED。账号密码可以轮换，但不能将旧会话的 leaf refs 改指另一组条目。
+
+通过已有 /api/skill-executions 创建、逐步 advance、respond；每次只推进一个持久化动作。
+配置变更必须逐项明确 approved=true 并提交本次 preview_hash；respond 本身不会下发配置，
+批准后仍需下一次 advance。网卡缺失/多地址/未知前缀时会等待接线，提示不等同于配置修改授权。
+修正接线后使用最新交互 hash；旧确认不能代替新确认。
+
+执行完成仍保持 DRAFT。核查结果、事实与证据后，用户通过已有结果 lock 接口明确锁定；
+之后再使用原 Report/Archive 流程。不得将动作 PASS 当作整个测试 PASS。
+
+## 网卡、指纹及换电脑
+
+确认实际测试网卡名称；DHCP 地址每次从该网卡实时选择，只接受 ONU 所在真实子网的唯一有效地址。
+不猜 /24、不自动选择其他网卡、不改系统路由。配置中网卡名称变更只影响重启后新建的会话。
+OLT 指纹需在受信任现场人工复核；指纹改变时停机核对，不自动接受或更新 known_hosts。
+迁移电脑后重新登记六个值，OS 凭据不随 Git、数据库、证据或 ZIP 迁移。
+
+## 恢复边界
+
+当前已有适配器只能证明部分注册信息，不能证明完整 WAN/service-port 恢复。
+RESTORE 及恢复核验安全 BLOCKED，结果进入 MANUAL_REQUIRED，不把注册字段相等当作恢复完成。
+应在现场人工核对原配置快照、WAN 与 service-port；保留中断与恢复记录，不手改数据库、
+不伪造 VERIFIED、不重复执行未确认的变更。当前接口没有新增人工恢复关闭能力。
+KEEP 仅在用户明确承担保留现场变更责任时选择，表示免除恢复，并非已经恢复。
+
+已注册 ONU 没有真实 autofind 记录时，不生成虚构匹配事实；
+在现有固定标准下，该项可能 FAIL。双 WAN 同时活跃且无法证明 PC 归属时不生成联网 PASS；
+系统默认 DNS 成功也不能代替归属证明。现场联调结果必须与离线替身测试分开记录。

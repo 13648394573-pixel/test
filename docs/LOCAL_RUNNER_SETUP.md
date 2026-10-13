@@ -81,5 +81,42 @@ KEEP 仅在用户明确承担保留现场变更责任时选择，表示免除恢
 当前目标 ID 空闲且 autofind 身份匹配。身份改变、ID 被占用、service-port 归属不明或
 未识别的读输出均安全阻塞。不能识别的固件输出须先提供脱敏样本审核，不猜测空结果。
 固定 SSH 指纹在同一连接认证前校验，系统 known_hosts 不能绕过此校验。
+
+## service-port 映射契约（Task 1，尚未启用自动创建）
+
+本机配置可选 service_port_profiles，键必须是 targets 中现有 MA5800 OLT 引用。
+每个 profile 包含 ipoe/pppoe 中至少一个明确映射；未配置时不补默认 GEM、VLAN
+或候选 ID，旧配置序列化及 SHA256 保持兼容。以下只是虚构配置片段，不是
+现场推荐值；请勿复制其中候选 ID 到实际配置并据此操作设备。
+
+~~~json
+{
+  "service_port_profiles": {
+    "fixture.olt": {
+      "ipoe": {
+        "vlan": 1000,
+        "gemport": 1,
+        "user_vlan": 1000,
+        "tag_transform": "translate",
+        "business_type": "multi-service",
+        "candidate_id": 53
+      }
+    }
+  }
+}
+~~~
+
+片段中的 fixture.olt 必须替换为经审核的实际 OLT 引用，所有数值都须由
+操作者确认。candidate_id 可省略，表示没有创建候选 ID，不表示自动分配。
+VLAN/user_vlan 为 1–4094，GEM 为 0–4095，候选 ID 为 0–65535，拒绝 bool
+和字符串数值；当前仅支持已取得协议样本的 multi-service/translate 组合。
+加载配置不连接设备，也不创建或删除端口。新建会话时冻结该映射，后来修改
+配置不改变旧绑定；旧绑定没有 profile 时仍兼容且不会补造历史数据。
+
+详情解析只有完整、明确作用域的响应才能返回 FOUND/ABSENT；部分表、未知
+属性、重复字段或未确认失败均返回 UNCONFIRMED。Profile/GEM 只接受已验证
+的完整 ETH/VLAN 表，未识别的行和缺行拒绝。编码器虽能产生结构化创建命令，
+尚未接入平台执行动作；创建审批、资源归属、清理及中断恢复仍未实现。
+当前恢复限制和 LOCKED 规则不变，任何设备写入仍需另行批准。
 Web 凭据及 PPPoE 凭据仅在动作内读取供脱敏；页面控件、普通文本与子帧在 PNG 前脱敏，
 无法完成遮挡或存在不可核验 canvas 时不保存该截图。

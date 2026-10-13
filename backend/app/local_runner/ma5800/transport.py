@@ -11,6 +11,7 @@ from typing import Any, Callable, Protocol
 import paramiko
 
 from app.local_runner.ma5800.parsers import normalize_cli_output
+from .service_port_contracts import ServicePortMapping
 
 
 class CommandTimeoutError(Exception):
@@ -164,6 +165,31 @@ def _remove_service_port(arguments: tuple[Any, ...]) -> str:
     return f"undo service-port {_int_arg(arguments[0], maximum=65535)}"
 
 
+def _display_service_port_by_id(arguments):
+    if len(arguments) != 1 or type(arguments[0]) is not int:
+        return _invalid_arguments('display_service_port_by_id')
+    return f'display service-port {_int_arg(arguments[0], maximum=65535)}'
+
+
+def _read_profile_gem(arguments):
+    if len(arguments) != 1 or type(arguments[0]) is not int:
+        return _invalid_arguments('read_profile_gem')
+    return f'display ont-lineprofile gpon profile-id {_int_arg(arguments[0])}'
+
+
+def _create_service_port(arguments):
+    if len(arguments) != 8:
+        return _invalid_arguments('create_service_port')
+    port_id, vlan, fsp, ont_id, gemport, user_vlan, transform, business_type = arguments
+    spec = ServicePortMapping(candidate_id=port_id, vlan=vlan, fsp=fsp, ont_id=ont_id,
+        gemport=gemport, user_vlan=user_vlan, tag_transform=transform, business_type=business_type,
+        olt_binding_hash='0' * 64)
+    if spec.candidate_id is None:
+        return _invalid_arguments('create_service_port')
+    return (f'service-port {spec.candidate_id} vlan {spec.vlan} gpon {spec.fsp} ont {spec.ont_id} '
+            f'gemport {spec.gemport} multi-service user-vlan {spec.user_vlan} tag-transform translate')
+
+
 _SAFE_COMMANDS: dict[str, Callable[[tuple[Any, ...]], str]] = {
     "enable": _no_args("enable", "enable"),
     "disable_paging": _no_args("disable_paging", "screen-length 0 temporary"),
@@ -180,6 +206,9 @@ _SAFE_COMMANDS: dict[str, Callable[[tuple[Any, ...]], str]] = {
     "provision_ipoe": _provision_ipoe,
     "provision_pppoe": _provision_pppoe,
     "remove_service_port": _remove_service_port,
+    "display_service_port_by_id": _display_service_port_by_id,
+    "read_profile_gem": _read_profile_gem,
+    "create_service_port": _create_service_port,
 }
 
 

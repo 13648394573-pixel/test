@@ -481,3 +481,84 @@ TDD：首次新增范围测试 11 failed / 2 passed；首次修复相关测试 5
 恢复仍不支持，完整平台执行闭环继续 HOLD。本轮未改前端、未运行前端测试。
 修复、测试及本记录尚未提交/推送；下一步先审核固化本轮修复，再逐项评审
 剩余闭环缺口，不能据本次测试通过批准现场注册、WAN 下发或恢复操作。
+
+## service-port 生命周期 Task 1 部分实施与协议采样（2026-10-13）
+
+设计 ae11ecfe98dfe30567f12c84ad19aa1a292e24d0 已获书面批准，用户选择当前
+会话逐项实施。先按计划缺样本分支加入独立 PortRead/详情边界：目前只返回
+UNCONFIRMED，不能把简表、空 Total、通用成功或未验证详情认定为完整映射
+或全局 ID 空闲。查询摘要绑定目标 hash 与原文本 hash，不留原文或伪造 Evidence。
+本边界尚未接入自动创建路径；不表示完整协议解析已经实现。
+
+离线基线端口/transport 33 passed（0.79s）；新测试 RED 12 failed（0.71s），
+GREEN 加端口/transport/配置回归 72 passed（1.65s）；完整后端 615 passed
+（311.15s）。未改前端、数据库结构、既有命令白名单或配置字段。
+
+用户随后单独批准 OLT 只读详情、Profile/GEM、候选 ID 和必要命令帮助采集。
+使用会话 cc0d9351-50b2-452e-952d-f63fa00bc222 的冻结绑定与系统凭据引用，
+每次连接核对固定 SSH 指纹、SN、FSP 0/2/9、ONT 14 和 Profile 10/10。
+未启动应用，不推进该旧会话，不改旧事件、Result 或配置快照。
+
+当前现场事实与历史不同：
+- 全局查询 service-port 288 返回 Service virtual port does not exist。
+- 候选 289 已被 0/2/9、ONT 15 占用，不能用于目标 ONT，也不自动认领。
+- 重新查询目标 ONT 14 清单，当前为 service-port 290，VLAN 1000、GEM 1、
+  user VLAN 1000、up；完整详情为 common/gpon、Flow type vlan、translate。
+- Profile 10 为 GPON、VLAN mapping、ETH GEM 1，包含 VLAN 1000 映射。
+  上述读数不是创建授权；288 不自动预留，290 不被自动改写或清理。
+
+头两次帮助读取等待普通完成提示导致 CommandTimeoutError，明确不计为通过；
+连接均关闭。最后一次仅发送带问号的未提交帮助行，截取文本后直接关闭 SSH，
+成功取得显式端口 ID + VLAN/GPON/ONT/GEM/multi-service/user-vlan 的可执行
+语法提示及 tag-transform 选项；没有按 Enter 执行配置。未因帮助读取成功
+推断所有转换模式、完整恢复或创建能力已经支持。
+
+4 个独立采样目录分别生成 8、4、4、6 份脱敏 TXT/PNG，共 22 份，大小及
+SHA256 经 EvidenceWriter 保存后逐份校验。根目录 main 已忽略的
+data/local-runner/service-port-detail-probe-20261013/；目录分别为
+6050c8ab41ba47758c123bf62f0dbf0b、4bf3d13721854a9da7baae5d6b226598、
+77a1a91f50984acb920f738fa1526117、4d90e949a5294a77afb45a495006be8a。
+每轮验收库和正式库 SHA256 前后不变，SSH 已关闭，设备配置写入 0。
+
+Task 1 尚未全部完成：完整详情/Profile 解析、参数契约与冻结配置、创建
+白名单和转换规则仍需基于真实样本继续 TDD。Task 2–7 未开始，不把未确认
+边界当作可用的生命周期功能。历史 288 快照不回写为 290；任何后续操作
+都必须新建计划和新采集范围。当前代码/测试/计划/本记录未提交或推送。
+
+## 生命周期 Task 1 完整读取/契约/编码验证（2026-10-13）
+
+继续已批准计划，补采显式 tag-transform translate 的只读命令帮助：返回
+<cr> 可执行语法提示；仅输入问号，未回车执行配置，随后关闭 SSH。新增
+7b4f1999a8374203bcb46aff1fc21971 目录的 6 份脱敏 TXT/PNG 大小/SHA256 通过。
+验收库/正式库前后 hash 不变，配置写入仍为 0；累计该采样根目录 28 份证据。
+
+实现 MappingSpec/ServicePortMapping/ServicePortProfile 冻结契约：明确 VLAN、
+GEM、用户 VLAN、候选 ID、translate/multi-service；拒绝 bool、字符串数值、
+越界值、未知属性和非规范 FSP。候选 ID 不参与语义 mapping_key，但属于独立
+创建参数，不自动分配。新 profile 仅绑定现有 OLT 引用；可选字段缺省时旧配置
+序列化及 SHA256 不变。新会话冻结 profile，后续配置修改不影响旧绑定。
+
+详情仅在完整范围响应、全部字段与已支持属性一致时 FOUND；按 ID 的明确
+不存在响应才 ABSENT；其他未知/不完整/冲突输出为 UNCONFIRMED。Profile/GEM
+仅接受完整 ETH/VLAN 映射；重复字段、未知内容、缺行和未验证队列模式拒绝。
+白名单新增全局 ID 查询、Profile/GEM 查询和显式 ID+translate 创建编码。
+仅编码、未注册为可执行平台动作，未改变已有运行/审批流程。
+
+脱敏 fixture 来源为已保存实测协议，端口/FSP/ONT/profile 名替换为虚构值，
+不提交原始现场证据、账号、密码、地址、数据库或生成文件。离线重放实际
+已保存证据同样得到 288 ABSENT、289 FOUND/ONT15/down、290 FOUND/ONT14/up；
+Profile 10 为 GEM1 的八条 VLAN 映射，包含 1000。该重放用虚构绑定 hash 进行
+孤立解析验证，不产生新 Snapshot、审批或设备操作授权。
+
+TDD 新契约/详情/命令首次 RED 37 failed / 36 passed（1.58s）；中间失败含
+未完整应用补丁、常量名与块尾空行，查明代码原因修复，未弱化测试。
+初次相关 GREEN 139 passed（6.53s）；再补结构反例 RED 4 failed / 31 passed
+（0.99s），整包校验后相关 GREEN 143 passed（6.42s）。最终完整后端
+680 passed（323.02s）；未改前端业务，本阶段未运行前端测试/构建。
+
+范围裁定：暂限已有真实样本证明的 common/gpon、VLAN flow、multi-service /
+translate、基线属性及队列模式；其他有效但未验证的模式仍可能 BLOCKED，
+不为兼容而忽略字段。缺省 profile 从序列化省略以保留老配置 hash，消费者
+须按可选字段处理。Task 1 代码与验证已完成，提交仍待用户指令；Task 2–7
+尚未实现，整体独立审核安排在最后，当前不宣称生命周期或恢复闭环已完成。
+本轮未提交/推送/合并，main 未修改，原 Snapshot/LOCKED/报告归档保持原规则。

@@ -1,0 +1,42 @@
+display ont-lineprofile gpon profile-id 10
+{ <cr>||<K> }:
+Command:
+display ont-lineprofile gpon profile-id 10
+------------------------------------------------------------------------------
+Profile-ID          :10
+Profile-name        :Fixture GPON
+Access-type         :GPON
+------------------------------------------------------------------------------
+FEC upstream switch :Disable
+OMCC encrypt switch :On
+Qos mode            :PQ
+Mapping mode        :VLAN
+TR069 management    :Enable
+TR069 IP index      :0
+------------------------------------------------------------------------------
+<T-CONT   0>          DBA Profile-ID:1
+<T-CONT   1>          DBA Profile-ID:10
+<Gem Index 1>
+--------------------------------------------------------------------
+|Serv-Type:ETH |Encrypt:on  |Cascade:off |GEM-CAR:-            |
+|Upstream-priority-queue:0  |Downstream-priority-queue:-       |
+--------------------------------------------------------------------
+Mapping VLAN  Priority Port    Port  Bundle  Flow  Transparent
+index                  type    ID    ID      CAR
+--------------------------------------------------------------------
+0       199   -        -       -     -       -     -
+1       200   -        -       -     -       -     -
+2       300   -        -       -     -       -     -
+3       1000  -        -       -     -       -     -
+4       6     -        -       -     -       -     -
+5       10    -        -       -     -       -     -
+6       100   -        -       -     -       -     -
+7       2020  -        -       -     -       -     -
+--------------------------------------------------------------------
+------------------------------------------------------------------------------
+Notes: Run the display traffic table ip command to query
+traffic table configuration
+------------------------------------------------------------------------------
+Binding times       :85
+------------------------------------------------------------------------------
+MA5800-X7(config)#

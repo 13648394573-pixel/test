@@ -1,8 +1,156 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from hashlib import sha256
+import json
 import re
 from typing import Mapping
+
+from .service_port_contracts import GemVlanMapping, PortRead, ServicePortDetail, ServicePortMapping
+
+
+def parse_service_port_detail(text: str, *, binding_hash: str) -> PortRead:
+    """Accept only a complete scoped detail response; all ambiguity fails closed."""
+    if not isinstance(binding_hash, str) or re.fullmatch(r'[0-9a-f]{64}', binding_hash) is None:
+        raise ValueError('Invalid service-port binding hash')
+    if not isinstance(text, str):
+        raise ValueError('Invalid service-port detail output')
+    encoded = json.dumps({'binding_hash': binding_hash, 'text': text},
+                         sort_keys=True, separators=(',', ':'), ensure_ascii=False).encode('utf-8')
+    read = PortRead(binding_hash=binding_hash, observation_hash=sha256(encoded).hexdigest())
+    normalized = normalize_cli_output(text)
+    lines = normalized.splitlines()
+    if not lines or not PROMPT_LINE.fullmatch(lines[-1]):
+        return read
+    query_ids = {int(value) for value in re.findall(r'(?m)^display service-port (0|[1-9][0-9]*)$', normalized)}
+    if len(query_ids) != 1 or max(query_ids) > 65535:
+        return read
+    query_id = next(iter(query_ids))
+    preamble = {f'display service-port {query_id}', '{ <cr>||<K> }:', 'Command:'}
+    absence = 'Failure: Service virtual port does not exist'
+    if absence in lines:
+        if all(line in preamble | {absence} for line in lines[:-1]):
+            return PortRead(binding_hash, read.observation_hash, 'ABSENT', query_port_id=query_id)
+        return read
+    blocks = list(re.finditer(r'(?m)^-{10,}\n(Index\s*:.*?)(?=\n-{10,}$)', normalized, re.DOTALL))
+    if len(blocks) != 1:
+        return read
+    block = blocks[0]
+    prefix = normalized[:block.start()].splitlines()
+    tail = normalize_cli_output(normalized[block.end():]).splitlines()
+    notes = {'Note: F--Frame, S--Slot, P--Port', 'v/e--vlan/encap', 'Dvlan--double vlan',
+             'pritag--priority-tagged,', 'ppp--pppoe, ip--ipoe, ip4--ipv4oe, ip6--ipv6oe',
+             'When the traffic-table is not configured, the system does',
+             'not limit the traffic rate and the priority is set to 0'}
+    if (any(line not in preamble for line in prefix)
+            or any(not re.fullmatch(r'-{10,}', line) and line not in notes
+                   for line in tail[:-1])):
+        return read
+    fields = {}
+    for line in block.group(1).splitlines():
+        match = re.fullmatch(r'([^:]+?)\s*:\s*(.*?)', line)
+        if match is None or match[1].strip() in fields:
+            return read
+        fields[match[1].strip()] = match[2]
+    defaults = {'VLAN attr': 'common', 'Port type': 'gpon', 'Flow type': 'vlan',
+        'TX': '-', 'Inbound table name': '-', 'RX': '-', 'Outbound table name': '-',
+        'Admin status': 'enable', 'Label': '-', 'Priority': '-', 'PVC bundle': 'no',
+        'Max MAC count': '1023', 'Tag transform': 'translate', 'Service-port bundle': '-',
+        'Cos': '-', 'Car-Group': '-', 'Static MAC': '', 'IP address': '',
+        'Stat. performance': 'disable', 'Subscriber ID': '-'}
+    required = set(defaults) | {'Index', 'VLAN ID', 'F/S/P', 'ONT ID', 'GEM port index',
+                               'Flow para', 'State', 'Description', 'Remote description'}
+    if set(fields) != required or any(fields[key] != value for key, value in defaults.items()):
+        return read
+    numeric = ('Index', 'VLAN ID', 'ONT ID', 'GEM port index', 'Flow para')
+    if any(re.fullmatch(r'(?:0|[1-9][0-9]*)', fields[key]) is None for key in numeric):
+        return read
+    if int(fields['Index']) != query_id or fields['State'] not in ('up', 'down'):
+        return read
+    try:
+        mapping = ServicePortMapping(olt_binding_hash=binding_hash, fsp=fields['F/S/P'],
+            ont_id=int(fields['ONT ID']), vlan=int(fields['VLAN ID']), gemport=int(fields['GEM port index']),
+            user_vlan=int(fields['Flow para']), tag_transform='translate', business_type='multi-service')
+    except ValueError:
+        return read
+    return PortRead(binding_hash, read.observation_hash, 'FOUND',
+                    (ServicePortDetail(query_id, mapping, fields['State']),), query_port_id=query_id)
+
+
+def parse_profile_gem(text: str, *, expected_profile_id: int) -> tuple[GemVlanMapping, ...]:
+    """Verify the observed GPON ETH/VLAN mapping subset, rejecting partial rows."""
+    if type(expected_profile_id) is not int or not 0 <= expected_profile_id <= 4095:
+        raise ValueError('Invalid GPON profile ID')
+    normalized = normalize_cli_output(text)
+    lines = normalized.splitlines()
+    if (not lines or not PROMPT_LINE.fullmatch(lines[-1]) or
+            len(re.findall(r'(?m)^Binding times\s*:\s*\d+$', normalized)) != 1):
+        raise ValueError('Incomplete GPON profile response')
+    for key, expected in [('Profile-ID', str(expected_profile_id)), ('Access-type', 'GPON'), ('Mapping mode', 'VLAN')]:
+        values = re.findall(r'(?m)^' + re.escape(key) + r'\s*:\s*(.*?)$', normalized)
+        if values != [expected]:
+            raise ValueError('Unexpected GPON profile mapping')
+    queries = {int(value) for value in re.findall(r'(?m)^display ont-lineprofile gpon profile-id (\d+)$', normalized)}
+    if queries != {expected_profile_id} or re.search(r'(?im)^(?:Failure:|Error:|%)', normalized):
+        raise ValueError('Unconfirmed GPON profile query')
+    sections = re.split(r'(?m)^<Gem Index (\d+)>$', normalized)
+    mappings, seen_gems = [], set()
+    for offset in range(1, len(sections), 2):
+        gemport, section = int(sections[offset]), sections[offset + 1]
+        if gemport in seen_gems or not 0 <= gemport <= 4095:
+            raise ValueError('Ambiguous GEM mapping')
+        seen_gems.add(gemport)
+        if not re.search(r'\|Serv-Type:ETH\s*\|Encrypt:on\s*\|Cascade:off\s*\|GEM-CAR:-\s*\|', section):
+            raise ValueError('Unsupported GEM service type')
+        table = re.search(r'Mapping VLAN\s+Priority Port\s+Port\s+Bundle\s+Flow\s+Transparent\n'
+            r'index\s+type\s+ID\s+ID\s+CAR\n-{10,}\n(.*?)\n-{10,}', section, re.DOTALL)
+        if table is None:
+            raise ValueError('Incomplete GEM mapping table')
+        indexes, vlans = set(), set()
+        for line in table[1].splitlines():
+            row = re.fullmatch(r'(\d+)\s+(\d+)(?:\s+-){6}', line)
+            if row is None:
+                raise ValueError('Unsupported GEM mapping row')
+            index, vlan = map(int, row.groups())
+            if index in indexes or vlan in vlans or not 1 <= vlan <= 4094:
+                raise ValueError('Ambiguous GEM VLAN mapping')
+            indexes.add(index)
+            vlans.add(vlan)
+            mappings.append(GemVlanMapping(expected_profile_id, gemport, vlan))
+        if not indexes or indexes != set(range(len(indexes))):
+            raise ValueError('Empty or incomplete GEM mapping is unconfirmed')
+    if not mappings:
+        raise ValueError('No verified GEM mappings')
+    known_fields = {'Profile-ID', 'Profile-name', 'Access-type', 'FEC upstream switch',
+        'OMCC encrypt switch', 'Qos mode', 'Mapping mode', 'TR069 management', 'TR069 IP index', 'Binding times'}
+    field_counts, numeric_rows, table_headers = {}, 0, 0
+    notes = {'Notes: Run the display traffic table ip command to query', 'traffic table configuration'}
+    for line in lines[:-1]:
+        if (line in {f'display ont-lineprofile gpon profile-id {expected_profile_id}', '{ <cr>||<K> }:', 'Command:'}
+                or line in notes or re.fullmatch(r'-{10,}', line)
+                or re.fullmatch(r'<T-CONT\s+\d+>\s+DBA Profile-ID:\d+', line)
+                or re.fullmatch(r'<Gem Index \d+>', line)):
+            continue
+        if re.fullmatch(r'Mapping VLAN\s+Priority Port\s+Port\s+Bundle\s+Flow\s+Transparent', line):
+            table_headers += 1
+            continue
+        if (re.fullmatch(r'index\s+type\s+ID\s+ID\s+CAR', line)
+                or re.fullmatch(r'\|Serv-Type:ETH\s*\|Encrypt:on\s*\|Cascade:off\s*\|GEM-CAR:-\s*\|', line)
+                or re.fullmatch(r'\|Upstream-priority-queue:0\s*\|Downstream-priority-queue:-\s*\|', line)):
+            continue
+        if re.fullmatch(r'\d+\s+\d+(?:\s+-){6}', line):
+            numeric_rows += 1
+            continue
+        field = re.fullmatch(r'([^:]+?)\s*:\s*(.+)', line)
+        if field and field[1].strip() in known_fields:
+            key = field[1].strip()
+            field_counts[key] = field_counts.get(key, 0) + 1
+            continue
+        raise ValueError('Unrecognized GPON profile content')
+    if (set(field_counts) != known_fields or any(count != 1 for count in field_counts.values())
+            or numeric_rows != len(mappings) or table_headers != len(seen_gems)):
+        raise ValueError('Incomplete or ambiguous GPON profile structure')
+    return tuple(mappings)
 
 
 ANSI_ESCAPE = re.compile(r"\x1B(?:\[[0-?]*[ -/]*[@-~]|[@-_])")

@@ -9,9 +9,10 @@ from types import MappingProxyType
 from typing import Annotated, Literal, Mapping
 from urllib.parse import urlsplit
 
-from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator, model_serializer, model_validator
 
 from .credentials import REFERENCE_PATTERN
+from .ma5800.service_port_contracts import ServicePortProfile
 
 
 class RunnerConfigurationError(ValueError):
@@ -102,6 +103,7 @@ class RunnerConfig(FrozenModel):
     enabled: bool
     targets: Mapping[str, Target]
     access_bindings: Mapping[str, AccessBinding]
+    service_port_profiles: Mapping[str, ServicePortProfile] = Field(default_factory=dict)
 
     @field_validator('schema_version', mode='before')
     @classmethod
@@ -112,8 +114,10 @@ class RunnerConfig(FrozenModel):
 
     @model_validator(mode='after')
     def immutable_maps(self):
-        for key in (*self.targets, *self.access_bindings):
+        for key in (*self.targets, *self.access_bindings, *self.service_port_profiles):
             reference(key)
+        if any(not isinstance(self.targets.get(key), OLTTarget) for key in self.service_port_profiles):
+            raise ValueError('SERVICE_PORT_PROFILE_REQUIRES_OLT_TARGET')
         if self.enabled and (
             not {'MA5800', 'ONU_WEB'} <= {target.kind for target in self.targets.values()}
             or not {'OLT', 'ONU_WEB', 'PPPOE'} <= {pair.kind for pair in self.access_bindings.values()}
@@ -121,11 +125,19 @@ class RunnerConfig(FrozenModel):
             raise ValueError('INCOMPLETE_CONFIGURATION')
         object.__setattr__(self, 'targets', MappingProxyType(dict(self.targets)))
         object.__setattr__(self, 'access_bindings', MappingProxyType(dict(self.access_bindings)))
+        object.__setattr__(self, 'service_port_profiles', MappingProxyType(dict(self.service_port_profiles)))
         return self
 
-    @field_serializer('targets', 'access_bindings')
+    @field_serializer('targets', 'access_bindings', 'service_port_profiles')
     def serialize_maps(self, value):
         return {key: item.model_dump(mode='json') for key, item in value.items()}
+
+    @model_serializer(mode='wrap')
+    def compatible_optional_profiles(self, handler):
+        value = handler(self)
+        if not self.service_port_profiles:
+            value.pop('service_port_profiles', None)
+        return value
 
     @property
     def sha256(self) -> str:
@@ -159,6 +171,7 @@ class RuntimeBinding(FrozenModel):
     olt: OLTTarget
     onu: ONUTarget
     access_bindings: Mapping[str, AccessBinding]
+    service_port_profile: ServicePortProfile | None = None
 
     _target_refs = field_validator('olt_target_ref', 'onu_web_target_ref')(reference)
     _version = field_validator('version', mode='before')(RunnerConfig.strict_version.__func__)
@@ -175,6 +188,13 @@ class RuntimeBinding(FrozenModel):
     @field_serializer('access_bindings')
     def serialize_access(self, value):
         return {key: pair.model_dump(mode='json') for key, pair in value.items()}
+
+    @model_serializer(mode='wrap')
+    def compatible_optional_profile(self, handler):
+        value = handler(self)
+        if self.service_port_profile is None:
+            value.pop('service_port_profile', None)
+        return value
 
 
 def resolve_runtime_binding(config: RunnerConfig, parameters: Mapping, pairs) -> RuntimeBinding:
@@ -195,6 +215,7 @@ def resolve_runtime_binding(config: RunnerConfig, parameters: Mapping, pairs) ->
                 raise ValueError('ACCESS_BINDING_UNAVAILABLE')
             access[kind] = pair
         return RuntimeBinding(config_sha256=config.sha256, olt_target_ref=olt_ref,
-                              onu_web_target_ref=onu_ref, olt=olt, onu=onu, access_bindings=access)
+                              onu_web_target_ref=onu_ref, olt=olt, onu=onu, access_bindings=access,
+                              service_port_profile=config.service_port_profiles.get(olt_ref))
     except (KeyError, TypeError, ValueError):
         raise RunnerConfigurationError('RUNTIME_BINDING_INVALID') from None

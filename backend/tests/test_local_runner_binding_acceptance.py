@@ -65,6 +65,8 @@ class Lab:
                 f'WAN index : {wan["ip_index"]}\nIPv4 access type : {("PPPoE" if mode == "PPPOE" else "DHCP")}\n'
                 f'VLAN : 1000\nIPv4 Connection status : {wan["status"]}\nIPv4 address : {wan["ip_address"]}'
                 for mode, wan in self.wans.items())
+        if text.startswith('display service-port port '):
+            return 'Total : 0'
         return 'Command executed successfully'
 
 

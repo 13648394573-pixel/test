@@ -154,7 +154,10 @@ class MA5800Actions:
         wan = [asdict(item) for item in parse_wan_info(wan_transcript.normalized_output)]
         if not self._wan_read_valid(wan_transcript, wan) or self._read_failed(port_transcript):
             return ActionOutcome("BLOCKED", (), (), "OLT_READ_UNRECOGNIZED")
-        service_ports = [asdict(item) for item in parse_service_ports(port_transcript.normalized_output)]
+        try:
+            service_ports = [asdict(item) for item in self._target_service_ports(port_transcript, target)]
+        except ValueError:
+            return ActionOutcome('BLOCKED', (), (), 'OLT_SERVICE_PORT_READ_UNRECOGNIZED')
         return self._pass(
             "olt.configuration_snapshot",
             {"registration": registration, "wan": wan, "service_ports": service_ports},
@@ -382,11 +385,22 @@ class MA5800Actions:
         requested = self._service_ports(context.parameters)
         if requested:
             ports = self.executor.run(SafeMA5800Command("display_service_ports", (self._fsp(target), target["ont_id"])))
-            owned = {item.service_port_id for item in parse_service_ports(ports.normalized_output)
-                     if item.fsp == self._fsp(target) and item.ont_id == target["ont_id"]}
-            if self._read_failed(ports) or not set(requested) <= owned:
+            try:
+                owned = {item.service_port_id for item in self._target_service_ports(ports, target)}
+            except ValueError:
+                return 'OLT_SERVICE_PORT_OWNERSHIP_UNCONFIRMED'
+            if not set(requested) <= owned:
                 return "OLT_SERVICE_PORT_OWNERSHIP_UNCONFIRMED"
         return None
+
+    @classmethod
+    def _target_service_ports(cls, transcript, target):
+        if cls._read_failed(transcript):
+            raise ValueError('Service-port query failed')
+        ports = parse_service_ports(transcript.normalized_output)
+        if any(item.fsp != cls._fsp(target) or item.ont_id != target['ont_id'] for item in ports):
+            raise ValueError('Service-port target scope mismatch')
+        return ports
 
     @staticmethod
     def _service_ports(parameters: Mapping[str, Any]) -> list[int]:

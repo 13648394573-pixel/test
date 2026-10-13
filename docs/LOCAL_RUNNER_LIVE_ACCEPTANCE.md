@@ -302,3 +302,87 @@ SN 校验、配置审批、命令构造、数据库设计、快照和 LOCKED 规
 这些软件测试不等于现场复验或完整业务 PASS。本轮修改尚未提交/推送，
 main 未修改。下一步审核固化修复后，独立只读复验端口查询；任何注册/WAN
 配置变更仍须核对目标、空闲 ID 及实际影响范围并得到明确批准。
+
+## 端口修复后独立现场只读复验（2026-10-13）
+
+代码基线 7439b2ef90fa9601e3f6b0316b4529a294d7e165。读取新会话
+cc0d9351-50b2-452e-952d-f63fa00bc222 的冻结 RuntimeBinding 与参数，
+直接调用真实 BoundExecutionRuntime：snapshot_ont / find_free_ont_id 均 PASS，
+error_code=None。没有启动应用或推进已有会话，旧 FREE_ID BLOCKED 事件保留。
+
+- 规范化 SN 与冻结 SN 一致；0/2/9、ONT-ID 14、Profile 10/10。
+- 注册状态 online / failed / match；Config state=failed 仍保留原始观察。
+- PPPoE：IP Host index 1、VLAN 1000、CONNECTED。
+- IPoE：IP Host index 2、VLAN 1000、CONNECTED。
+- 当前 WAN index 与冻结测试参数（PPPoE=0、IPoE=1）不同；不覆盖现有 WAN，
+  不以 Connected 代替 Ping/O5/Internet PASS。解析出的 service-port 数量为 0，
+  本轮不把这个值当作完整所有权或删除影响范围证明。
+- 空闲 ONT ID 观察为 16，仅为本时点只读查询，不是注册授权或永久预留。
+- 4 份独立文本/PNG 证据的大小及 SHA256 校验通过，位于已忽略的
+  data/local-runner/port-readonly-recheck-20261013/；不是新增平台 Evidence。
+- 验收库及正式库 SHA256 均前后一致；设备配置写入 0。
+
+结论：两项解析兼容修复的现场只读复验 PASS；完整业务执行继续 HOLD。
+下一步先明确现有注册/WAN 保留或替换策略及 service-port 影响范围，
+任何使用 ID 16、删除 ONT 14、重新注册或 WAN 下发都必须另行明确批准。
+本轮仅追加文档，未提交/推送，未修改业务代码或历史 Run。
+
+## service-port 影响范围只读核对（2026-10-13）
+
+用户同意保留现有注册/WAN，核对影响范围。离线检查上一轮最新真实只读
+证据 f14b1f3059004b05850c6690367a00a4.txt 的 display service-port 段，
+原文包含 Huawei Switch-Oriented Flow List：
+
+service-port 288，VLAN 1000，gpon 0/2 /9，ONT 14，GEM 1，
+FLOW TYPE vlan / FLOW PARA 1000，STATE up；Total : 1。
+
+用现有 parse_service_ports 重放该证据，结果数量仍为 0。该解析器仅支持
+精简的六列数字行，不能识别现场带 common/gpon/vlan/state 列的真实表格。
+因此先前“解析出的 service-port 数量 0”不代表设备没有 service-port；
+已定位影响范围包含 service-port 288。原平台快照不回写，原证据继续保留。
+snapshot_ont 返回 PASS 仅说明现有动作门禁通过，不足以证明配置快照完整。
+在修复真实表格解析及非空表格不可静默当空的门禁前，不允许基于该快照删除注册。
+
+WAN 编号补充：参考技能记录指出 MA5603T 的零基命令索引 0/1 会显示为
+WAN Index 1/2；本次 MA5800 的实际索引语义还需核对，不能仅凭显示 1/2
+认定冻结参数 0/1 与当前配置冲突，不应据此覆盖现有 WAN。
+
+本轮仅读取已有证据并离线重放，没有新增设备连接/配置写入，没有修改业务代码、
+数据库或历史 Run。完整配置变更门禁继续 HOLD。建议下一步 TDD 覆盖现场
+完整 service-port 表格、精简格式兼容、严格目标归属及解析失败拒绝；等待批准。
+
+## service-port 完整表格解析及失败保护修复（2026-10-13）
+
+用户批准继续，范围仅为解析、快照/归属门禁及测试。采用 TDD：最终初始用例
+修复前 15 failed / 5 passed；首次修复后相关 63 passed。独立审核指出
+非数字未知内容及异常 Total 可被忽略，亲自补测复现 3 failed / 20 passed；
+进一步补测标题缺失和尾行后未知内容，复现 2 failed / 23 passed。
+最终统一验证整段输出的命令包络、已知表头/分隔线、完整 Total、已知说明行；
+未知内容、截断完整表格、数量矛盾和重复 service-port 均拒绝，不当作空表。
+保留六列精简格式；空表必须由合法 Total : 0 明确证明。
+
+快照采集和已批准变更前的所有权检查共用严格 F/S/P + ONT ID 验证；
+异常或归属不一致时 BLOCKED，不生成假完整配置快照。未改变 SN 校验、
+配置审批、命令构造、数据库设计、历史快照或 LOCKED 规则。
+
+初轮全量出现集成测试失败，随后单模块复现 5 failed / 5 passed：
+- test_api_to_runtime_to_evidence_chain[False-None]。
+- test_api_to_runtime_to_evidence_chain[True-None]。
+- test_api_to_runtime_to_evidence_chain[False-PPPOE]。
+- test_repeated_connection_wait_does_not_enter_recovery。
+- test_external_failure_is_blocked_and_retains_evidence[selector]。
+原因是该文件 Lab.cli 的 service-port 查询替身返回通用 Command executed
+successfully，不能证明空表。仅增加两行明确返回 Total : 0，原断言全部保留，
+没有让生产解析接受通用成功冒充空表，也未修改测试期待状态。
+
+最终相关动作/解析/端口/API 集成测试 78 passed（27.06s）；重新完整后端
+回归 588 passed（313.17s）。独立复核无剩余 Critical/Important/Minor，
+审核者自行运行 service-port 与 binding acceptance 测试 35 passed。
+
+最终解析器离线重放此前完整真实脱敏证据（包含 Huawei 说明尾段），正确输出
+service-port 288 / VLAN 1000 / FSP 0/2/9 / ONT 14 / GEM 1 / USER VLAN 1000。
+这是历史证据离线重放，不是新的现场查询或平台 Run；旧错误快照不回写。
+本轮没有连接设备、修改现场验收库/正式库或推进会话。main 未修改。
+本轮业务修复及文档尚未提交/推送；完整执行闭环继续 HOLD。
+下一步审核固化修复，再进行独立只读现场复验；任何注册/WAN 配置变更
+仍须明确批准，并使用能够证明完整影响范围的新快照。

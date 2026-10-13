@@ -209,22 +209,77 @@ def parse_ont_port_target(value: str, fsp: str, ont_id: int) -> OntStateObservat
 
 
 def parse_service_ports(value: str) -> tuple[ServicePortObservation, ...]:
+    normalized = normalize_cli_output(value)
+    if re.search(r'(?im)^(?:Failure\s*:|Error\s*:|%\s*)', normalized):
+        raise ValueError('Service-port query failed')
     observations: list[ServicePortObservation] = []
-    row = re.compile(
-        r"(?m)^\s*(\d+)\s+(\d+)\s+(\d+\s*/\s*\d+\s*/\s*\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s*$"
+    compact = re.compile(
+        r"(\d+)\s+(\d+)\s+(\d+\s*/\s*\d+\s*/\s*\d+)\s+(\d+)\s+(\d+)\s+(\d+)"
     )
-    for match in row.finditer(normalize_cli_output(value)):
+    full = re.compile(
+        r"(\d+)\s+(\d+)\s+common\s+gpon\s+(\d+\s*/\s*\d+\s*/\s*\d+)"
+        r"\s+(\d+)\s+(\d+)\s+vlan\s+(\d+)\s+(?:-|\d+)\s+(?:-|\d+)\s+(?:up|down)",
+        re.IGNORECASE,
+    )
+    full_table = 'switch-oriented flow list' in normalized.casefold()
+    totals: list[int] = []
+    header_tokens = {'INDEX', 'VLAN', 'PORT', 'F/', 'S/', 'P', 'F/S/P', 'VPI', 'VCI',
+                     'FLOW', 'RX', 'TX', 'STATE', 'ID', 'ATTR', 'TYPE', 'PARA',
+                     'ONT', 'GEM', 'USER-VLAN'}
+    legend_lines = {
+        'Note : F--Frame, S--Slot, P--Port,',
+        'VPI indicates ONT ID for PON, VCI indicates GEM index for GPON,',
+        'v/e--vlan/encap, pritag--priority-tagged,',
+        'ppp--pppoe, ip--ipoe, ip4--ipv4oe, ip6--ipv6oe, vxl--vxlan.',
+        'When FLOW TYPE is plist, the value of FLOW PARA is a byte in',
+        'hexadecimal format and indicates a priority list. Eight bits',
+        'of its binary value indicate priorities 0-7 from the least',
+        'significant bit to the most significant bit. Value 1 indicates',
+        'that the priority is used. For example, if FLOW PARA is 0x23 and',
+        'its binary format is 0010 0011, priorities 0, 1 and 5 are used',
+    }
+    seen_ids: set[int] = set()
+    for line in normalized.splitlines():
+        if line.casefold() == 'switch-oriented flow list':
+            continue
+        if re.match(r'(?i)^Total\b', line):
+            footer = re.fullmatch(r'Total\s*:\s*(\d+)(?:\s+\(Up/Down\s*:\s*\d+/\d+\))?',
+                                  line, re.IGNORECASE)
+            if footer is None:
+                raise ValueError('Invalid service-port total')
+            totals.append(int(footer.group(1)))
+            continue
+        if not re.match(r'^\d', line):
+            envelope = (PROMPT_LINE.fullmatch(line) or line == 'Command:' or
+                re.fullmatch(r'\{[ \t]*<cr>[^{}]*\}:', line) or
+                re.fullmatch(r'display service-port port \d+\s*/\s*\d+\s*/\s*\d+ ont \d+', line))
+            if not (envelope or re.fullmatch(r'-+', line) or
+                    all(token in header_tokens for token in line.upper().split()) or
+                    (totals and ' '.join(line.split()) in legend_lines)):
+                raise ValueError('Unrecognized service-port table content')
+            continue
+        match = compact.fullmatch(line) or full.fullmatch(line)
+        if match is None:
+            raise ValueError('Unrecognized service-port row')
+        full_table |= full.fullmatch(line) is not None
         service_port, vlan, fsp, ont_id, gemport, user_vlan = match.groups()
+        if int(service_port) in seen_ids:
+            raise ValueError('Duplicate service-port identity')
+        seen_ids.add(int(service_port))
         observations.append(
             ServicePortObservation(
                 service_port_id=int(service_port),
                 vlan=int(vlan),
-                fsp=fsp.replace(" ", ""),
+                fsp=re.sub(r'\s', '', fsp),
                 ont_id=int(ont_id),
                 gemport=int(gemport),
                 user_vlan=int(user_vlan),
             )
         )
+    if len(totals) > 1 or (totals and totals[0] != len(observations)):
+        raise ValueError('Service-port total does not match parsed rows')
+    if (full_table and not totals) or (not observations and totals != [0]):
+        raise ValueError('Service-port completeness cannot be confirmed')
     return tuple(observations)
 
 

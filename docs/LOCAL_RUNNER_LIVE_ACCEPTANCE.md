@@ -254,3 +254,51 @@ SN/FSP/ONT-ID 的严格身份比较未修改；未新增功能或执行数据库
 Config state=failed 继续保留原始观察；本次未核验 O5、WAN 连通或注册/WAN变更。
 尚未提交/推送本轮修改；下一步审核修复，再决定新会话及配置变更审批，
 不得把旧 BLOCKED 记录改写成 PASS。
+
+## 已授权旧会话收尾与新 Run 预检（2026-10-13）
+
+用户批准通过正常流程将旧会话收尾为 BLOCKED，再创建新 Run。
+操作前 SQLite 在线备份：acceptance-before-new-run-20261013-112126-730226.db；
+SHA256：1f6bc8f1a329ef82049ba89dcec76dd0ba5cef6e708473a1a1a77e86602cda77。
+备份 integrity_check=ok，位于已忽略的独立验收目录。
+
+通过现有 SkillExecutionService/Coordinator 调用 advance → END_POLICY KEEP →
+advance，旧会话 fef38db6-5988-43b1-9a60-3750a3e2df32 最终为 BLOCKED，
+旧 Result=BLOCKED / DRAFT，未锁定。没有把旧阻塞判为 PASS。
+只追加正常收尾事件及派生评估；原 case/skill/parameter 快照和版本字段逐值一致，
+原执行事件前缀逐行一致。未启动应用 lifespan，因此未触发旧任务重启恢复。
+这是现有业务 Service 的现场验收，不是浏览器或 HTTP 启动/重启验收。
+
+- 新 Session：cc0d9351-50b2-452e-952d-f63fa00bc222。
+- 新 Run：55ee49bf-2fc0-4930-9d3d-8c6856f55b50。
+- 新 Result：588bf0e5-a437-40d0-b0b3-768d2c479c50。
+- PREFLIGHT / AUTOFIND / SNAPSHOT 均 PASS；FREE_ID 为 BLOCKED。
+- 新会话暂为 RUNNING / DRAFT；未推进 FINISH，也未批准配置变更。
+- 6 份平台证据均通过文件大小及 SHA256 校验；未声称本轮 HTTP 下载验收。
+- 正式 data/test_workbench.db 的 SHA256 未变；验收库 foreign_key_check 无异常。
+- 删除注册、注册和 WAN 下发均未执行，设备配置写入 0。
+
+FREE_ID 的已存只读端口证据显示表格位置为「0/ 2/9」，含斜杠旁空格。
+当前 _port_read_valid 和 used-ID 提取使用固定「0/2/9」正则，不能匹配该格式。
+证据中端口有 17 个 ONT；未将“解析失败”误报为“没有空闲 ID”，也未擅自选 ID。
+下一步应 TDD 修复端口位置格式识别及 used-ID 提取/占用校验的一致性，
+保留严格目标匹配；本轮只定位原因，未修改业务代码。
+完整执行闭环继续 HOLD；新任务阻塞记录保留，不绕过门禁。
+
+## 端口空格格式兼容修复（2026-10-13）
+
+按批准的下一步采用 TDD：新增端口格式测试修复前 6 failed / 3 passed，
+失败覆盖含空格/制表符端口的空闲 ID 识别、注册占用 ID 判断及满端口判断。
+修复后解析/动作/端口相关测试 43 passed（0.95s）；完整后端回归
+563 passed（311.42s）。独立只读代码审核无 Critical/Important/Minor 问题，
+审核者自行运行端口与既有动作/审批保护测试 23 passed。
+
+最小改动为 MA5800Actions._port_pattern：仅允许斜杠两侧水平空格/制表符，
+端口读取验证、已用 ID 提取和注册前占用检查共用该规则。F/S/P 数字分量
+与 ID 边界保持严格，0/2/100 不会匹配目标 0/2/10；已占用 ID 仍阻止注册。
+SN 校验、配置审批、命令构造、数据库设计、快照和 LOCKED 规则未修改。
+
+本轮未连接设备、未修改现场验收库或旧 Run，未重试已有 FREE_ID 阻塞会话；
+这些软件测试不等于现场复验或完整业务 PASS。本轮修改尚未提交/推送，
+main 未修改。下一步审核固化修复后，独立只读复验端口查询；任何注册/WAN
+配置变更仍须核对目标、空闲 ID 及实际影响范围并得到明确批准。

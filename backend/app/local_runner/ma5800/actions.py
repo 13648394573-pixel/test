@@ -170,7 +170,7 @@ class MA5800Actions:
         used = {
             int(item)
             for item in re.findall(
-                rf"(?m)^\s*{re.escape(self._fsp(target))}\s+(\d+)\s+", transcript.normalized_output
+                rf"(?m)^[ \t]*{self._port_pattern(target)}[ \t]+(\d+)[ \t]+", transcript.normalized_output
             )
         }
         free = next((item for item in range(128) if item not in used), None)
@@ -349,7 +349,7 @@ class MA5800Actions:
     def _port_read_valid(cls, transcript, target):
         text = transcript.normalized_output
         return not cls._read_failed(transcript) and bool(
-            re.search(rf'(?im)^\s*{re.escape(cls._fsp(target))}\s+\d+\s+[0-9a-f]{{16}}\b', text)
+            re.search(rf'(?im)^[ \t]*{cls._port_pattern(target)}[ \t]+\d+[ \t]+[0-9a-f]{{16}}\b', text)
             or re.search(r'(?i)The number of ONTs is\s+0\b', text))
 
     def _revalidate_mutation(self, context, target):
@@ -362,7 +362,7 @@ class MA5800Actions:
             port = self.executor.run(SafeMA5800Command("display_ont_port", (target["pon_port"],)))
             if not self._port_read_valid(port, target):
                 return "OLT_PORT_READ_UNRECOGNIZED"
-            if re.search(rf'(?m)^\s*{re.escape(self._fsp(target))}\s+{target["ont_id"]}\s+',
+            if re.search(rf'(?m)^[ \t]*{self._port_pattern(target)}[ \t]+{target["ont_id"]}[ \t]+',
                          port.normalized_output):
                 return "OLT_ONT_ID_IN_USE"
             discovery = self.executor.run(SafeMA5800Command("display_autofind", ()))
@@ -398,6 +398,10 @@ class MA5800Actions:
     @staticmethod
     def _fsp(target: Mapping[str, Any]) -> str:
         return f"{target['frame']}/{target['slot']}/{target['pon_port']}"
+
+    @classmethod
+    def _port_pattern(cls, target: Mapping[str, Any]) -> str:
+        return r"[ \t]*/[ \t]*".join(re.escape(part) for part in cls._fsp(target).split("/"))
 
     @staticmethod
     def _pass(

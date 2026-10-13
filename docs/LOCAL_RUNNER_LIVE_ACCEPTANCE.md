@@ -386,3 +386,73 @@ service-port 288 / VLAN 1000 / FSP 0/2/9 / ONT 14 / GEM 1 / USER VLAN 1000。
 本轮业务修复及文档尚未提交/推送；完整执行闭环继续 HOLD。
 下一步审核固化修复，再进行独立只读现场复验；任何注册/WAN 配置变更
 仍须明确批准，并使用能够证明完整影响范围的新快照。
+
+## service-port 修复后的现场只读复验（2026-10-13）
+
+代码基线 598b7ff5d185e54592c34b5ea1268466f43b965c，使用已有新会话
+cc0d9351-50b2-452e-952d-f63fa00bc222 的冻结目标直接调用真实 Runtime，
+重新执行 snapshot_ont 与 find_free_ont_id，两项均 PASS、error_code=None。
+这是新采集的独立只读 Runtime 快照，不是覆盖旧平台 ConfigurationSnapshot，
+也未启动应用、推进旧会话或创建平台 Evidence。
+
+- SN 与冻结 SN 一致；0/2/9、ONT 14、Profile 10/10。
+- 注册状态 online / failed / match；Config failed 仍作为观察保留。
+- PPPoE 显示 index 1、IPoE 显示 index 2，均 VLAN 1000 / CONNECTED。
+  未据显示编号推定命令索引冲突，未测试 O5 或 WAN Ping/网络连通。
+- 本次新快照确实包含 service-port 288：VLAN 1000、FSP 0/2/9、ONT 14、
+  GEM 1、USER VLAN 1000；字段逐项核验通过，非此前旧证据的离线重放。
+- 当前空闲 ONT ID 为 16，尚未授权注册，也没有永久预留。
+- 本次 4 份新文本/PNG 证据在已忽略的 port-readonly-recheck-20261013 目录，
+  文件大小及 SHA256 全部通过；保留该目录此前的证据，未覆盖。
+- 验收库和正式库的文件 SHA256 前后一致，历史 Run/事件/快照没有改写。
+  设备配置写入 0；未删除 ONT 或 service-port，未下发 WAN、未修改 LAN/NAT。
+
+结论：SN、端口及 service-port 解析修复的现场只读门禁复验 PASS；完整
+平台执行闭环仍未完成。可以保留现有注册继续核验 O5 与分 WAN 连通性，
+但删除 ONT 14/service-port 288 或用 ID 16 重注册仍需独立核对完整变更预览
+并获得明确批准；当前只读成功不等于配置操作或恢复路径获准。
+本轮仅追加验收文档，未提交/推送。
+
+## 保留配置的真实 PON 与分 WAN 业务诊断（2026-10-13）
+
+代码基线 598b7ff5d185e54592c34b5ea1268466f43b965c，继续使用已有会话
+冻结的 ONU Web 目标和操作系统凭据引用，不启动平台、不改配置或旧数据。
+首次登录后的页面未直接确认 SN；按现场实际 Device 链接进入 status.asp，
+读取序列号字段后与冻结目标一致，才继续。认证成功不被当作身份匹配证据。
+
+使用项目现有 NeutralPlaywrightSurface/NeutralONUWebAdapter 本地执行，
+PON 只读采集使用现场已观察到的 status_pon.asp 链接。截图已人工核对确为
+Status > PON，不使用 WAN 截图替代光功率证据。两次读数均 O5 / ONU ID 14：
+- 初次 TX 2.322856 dBm、RX -13.496925 dBm。
+- PPPoE 补测前 TX 2.305779 dBm、RX -13.477537 dBm。
+光功率仅记录测量值，未新增合格范围或据两次采样声称长期稳定性。
+
+ONU Web 两路 WAN 均 VLAN 1000/up：IPoE nas0_1，PPPoE ppp0_nas0_0。
+诊断下拉实际选择 IPoE value 130817（截图显示 nas0_1）、PPPoE value
+65536（截图显示 ppp0），没有使用 Any/默认接口作为分路证据。
+每个目标均为 4 发 4 收，0% 丢包；平均 RTT：
+
+| WAN | 网关 | 公网 IP 1.1.1.1 | 域名 www.baidu.com |
+| --- | --- | --- | --- |
+| IPoE | 1.913 ms | 55.135 ms | 8.865 ms |
+| PPPoE | 1.679 ms | 58.574 ms | 18.824 ms |
+
+首次辅助验收脚本把 PPPoE 的「up + 在线时长」误判为未在线，跳过了 Ping，
+没有报告假失败或假 PASS。只修正已忽略临时脚本的严格状态格式识别，
+再次仅补测 PPPoE；未改产品代码或测试断言。初轮生成 12 份证据，补测轮
+生成 10 份（含再次 PON/WAN 采集），共 22 份脱敏 PNG/文本，大小与 SHA256
+均经现有 EvidenceStorage 保存后校验。目录为 main 已忽略的
+data/local-runner/web-business-20261013/independent-probe/cc0d9351-50b2-452e-952d-f63fa00bc222/。
+
+关键截图：
+- PON：5ddf8ad4-ddb7-4ce8-9c42-de6520792d63.png，补测 PON：af9c22f0-b2ba-4239-a373-28dd606c36b3.png。
+- IPoE 域名 Ping：01240b6b-db12-436c-98fa-7db1c826e118.png。
+- PPPoE 域名 Ping：2a14e27b-9191-4fb9-bf85-5257d414283b.png。
+
+验收库和正式库文件 SHA256 前后不变，配置写入 0。两路内置 Ping 与 O5
+现场诊断 PASS，但不是新平台 Run/Evidence 持久化、注册/WAN 下发或报告归档
+闭环验收；旧 BLOCKED 会话、Result/快照不回写，未 LOCK、未生成新报告/归档。
+本轮未验证电脑侧 DHCP/DNS/NAT、HTTP/HTTPS 或恢复/重注册路径。
+OLT Config state=failed 仍保留为观察，不能因业务 Ping 通过而删去。
+本轮仅追加文档，未提交/推送，未修改业务代码。后续先固化本轮验收记录，
+再评审平台完整闭环与配置变更审批，不把当前诊断成功当作自动批准。

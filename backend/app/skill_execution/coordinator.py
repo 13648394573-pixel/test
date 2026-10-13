@@ -125,6 +125,27 @@ class SkillCoordinator:
     def _snapshot(self, execution):
         return deepcopy(execution.configuration_snapshots[0].snapshot_json) if execution.configuration_snapshots else {}
 
+    @staticmethod
+    def _owned_snapshot_ports(parameters):
+        snapshot = parameters.get('configuration_snapshot')
+        ports = snapshot.get('service_ports') if isinstance(snapshot, dict) else None
+        if not isinstance(ports, list):
+            raise ValueError('Configuration service-port scope is unconfirmed')
+        target_fsp = '/'.join(str(parameters[key]) for key in ('frame', 'slot', 'pon_port'))
+        seen, owned = set(), []
+        for item in ports:
+            if (not isinstance(item, dict) or type(item.get('service_port_id')) is not int
+                    or not 0 <= item['service_port_id'] <= 65535
+                    or not isinstance(item.get('fsp'), str)
+                    or re.fullmatch(r'(?:0|[1-9][0-9]*)/(?:0|[1-9][0-9]*)/(?:0|[1-9][0-9]*)', item['fsp']) is None
+                    or type(item.get('ont_id')) is not int or not 0 <= item['ont_id'] <= 127
+                    or item['service_port_id'] in seen):
+                raise ValueError('Configuration service-port scope is unconfirmed')
+            seen.add(item['service_port_id'])
+            if item['fsp'] == target_fsp and item['ont_id'] == parameters['ont_id']:
+                owned.append(item['service_port_id'])
+        return sorted(owned)
+
     def _preview(self, result, step):
         target = {key: result.parameter_snapshot[key] for key in
                   ('frame','slot','pon_port','ont_id','onu_serial_number')}
@@ -211,6 +232,8 @@ class SkillCoordinator:
                 for o in e.payload_json.get('observations', []) if o['fact_key'] == 'olt.free_ont_id']
         if free and step['ref'] not in {'SNAPSHOT','DELETE_EXISTING'}:
             parameters['ont_id'] = free[-1]
+        if step['action'] in MUTATIONS:
+            parameters['affected_service_ports'] = self._owned_snapshot_ports(parameters)
         interaction = next((i for i in execution.operator_interactions if i.interaction_ref == step['ref'] and i.status == 'COMPLETED'), None)
         if interaction is not None:
             parameters['mutation_approval'] = {'approved':True,'preview_hash':interaction.impact_preview['preview_hash']}

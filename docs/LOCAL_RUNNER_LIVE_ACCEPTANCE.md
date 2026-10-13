@@ -456,3 +456,28 @@ data/local-runner/web-business-20261013/independent-probe/cc0d9351-50b2-452e-952
 OLT Config state=failed 仍保留为观察，不能因业务 Ping 通过而删去。
 本轮仅追加文档，未提交/推送，未修改业务代码。后续先固化本轮验收记录，
 再评审平台完整闭环与配置变更审批，不把当前诊断成功当作自动批准。
+
+## 审批预览 service-port 影响范围修复（2026-10-13）
+
+本轮只修复可信 ConfigurationSnapshot 中 service-port 未进入配置变更审批
+预览的问题，不实现 service-port 创建/生命周期、前端接入或设备配置操作。
+SkillCoordinator 在生成变更预览前读取冻结快照，校验每条记录的 ID、规范
+FSP、ONT ID 和重复项，仅提取有效目标 FSP/ONT 的 service-port，并排序后
+传入 affected_service_ports。注册使用空闲新 ONT ID 时不继承旧 ONT 端口。
+已知空表保留兼容；缺失、异常或前导零 FSP 等不确定范围拒绝生成审批。
+
+新增测试验证单条/多条/空表、相邻端口或 ONT 排除、快照与哈希不变、旧空
+范围哈希无法批准新的非空预览，以及异常范围拒绝且不创建审批或启动动作。
+测试执行器禁止真实设备调用；本轮未连接设备、启动现场平台或改写历史库。
+
+TDD：首次新增范围测试 11 failed / 2 passed；首次修复相关测试 55 passed。
+独立审核发现前导零 FSP 边界后，补充反例得到 2 failed / 13 passed，再修复。
+最终相关测试 57 passed（84.12s）；独立复核范围测试 15 passed（24.98s），
+无剩余 Critical/Important 意见。最终完整后端回归 603 passed（326.85s），
+使用 no:cacheprovider、PYTHONDONTWRITEBYTECODE 和独立临时目录。
+此前一次全量运行主动中断，不计作通过结果。
+
+本轮未改数据库结构、Snapshot/LOCKED 规则、设备命令或恢复保护；完整 WAN
+恢复仍不支持，完整平台执行闭环继续 HOLD。本轮未改前端、未运行前端测试。
+修复、测试及本记录尚未提交/推送；下一步先审核固化本轮修复，再逐项评审
+剩余闭环缺口，不能据本次测试通过批准现场注册、WAN 下发或恢复操作。

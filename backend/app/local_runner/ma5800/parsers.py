@@ -129,12 +129,37 @@ def parse_autofind(value: str) -> tuple[AutofindObservation, ...]:
     return tuple(observations)
 
 
+def _parse_ont_serial(value: str) -> str:
+    serial_fields = re.findall(
+        r"(?im)^(?:SN|Ont SN)[ \t]*:[ \t]*(.*)$", normalize_cli_output(value)
+    )
+    if len(serial_fields) != 1:
+        raise ValueError("Expected exactly one MA5800 serial field")
+    match = re.fullmatch(
+        r"([0-9a-f]{16})(?:[ \t]+\(([a-z0-9]{4})-([0-9a-f]{8})\))?",
+        serial_fields[0],
+        re.IGNORECASE | re.ASCII,
+    )
+    if match is None:
+        raise ValueError("Invalid MA5800 serial format")
+    serial, vendor, suffix = match.groups()
+    serial = serial.upper()
+    if vendor is not None:
+        try:
+            expected_vendor = bytes.fromhex(serial[:8]).decode("ascii").upper()
+        except UnicodeDecodeError as exc:
+            raise ValueError("Invalid MA5800 serial annotation") from exc
+        if vendor.upper() != expected_vendor or suffix.upper() != serial[8:]:
+            raise ValueError("Inconsistent MA5800 serial annotation")
+    return serial
+
+
 def parse_ont_state(value: str) -> OntStateObservation:
     fields = _safe_fields(value)
     return OntStateObservation(
         fsp=_required(fields, "F/S/P").replace(" ", ""),
         ont_id=int(_required(fields, "ONT-ID", "ONT ID")),
-        serial_number=_required(fields, "SN", "Ont SN").upper(),
+        serial_number=_parse_ont_serial(value),
         run_state=_required(fields, "Run state").lower(),
         config_state=_required(fields, "Config state").lower(),
         match_state=_required(fields, "Match state").lower(),

@@ -162,3 +162,95 @@ LOCAL_RUNNER 先被 CHECK 拒绝（2 failed / 1 passed），再实施修复。
 关联多个 Result，也未直接覆盖已有 ExecutionSession/Result 双向引用的升级场景。
 前述测试覆盖表述已收窄；不将这些未直接覆盖的场景写成已验收。
 现场操作、正式数据库升级及真实 DUT 闭环不属于此次代码审核结论。
+
+## 第一步：独立验收数据库备份与升级（2026-10-13）
+
+日期/时区：2026-10-13，Asia/Shanghai。代码基线：codex/skill-execution，
+b2eb172de33faaa5b4992bb4219605feb630777b；执行前工作区干净。
+仅处理主工作区 data/local-runner/platform-live-20261012/acceptance.db，
+没有启动应用、创建会话、连接 ONU/OLT 或推进配置动作。
+
+先使用 SQLite backup API 创建一致性备份，再验证备份完整性、外键及全部业务表数据。
+备份：acceptance-before-0022-20261013-090531-258509.db（与验收库同目录，被 Git 忽略）。
+SHA256：eba3db3f454f4ddb41c532df35e7e7c0b7a867af1b74bbead0b955ee30376e50。
+备份版本为 20260918_0021，integrity_check=ok，foreign_key_check 无异常。
+
+实际升级：20260918_0021 → 20261012_0022；使用现有 Alembic 迁移，未手工改库。
+升级后 integrity_check=ok，foreign_key_check 无异常；43 张业务表的行数及全部行
+内容摘要与备份一致（不把 alembic_version 版本变更计作业务数据变化）。
+TestRun / RunResult / ExecutionSession / ExecutionEvent 均保持 0。
+正式 data/test_workbench.db 升级前后文件 SHA256 相同；没有执行正式库迁移。
+
+第一步结果：PASS。辅助脚本、备份和验收库均仅在已忽略的 data/local-runner/ 下。
+仅文档追加属于本轮 Git 变更，未提交或推送。真实平台会话验收尚未开始，
+没有解除现场闭环门禁；下一步才创建新会话并核对目标及审批影响范围。
+
+## 第二步：新平台会话与只读现场预检（2026-10-13）
+
+使用已升级的独立验收库，真实 Runtime/凭据/OLT 通过现有 FastAPI Router 创建会话。
+调用由本机 TestClient 调度（不是浏览器 UI 一键验收）；没有替换现场 SSH I/O。
+POST /api/skill-executions 返回 201，原迁移约束 409 已解除。
+
+- Session：fef38db6-5988-43b1-9a60-3750a3e2df32。
+- TestRun：5afd8d6a-5b80-46b9-8ba0-6406dd38d883。
+- RunResult：6896b829-e3e3-4e16-8832-f5ab45f8a3e7。
+- PREFLIGHT、AUTOFIND 动作 PASS；AUTOFIND 查询成功不等于目标未注册 ONU 已上报。
+- SNAPSHOT 动作 BLOCKED；平台当前仍为 RUNNING / DRAFT，未完成或 LOCK。
+
+平台生成并保存 4 份证据，列表及下载全部 200，每份下载内容大小及 SHA256
+与元数据一致。数据库现有 Run/Result/Session 各 1；配置变更动作开始事件为 0。
+尚无审批交互；没有删除注册、重新注册、WAN 下发、修改 LAN/NAT 或覆盖旧 Run。
+
+脱敏注册文本显示 F/S/P 0/2/9、ONT-ID 14、online / failed / match。
+独立只读 Runtime 复核返回 OLT_TARGET_IDENTITY_MISMATCH；这是程序身份比较拒绝，
+不是已确认换设备或解析器故障的根因。首次临时复核未提供证据目录，返回泛化 I/O
+阻塞，不能据此判断现场网络故障；补齐证据目录后才得到上述具体身份阻塞码。
+该复核生成的两份诊断证据位于已忽略目录，未冒充新增平台 Evidence。
+
+结论：平台创建/持久化/证据下载校验 PASS；真实执行闭环仍 HOLD。
+先核对 SN/FSP/ONT-ID 的实际值和解析比较差异，不绕过身份门禁，不批准变更。
+本轮没有业务代码修改、提交或推送，仅追加验收文档；独立验收库新增真实预检记录。
+
+## 身份阻塞只读根因核对（2026-10-13）
+
+从已有会话冻结参数读取目标，只读执行 display ont info by-sn，比较 OLT 原始
+身份字段与现有 parse_ont_state 的输出。F/S/P 均为 0/2/9，ONT-ID 均为 14。
+OLT SN 字段格式为「16 位十六进制 SN (厂商 ASCII 显示名)」，十六进制部分与
+冻结 SN 完全一致（本文继续只保留尾号 C999，不补写完整序列号）。
+现有解析器对整个字段执行 upper()，没有规范化括号内显示名；_same_identity
+将整段字符串与纯十六进制 SN 比较，因此返回 OLT_TARGET_IDENTITY_MISMATCH。
+本次查明的是解析兼容问题，不是发现目标位置或实际十六进制 SN 改变。
+
+未修改身份校验、数据库快照、Run、设备配置或业务代码。临时诊断首个调用因
+导入不存在的命令模块失败，尚未连接设备；改用现有 transport 命令类型后完成查询。
+修复建议待批准：TDD 覆盖纯十六进制、已确认的括号显示格式、异常/歧义字段及
+真正不匹配的身份；仅规范化 SN 解析，不绕过严格的 SN/FSP/ONT-ID 比较。
+修复后保留本次阻塞历史，新会话/后续处置另行决定，不回写旧冻结参数。
+
+## SN 格式最小修复与独立只读复验（2026-10-13）
+
+按批准范围采用 TDD：新增测试先出现 13 failed / 21 passed，复现括号显示名
+误拦截及异常/歧义字段被接受；修复后同组测试 34 passed（0.79s）。
+完整后端回归 554 passed（320.75s）。仅修改 parse_ont_state 的 SN 解析和测试：
+接受 16 位十六进制及一致的厂商显示注释，拒绝重复、矛盾和额外尾随字段。
+SN/FSP/ONT-ID 的严格身份比较未修改；未新增功能或执行数据库迁移。
+
+使用已有会话冻结的 RuntimeBinding 和 parameter_snapshot，只读打开独立验收库，
+直接调用真实 BoundExecutionRuntime.snapshot_ont；未启动应用、未推进旧会话。
+本次不是浏览器一键验收或新平台 Run，证据不冒充新增平台 Evidence。
+
+- SNAPSHOT_STATUS=PASS，error_code=None；规范化 SN 与冻结 SN 一致。
+- 位置 0/2/9、ONT-ID 14；online / failed / match。
+- WAN 数量 2，当前解析出的 service-port 数量 0；不据此声称 WAN 连通 PASS。
+- 本轮两份文本/PNG 证据位于 main 已忽略的 data/local-runner/sn-readonly-recheck-20261013/。
+  文件大小和 SHA256 与生成元数据一致。
+- 验收数据库文件 SHA256 前后相同，配置写入为 0；历史 Run/Result/快照未改。
+
+首次辅助调用已读取成功，但证据校验误把相对路径当作工作目录路径，退出 1；
+只修正被忽略的临时脚本路径后，重复只读复验退出 0，证据校验全部通过。
+此辅助脚本错误不是产品解析或设备 I/O 故障。
+
+结论：SN 解析缺陷的软件回归和现场只读复验 PASS；完整真实执行闭环仍 HOLD。
+Config state=failed 继续保留原始观察；本次未核验 O5、WAN 连通或注册/WAN变更。
+尚未提交/推送本轮修改；下一步审核修复，再决定新会话及配置变更审批，
+不得把旧 BLOCKED 记录改写成 PASS。

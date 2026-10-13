@@ -74,6 +74,30 @@ def observation(outcome, fact_key: str):
     return next(item.value for item in outcome.observations if item.fact_key == fact_key)
 
 
+@pytest.mark.parametrize('serial,expected', [
+    ('48575443DD91BBBB (HWTC-DD91BBBB)', 'PASS'),
+    ('4857544311223344 (HWTC-11223344)', 'BLOCKED'),
+])
+def test_snapshot_uses_canonical_serial_without_weakening_identity_guard(serial, expected):
+    class AnnotatedExecutor(FakeExecutor):
+        def run(self, command):
+            result = super().run(command)
+            if command.action_code == 'display_ont_by_sn':
+                raw = result.normalized_output.replace(
+                    'SN                  : 48575443DD91BBBB', 'SN : ' + serial)
+                return CommandTranscript(command.action_code, raw, raw, 'MA5800-X7#', 'a' * 64)
+            return result
+
+    executor = AnnotatedExecutor()
+    outcome = MA5800Actions(executor).snapshot_ont(context('snapshot_ont'))
+    assert outcome.status == expected
+    if expected == 'PASS':
+        assert observation(outcome, 'olt.configuration_snapshot')['registration']['serial_number'] == '48575443DD91BBBB'
+    else:
+        assert outcome.error_code == 'OLT_TARGET_IDENTITY_MISMATCH'
+        assert [c.action_code for c in executor.commands] == ['display_ont_by_sn']
+
+
 def test_register_action_builds_command_only_from_validated_fields() -> None:
     command = build_register_command(valid_registration_parameters())
     assert command.text == (

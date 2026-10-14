@@ -33,7 +33,7 @@ class ServicePortLifecycle:
         self.persist_evidence, self.storage = persist_evidence, storage
         self.delete_device, self.inspect_cleanup_device = delete_device, inspect_cleanup_device
 
-    def _scope(self, sid, mapping):
+    def _scope(self, sid, mapping, *, recovery=False):
         repo = self.repository
         execution = repo.get(sid)
         result = repo.session.get(RunResult, execution.run_result_id)
@@ -41,7 +41,8 @@ class ServicePortLifecycle:
         binding = RuntimeBinding.model_validate(execution.plugin_snapshot['runtime_binding'])
         parameters = result.parameter_snapshot
         fsp = '/'.join(str(parameters[key]) for key in ('frame', 'slot', 'pon_port'))
-        if (execution.status not in {'CREATED', 'RUNNING'}
+        statuses = {'RECOVERY_REQUIRED'} if recovery else {'CREATED', 'RUNNING'}
+        if (execution.status not in statuses
                 or run.execution_plan_snapshot.get('version') != 2 or result.integrity_status == 'LOCKED'
                 or parameters.get('end_policy') != 'KEEP' or mapping.olt_binding_hash != olt_binding_hash(binding)
                 or mapping.fsp != fsp or mapping.ont_id != parameters['ont_id']
@@ -81,8 +82,8 @@ class ServicePortLifecycle:
             valid = False
         return read if valid else replace(read, status='UNCONFIRMED')
 
-    def _capture(self, sid, mapping, *, cleanup=False):
-        self._scope(sid, mapping)
+    def _capture(self, sid, mapping, *, cleanup=False, recovery=False):
+        self._scope(sid, mapping, recovery=recovery)
         self.repository.session.commit()  # Release the DB boundary before device I/O.
         callback = self.inspect_cleanup_device if cleanup and self.inspect_cleanup_device else self.inspect_device
         outcome = callback(sid, mapping)
@@ -214,6 +215,57 @@ class ServicePortLifecycle:
 
     def _resources(self, sid):
         return replay_port_ledger(sid, self.repository.events(sid))
+
+    def mark_interrupted(self, session_id: str):
+        """Local event processing only: no credentials, device callbacks or file reads."""
+        execution = self.repository.get(session_id)
+        result = self.repository.session.get(RunResult, execution.run_result_id)
+        if (execution.mode != 'DEVELOPMENT' or result is None or result.integrity_status == 'LOCKED'
+                or result.run.execution_plan_snapshot.get('version') != 2
+                or execution.status in {'COMPLETED', 'BLOCKED', 'ERROR', 'CANCELLED'}):
+            raise ValueError('Historical or unversioned execution cannot be marked')
+        for resource in self._resources(session_id):
+            if resource.state not in {'CREATE_PENDING', 'DELETE_PENDING'}:
+                continue
+            intent = next(e for e in self.repository.events(session_id) if e.id == resource.last_event_id)
+            kind = 'PORT_CREATE_UNCERTAIN' if resource.state == 'CREATE_PENDING' else 'PORT_DELETE_UNCERTAIN'
+            self._append(session_id, kind, {**intent.payload_json, 'command_result': 'UNKNOWN',
+                         'captured_at': datetime.now(UTC).isoformat()})
+        return self._resources(session_id)
+
+    def reconcile_interrupted(self, session_id: str):
+        """Explicit read-only device reconciliation; never authorizes or replays a write."""
+        execution = self.repository.get(session_id)
+        result = self.repository.session.get(RunResult, execution.run_result_id)
+        if (execution.status != 'RECOVERY_REQUIRED' or result.integrity_status == 'LOCKED'
+                or result.run.execution_plan_snapshot.get('version') != 2):
+            raise ValueError('Explicit versioned recovery is required')
+        resources = self.mark_interrupted(session_id)
+        for resource in resources:
+            if resource.state not in {'CREATE_UNCERTAIN', 'DELETE_UNCERTAIN'}:
+                continue
+            self._scope(session_id, resource.mapping, recovery=True)
+            if resource.state == 'DELETE_UNCERTAIN':
+                self._creation_proof(session_id, resource)
+                self._proofs(session_id, resource.before_evidence_ids)
+            read = self._capture(session_id, resource.mapping, cleanup=True, recovery=True)
+            self._scope(session_id, resource.mapping, recovery=True)
+            self.repository.append_event(session_id, 'SERVICE_PORT_RECONCILED',
+                dict(operation_id=resource.operation_id, port_id=resource.port_id,
+                     status=read.status, read=port_read_payload(read), automatic_write_authorized=False),
+                'reconcile-' + uuid4().hex)
+            self.repository.session.commit()
+            if resource.state == 'DELETE_UNCERTAIN' and read.status == 'ABSENT' and read.query_port_id == resource.port_id:
+                # This confirms an observation, not a delete command or a successful Run.
+                self._creation_proof(session_id, resource)
+                self._proofs(session_id, resource.before_evidence_ids)
+                intent = next(e for e in self.repository.events(session_id) if e.id == resource.last_event_id)
+                verification = sha256(json.dumps(port_read_payload(read), sort_keys=True,
+                                                 separators=(',', ':')).encode()).hexdigest()
+                self._append(session_id, 'PORT_DELETE_VERIFIED', {**intent.payload_json,
+                    'command_result': 'ABSENT_CONFIRMED', 'after_evidence_ids': list(read.evidence_ids),
+                    'verification_hash': verification, 'captured_at': datetime.now(UTC).isoformat()})
+        return self._resources(session_id)
 
     def _creation_proof(self, sid, resource):
         event = next((e for e in self.repository.events(sid) if e.id == resource.creation_event_id

@@ -448,11 +448,53 @@ class SkillCoordinator:
             ExecutionSession.mode == 'DEVELOPMENT',
             ExecutionSession.run_result_id.is_not(None),
             ExecutionSession.plugin_snapshot['code'].as_string() == 'ONU_LOCAL_RUNNER',
-            ExecutionSession.status.in_(['RUNNING','RESTORING']))))
+            ExecutionSession.status.in_(['CREATED','RUNNING','RESTORING','WAITING_OPERATOR','RECOVERY_REQUIRED']))))
+        recovered = 0
         for execution in executions:
+            result = db.get(RunResult, execution.run_result_id)
+            if result is None or result.integrity_status == 'LOCKED':
+                continue
+            must_recover = execution.status in {'RUNNING', 'RESTORING'}
+            ledger_invalid = False
+            if result.run.execution_plan_snapshot.get('version') == 2:
+                from app.skill_execution.service_port_lifecycle import ServicePortLifecycle
+                lifecycle = ServicePortLifecycle(self.repository, inspect_device=None, create_device=None,
+                    persist_evidence=None, storage=self.storage)
+                try:
+                    resources = lifecycle._resources(execution.id)
+                    pending = any(r.state in {'CREATE_PENDING', 'DELETE_PENDING'} for r in resources)
+                    uncertain = any(r.state in {'CREATE_UNCERTAIN', 'DELETE_UNCERTAIN'} for r in resources)
+                    must_recover |= pending or (uncertain and execution.status != 'RECOVERY_REQUIRED')
+                    if pending:
+                        lifecycle.mark_interrupted(execution.id)
+                except ValueError:
+                    ledger_invalid = True
+                    must_recover |= execution.status != 'RECOVERY_REQUIRED'
+            if not must_recover:
+                continue
+            execution.error_code = 'PORT_LEDGER_UNCONFIRMED' if ledger_invalid else 'PROCESS_RESTARTED'
             self._recovery(execution)
+            recovered += 1
         db.commit()
-        return len(executions)
+        return recovered
+
+    def reconcile_service_ports(self, session_id):
+        from app.local_runner.ma5800.service_port_contracts import ServicePortMapping
+        from app.skill_execution.service_port_lifecycle import ServicePortLifecycle
+        repo = self.repository
+        execution = repo.get(session_id)
+        result = repo.session.get(RunResult, execution.run_result_id)
+        def inspect(_sid, mapping):
+            values = deepcopy(result.parameter_snapshot)
+            values['service_port_mapping'] = mapping.model_dump(mode='json')
+            return self.execute(ActionContext(session_id, 'inspect_service_port', values,
+                self.secrets_for(values, 'inspect_service_port'), self.workspace / session_id))
+        lifecycle = ServicePortLifecycle(repo, inspect_device=inspect, inspect_cleanup_device=inspect,
+            create_device=None, delete_device=None, storage=self.storage,
+            persist_evidence=lambda sid, outcome: self._store_artifacts(repo.get(sid), result,
+                dict(step='FINISH', method='OLT_RENDER'), outcome.artifacts))
+        lifecycle.reconcile_interrupted(session_id)
+        return repo.get(session_id)
 
     def _finalize(self, execution):
         db = self.repository.session

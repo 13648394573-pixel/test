@@ -120,21 +120,24 @@ Task 4 限制：仅接受当前支持的完整映射及显式成功回执；陌�
 - [x] 清理核心 RED 15 failed；Runner/KEEP 接入 RED 3 failed；继续实施前 Runner 再次 RED 2 failed；DELETE 标签 RED 1 failed。仅使用脱敏离线设备替身。
 - [x] 实现逐条核验与 DELETE_INTENT/DELETE_VERIFIED/UNCERTAIN；空清理集合不发生 I/O。未知/旧账本不得用快照已有端口替代，本次创建与原有资源分离；KEEP 追加 PORT_RETAINED。
 - [x] 清理、创建、账本、MA5800 动作、审批、Runner、契约、计划及 Coordinator 相关 204 passed（99.90s）；不自动补建删除资源、不删除 ONT。
-- [ ] 提交建议 `fix(local-runner): clean only verified session service ports`，等待用户指令。完整后端 800 passed（375.68s），详见验收文档与本地实施账本；未现场执行。
+- [x] 已按用户后续指令提交 `fix(local-runner): clean only verified session service ports`（6c53c9f945d6ea45ec86723b41f1c2e8a1ca66ba）。完整后端 800 passed，提交前相关 204 passed，提交后阶段门禁 102 passed；未推送、合并或现场执行。
 
 ### Task 6：中断恢复与只读详情
 
-**Files:** 修改 coordinator.py、service.py、schemas.py、router.py；新增 backend/tests/test_service_port_recovery.py、test_service_port_lifecycle_api.py。
+**Files:** 修改 coordinator.py、service.py、schemas.py、router.py、service_port_lifecycle.py；新增 backend/tests/test_service_port_recovery.py、test_service_port_lifecycle_api.py。生命周期接口补齐本地意图中断标记及显式只读核对，不放宽既有写入状态保护。
 **Interfaces:** lifecycle.reconcile_interrupted(session_id:str) -> tuple[PortResource,...]，只读、不返回自动写入授权；ExecutionRead.service_port_resources 为新增只读列表，含来源、状态、消费者、证据引用，不含凭据。
 
-- [ ] 写 test_restart_after_create_intent_never_reissues_command、test_matching_resource_without_verified_event_is_not_owned；断言 RECOVERY_REQUIRED、无自动清理资格。
-- [ ] 写 test_restart_after_delete_reads_before_new_approval；缺失只记核对事实，存在等待新审批，均不自动写入。
-- [ ] 写 API 测试：请求篡改 owned/端口列表被拒绝；详情来自当前会话事件；旧会话返回空摘要；重复 advance/respond 无重复 I/O。
-- [ ] 运行 `python -m pytest backend/tests/test_service_port_recovery.py backend/tests/test_service_port_lifecycle_api.py -q`，确认 RED。
-- [ ] 在现有 recover_interrupted 接入意图核对/状态标记，不在应用启动时主动 SSH；后续明确只读恢复动作才读取设备。复用原 RecoveryTask 人工处理流程，不引入自动认领接口。
-- [ ] 运行恢复/API/账本与 test_skill_execution_api.py，全部 PASS。提交建议 `feat(skill-execution): expose service port recovery state`，等待指令。
+- [x] 写 test_restart_after_create_intent_never_reissues_command、test_matching_resource_without_verified_event_is_not_owned；断言 RECOVERY_REQUIRED、无自动清理资格。
+- [x] 写 test_restart_after_delete_reads_before_new_approval；缺失只记核对事实，存在仍不确定，均不自动写入、不自动解除人工恢复。
+- [x] 写 API 测试：请求篡改 owned/端口列表被拒绝；详情来自当前会话事件；旧会话返回空摘要；重复 advance/respond 无重复 I/O；最新核对状态及证据可追溯。
+- [x] 修正测试夹具导入后，真实 RED 13 failed（16.64s）；保护历史反例 RED 3 failed；核对摘要反例 RED 1 failed。
+- [x] 在现有 recover_interrupted 接入意图核对/状态标记，不在应用启动时主动 SSH；后续明确只读恢复动作才读取设备。复用原 RecoveryTask，不引入自动认领或自动重试接口。
+- [x] 恢复/API/账本、既有执行 API/Coordinator 及创建/清理兼容测试 154 passed（121.11s）；完整后端 817 passed（397.04s），详见验收记录。
+- [ ] 提交建议 `feat(skill-execution): expose service port recovery state`，等待用户指令。
 
 ### Task 7：兼容回归、审核与现场验收交接
+
+集成审核需专项核验完整 PortPreview 到 Router `_pending` / 真实前端的字段投影，尤其 `fsp` / `target_fsp`、Profile、VLAN/GEM、候选 ID 与消费者。只读资源摘要不能代替完整人工审批展示；未验证前不通过现场写入门禁。
 
 **Files:** 新增 backend/tests/test_service_port_lifecycle_acceptance.py；更新 docs/LOCAL_RUNNER_LIVE_ACCEPTANCE.md 和现有非敏感配置说明；不修改前端业务文件。
 **Interfaces:** 真实 Service → Coordinator → 注入离线 Runner → EvidenceStorage → 事件/API；复用现有 Report/Archive API，仅测试兼容性。

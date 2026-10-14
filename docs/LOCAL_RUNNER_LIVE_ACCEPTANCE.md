@@ -739,3 +739,20 @@ Task 4 未提交/推送/合并，最终独立整体审核仍在 Task 7；不宣�
 完整后端回归：`python -m pytest backend/tests -q -p no:cacheprovider --basetemp=C:/Users/admin/AppData/Local/Temp/twb-task5-full-20261014 --tb=short` → **800 passed（375.68s）**，exit 0。`git diff --check` 通过（仅 LF/CRLF 提示）。本任务未改前端，未重复前端测试/构建；整体最终审核与前端回归留在 Task 7。
 
 范围共八个交付文件：actions.py、service_port_contracts.py、runtime.py、coordinator.py、service_port_lifecycle.py、test_service_port_cleanup.py，以及本验收记录与实施计划。没有数据库、Evidence、ZIP、构建产物或临时文件进入变更集。实现已离线验证、待用户审核提交；未提交、未推送、未合并，main 不变，Task 6/7 未开始。阶段提交门禁尚未完成，不写入 Task 5 complete。
+
+## Task 6：中断恢复与只读详情（2026-10-14）
+
+基线 `6c53c9f945d6ea45ec86723b41f1c2e8a1ca66ba`。Task 5 此前已按用户指令提交、阶段复验 102 passed；旧阶段过程记录保留。Task 6 仅在隔离分支实施，不连接设备、不改 main、不执行迁移。
+
+- 测试先行：首次 13 个夹具设置错误因测试模块没有导入 execution_fixture；修正导入、生产代码不变后，真实 RED 为 13 failed（16.64s）。初始相关 GREEN 102 passed（62.53s）。核对详情缺少最新证据反例 RED 1 failed；本地标记对 LOCKED/CANCELLED/COMPLETED 历史缺少直接保护反例 RED 3 failed。修正后最终相关 **154 passed（121.11s）**。
+- 启动 `recover_interrupted` 只重放本地事件。CREATE_PENDING/DELETE_PENDING 追加 UNCERTAIN，不打开 SSH、不取凭据、不重发命令。正常 CREATED/WAITING 会话不动；这些状态若存在持久化悬空意图，则进入 RECOVERY_REQUIRED。未知账本 fail closed，已锁定/终态历史不回写。
+- `GET /api/skill-executions/{id}` 增加只读 `service_port_resources`：完整映射、来源、状态、消费者、创建事件、证据引用及最新核对状态/时间。GET 不连接设备、不改事件；旧计划返回空列表，不从旧快照回填所有权；损坏账本返回 409，不泄露原始 payload。
+- 新增 `POST /api/skill-executions/{id}/reconcile-service-ports`，请求必须为 `{}`，只能在 v2 / DRAFT / RECOVERY_REQUIRED 会话明确发起。owned、端口列表、命令等额外输入返回 422；复用本机同源校验、串行锁及冻结绑定。仅执行允许列表中的只读全局 ID/身份/Profile 核对，追加 Evidence 和审计记录；“只读”是指设备配置不写，不是声称数据库零追加。
+- 创建中断后，即使读回匹配，也不产生 CREATE_VERIFIED 或清理资格。删除中断后，已核验创建的资源若全局 ID 明确缺失，可追加 ABSENT_CONFIRMED；仍存在或无法确认时保留不确定状态。所有路径都不自动解除人工 RecoveryTask、不解锁 Result、不让 Run 自动 PASS、不自动创建/删除或重试。
+- 重复 advance / 旧审批 respond 不产生设备 I/O。新恢复审计摘要明确 `automatic_write_authorized=false`，不提供任意命令、手工认领或直接修改资源状态接口。
+- 范围裁定：本任务需修改 service_port_lifecycle.py 才能实现已批准接口；独立 recovery 标志仅用于读取，已有写入状态门禁保持原样。正常创建/等待会话不升级，仅有实际悬空意图时中断。没有新增表、依赖或前端代码。
+- 待 Task 7 集成检查：资源摘要不等于完整审批预览；必须核验 PortPreview 的 FSP/Profile/业务映射、候选 ID 与消费者到真实 API/前端的完整展示，尤其 `_pending` 的 `target_fsp` 与新预览 `fsp` 键。现场写入门禁尚未通过。
+
+完整后端回归：`python -m pytest backend/tests -q -p no:cacheprovider --basetemp=C:/Users/admin/AppData/Local/Temp/twb-task6-full-20261014 --tb=short` → **817 passed（397.04s）**，exit 0。相关测试 154 passed；`git diff --check` 通过（仅 LF/CRLF 提示）。未修改前端，前端完整验证留在 Task 7。
+
+九个交付文件：coordinator.py、service.py、schemas.py、router.py、service_port_lifecycle.py，两份恢复/API 测试，以及本验收记录和实施计划。没有数据库、Evidence、ZIP、构建产物或临时文件进入变更集。软件实现已离线验证，待用户审核提交；未提交、未推送、未合并，main 不变。Task 7 未开始，真实设备恢复/写入验收未执行；不写入 Task 6 complete，阶段提交门禁仍待完成。

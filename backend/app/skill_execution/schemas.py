@@ -4,6 +4,34 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, StrictBool
 from app.skill_execution.service import CreateSkillExecutionCommand
+from app.local_runner.ma5800.service_port_contracts import ServicePortMapping
+
+
+class ReconcileRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
+
+class ReconciliationRead(BaseModel):
+    status: Literal['FOUND', 'ABSENT', 'UNCONFIRMED']
+    evidence_ids: list[str]
+    automatic_write_authorized: Literal[False]
+    captured_at: datetime
+
+
+class ServicePortResourceRead(BaseModel):
+    port_id: int
+    mapping: ServicePortMapping
+    origin: Literal['REUSED', 'CREATED']
+    state: Literal['REUSED', 'CREATE_PENDING', 'ACTIVE', 'CREATE_UNCERTAIN', 'DELETE_PENDING',
+                   'DELETE_UNCERTAIN', 'DELETED', 'RETAINED']
+    consumers: list[Literal['IPOE', 'PPPOE']]
+    creation_event_id: str | None
+    operation_id: str
+    last_event_id: str
+    evidence_ids: list[str]
+    before_evidence_ids: list[str]
+    baseline_hash: str
+    reconciliation: ReconciliationRead | None = None
 
 
 class ExecutionCreate(BaseModel):
@@ -78,6 +106,7 @@ class ExecutionRead(BaseModel):
     observations: list[ObservationRead]
     pending_interaction: InteractionRead | None
     recovery_tasks: list[RecoveryRead]
+    service_port_resources: list[ServicePortResourceRead] = Field(default_factory=list)
 
 
 class ExecutionEvidenceRead(BaseModel):

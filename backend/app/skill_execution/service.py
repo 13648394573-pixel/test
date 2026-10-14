@@ -190,5 +190,40 @@ class SkillExecutionService:
         execution = self.repository.get(session_id)
         return {'session_id': execution.id, 'test_run_id': execution.test_run_id,
                 'run_result_id': execution.run_result_id, 'status': execution.status,
+                'service_port_resources': self.service_port_resources(session_id),
                 'events': [{'type': event.event_type, 'step_ref': event.step_ref,
                             'payload': deepcopy(event.payload_json)} for event in self.repository.events(session_id)]}
+
+    def service_port_resources(self, session_id):
+        from app.skill_execution.service_port_ledger import replay_port_ledger
+        from app.local_runner.ma5800.service_port_contracts import read_port_payload
+        execution = self.repository.get(session_id)
+        result = self.repository.session.get(RunResult, execution.run_result_id)
+        if result.run.execution_plan_snapshot.get('version') != 2:
+            return []  # Legacy plans are not upgraded or backfilled from device snapshots.
+        events = self.repository.events(session_id)
+        resources = replay_port_ledger(session_id, events)
+        def reconciliation(resource):
+            record = next((e for e in reversed(events) if e.event_type == 'SERVICE_PORT_RECONCILED'
+                and e.payload_json.get('operation_id') == resource.operation_id
+                and e.payload_json.get('port_id') == resource.port_id), None)
+            if record is None:
+                return None
+            read = read_port_payload(record.payload_json['read'])
+            if (record.payload_json.get('automatic_write_authorized') is not False
+                    or read.binding_hash != resource.mapping.olt_binding_hash
+                    or record.payload_json.get('status') != read.status):
+                raise ValueError('Invalid reconciliation metadata')
+            return dict(status=read.status, evidence_ids=list(read.evidence_ids),
+                        automatic_write_authorized=False, captured_at=record.occurred_at)
+        return [dict(port_id=r.port_id, mapping=r.mapping.model_dump(mode='json'), origin=r.origin,
+            state=r.state, consumers=sorted(r.consumers), creation_event_id=r.creation_event_id,
+            operation_id=r.operation_id, last_event_id=r.last_event_id,
+            evidence_ids=list(r.last_evidence_ids), before_evidence_ids=list(r.before_evidence_ids),
+            baseline_hash=r.baseline_hash, reconciliation=reconciliation(r)) for r in resources]
+
+    def reconcile_service_ports(self, session_id):
+        if self.coordinator is None:
+            raise RuntimeError('Runner coordinator is not configured')
+        self._bind_runtime(session_id)
+        return self.coordinator.reconcile_service_ports(session_id)

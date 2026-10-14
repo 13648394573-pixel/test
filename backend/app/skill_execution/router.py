@@ -22,7 +22,7 @@ from app.skill_execution.coordinator import SkillCoordinator
 from app.skill_execution.repository import SkillExecutionRepository
 from app.skill_execution.service import SkillExecutionService, RuntimeBindingRequiredError
 from app.skill_execution.schemas import (
-    ExecutionCreate, ExecutionRead, InteractionResponse, ExecutionEvidenceRead,
+    ExecutionCreate, ExecutionRead, InteractionResponse, ExecutionEvidenceRead, ReconcileRequest,
 )
 
 
@@ -157,6 +157,10 @@ def _pending(execution, result):
 def _view(service, session_id, configured):
     execution, result = _execution(service, session_id)
     events = service.repository.events(session_id)
+    try:
+        resources = service.service_port_resources(session_id)
+    except ValueError:
+        raise HTTPException(409, 'Service-port ledger cannot be verified') from None
     return dict(session_id=execution.id, test_run_id=execution.test_run_id, run_result_id=result.id,
         skill_code=result.skill_snapshot['skill_code'], skill_version=result.skill_snapshot['version'],
         wan_mode=result.parameter_snapshot['execution_mode'], mode=execution.mode, status=execution.status,
@@ -165,6 +169,7 @@ def _view(service, session_id, configured):
         events=[dict(sequence_no=e.sequence_no, type=e.event_type, step_ref=e.step_ref, occurred_at=e.occurred_at)
             for e in events if e.event_type in _EVENT_TYPES], observations=_observations(events),
         pending_interaction=_pending(execution, result),
+        service_port_resources=resources,
         recovery_tasks=[dict(id=t.id, status=t.status,
             instructions='请人工核对注册、WAN 和 service-port；未确认恢复前不要重复执行。') for t in execution.recovery_tasks])
 
@@ -229,6 +234,14 @@ def respond_execution(session_id: str, interaction_id: str, payload: Interaction
     _no_store(response)
     return _mutate(request, service, session_id,
         lambda: service.respond(session_id, interaction_id, payload.model_dump()))
+
+
+@router.post('/{session_id}/reconcile-service-ports', response_model=ExecutionRead)
+def reconcile_service_ports(session_id: str, payload: ReconcileRequest, request: Request,
+    response: Response, service: ServiceDependency):
+    """Explicit read-only device action; request cannot select resources or grant ownership."""
+    _no_store(response)
+    return _mutate(request, service, session_id, lambda: service.reconcile_service_ports(session_id))
 
 
 @router.get('/{session_id}/evidence', response_model=list[ExecutionEvidenceRead])

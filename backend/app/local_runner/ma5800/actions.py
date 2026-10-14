@@ -197,6 +197,18 @@ class MA5800Actions:
             (Observation('port.command_succeeded', acknowledged, 'MA5800'),), (),
             None if acknowledged else 'PORT_COMMAND_ACK_UNCONFIRMED')
 
+    def delete_service_port(self, operation) -> ActionOutcome:
+        """Single typed command; Runner checks durable batch approval before opening SSH."""
+        from .service_port_contracts import PortOperation
+        if not isinstance(operation, PortOperation) or operation.kind != 'DELETE':
+            raise ValueError('An immutable DELETE operation is required')
+        transcript = self.executor.run(SafeMA5800Command('remove_service_port', (operation.port_id,)))
+        acknowledged = parse_command_result(transcript.normalized_output).success and bool(re.search(
+            r'(?im)^Command executed successfully\.?\s*$', transcript.normalized_output))
+        return ActionOutcome('PASS' if acknowledged else 'BLOCKED',
+            (Observation('port.command_succeeded', acknowledged, 'MA5800'),), (),
+            None if acknowledged else 'PORT_COMMAND_ACK_UNCONFIRMED')
+
     def delete_ont(self, context: ActionContext) -> ActionOutcome:
         return self._guarded_mutation(
             context,
@@ -253,11 +265,8 @@ class MA5800Actions:
         service_ports = self._service_ports(context.parameters)
         if not service_ports:
             return self._pass("olt.removed_service_ports", [])
-        return self._guarded_mutation(
-            context,
-            summary="Remove the listed test service ports before WAN isolation or recovery.",
-            command_factory=lambda: SafeMA5800Command("remove_service_port", (service_ports[0],)),
-        )
+        return ActionOutcome('BLOCKED', (), (), 'PORT_VERIFIED_CREATION_REQUIRED',
+                             'A snapshot list or legacy mutation approval does not establish test resource ownership.')
 
     def restore_snapshot(self, context: ActionContext) -> ActionOutcome:
         snapshot = context.parameters.get("configuration_snapshot")

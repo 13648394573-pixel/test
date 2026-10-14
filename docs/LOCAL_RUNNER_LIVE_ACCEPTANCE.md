@@ -711,3 +711,31 @@ backend/tests/test_service_port_plan.py -q -p no:cacheprovider
 
 无 OLT/ONU 连接、无现场命令、无正式/验收数据库写入；main 未修改。
 Task 4 未提交/推送/合并，最终独立整体审核仍在 Task 7；不宣称现场闭环已完成。
+# Task 5 软件验证进展（2026-10-14，未完成）
+
+基线 `a3830fa4d8eae6da628655c994f4bf5132d1246f`；仅在隔离分支工作，未连接 OLT/ONU。
+
+- 核心清理测试 RED 15 failed，GREEN 15 passed：本会话已核验 CREATED 资格、共享消费者保留、两条逐项处理、第二条失败保留部分结果、审批集合不可篡改、已缺失只记录事实、KEEP 不执行设备 I/O。
+- 旧 `remove_test_services` 的非空快照列表不再作为删除授权，返回 BLOCKED；旧计划和 Snapshot 不重写。
+- 集成测试纠正夹具元组与活跃会话前提后，3 failed / 21 passed；缺失项为 Runner 全局 ID 检查/受审批删除接入和 Coordinator KEEP 记录。KEEP 追加记录随后已接入。
+- 实际删除命令与 Runner 守卫的组合补丁被操作审批拒绝，原因是需要更明确的设备删除能力实现授权。补丁未应用；没有新增可执行删除 action，不绕过该限制。现场删除仍需另外确认目标与影响范围。
+- 未受阻部分验证：清理、账本、MA5800 动作、审批范围、Coordinator 共 **111 passed / 2 deselected（55.23s）**。排除的是两项尚未接入的 Runner 测试，不能据此声称 Task 5 或完整后端全部通过。
+- 当前合法双 WAN 配置最多两条不同映射；使用两条的全部清理和部分失败验证，不虚构第三条资源或放宽冻结映射。批次处理会为后续项记录 NOT_PROCESSED。
+- 清理逐条读取采用资源级 hash 的方案仍待 Runner 接入，防止第一条合法删除导致第二条审批因批次自身变化失效。不能识别外部同 ID/同属性无痕重建，现场竞争窗口仍需披露。
+
+状态：未提交、未推送、未合并；Task 5 等待精确能力授权后继续 TDD，Task 6/7 未开始。
+
+## Task 5 继续实施（明确能力授权后，2026-10-14）
+
+用户随后批准了“仅删除本会话已核验创建、无保留消费者、经精确审批的 service-port”能力实现。本次仍仅离线开发/验证；不包括现场写入授权。上节保留此前阻断过程，不代表当前继续阻断。
+
+- 继续前两项 Runner 测试复现 RED：2 failed / 22 deselected（5.53s）。接入全局 ID 读取、资源级语义 hash、持久化批次审批与 DELETE_PENDING 守卫、单条参数化白名单删除及缺失后验后，相关 122 passed（67.85s）。没有任意命令入口或 ONT 删除调用。
+- 发现 DELETE 预览误显示 CREATE 标签：新增反例 RED 1 failed / 1 passed，修正 `PortPreview.to_payload` 动作标签，CREATE 原有表示及预览 hash 不变。
+- 清理、创建、账本、MA5800 动作、审批范围、Runner、契约、计划及 Coordinator：**204 passed（99.90s）**，没有排除未实现测试。
+- 两条合法映射全部处理、第二条失败保留第一条已验证结果；第一条失败则第二条标为 NOT_PROCESSED。跨会话/旧快照不授予删除权，共享消费者及 KEEP 保留；已缺失资源只追加缺失事实，不发删除命令。
+- 每项独立提交删除意图后才调用设备边界；超时、后验不符、证据损坏、提交失败及取消不记录成功，不自动重试。读回 hash 包含冻结身份、注册/Profile/GEM 和本资源详情，不因批次自身删除另一条而失效。
+- 限制：当前只接受显式支持的成功回执；同 ID 同完整属性的外部无痕重建仍不可观察，不声称跨 OLT 客户端原子性。真实创建/删除与完整平台闭环仍须另行现场审批验收。
+
+完整后端回归：`python -m pytest backend/tests -q -p no:cacheprovider --basetemp=C:/Users/admin/AppData/Local/Temp/twb-task5-full-20261014 --tb=short` → **800 passed（375.68s）**，exit 0。`git diff --check` 通过（仅 LF/CRLF 提示）。本任务未改前端，未重复前端测试/构建；整体最终审核与前端回归留在 Task 7。
+
+范围共八个交付文件：actions.py、service_port_contracts.py、runtime.py、coordinator.py、service_port_lifecycle.py、test_service_port_cleanup.py，以及本验收记录与实施计划。没有数据库、Evidence、ZIP、构建产物或临时文件进入变更集。实现已离线验证、待用户审核提交；未提交、未推送、未合并，main 不变，Task 6/7 未开始。阶段提交门禁尚未完成，不写入 Task 5 complete。

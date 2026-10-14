@@ -150,7 +150,8 @@ class PortPreview:
         return sha256(json.dumps(payload, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
 
     def to_payload(self) -> dict:
-        return dict(action_code='create_service_port', operation=self.operation.model_dump(mode='json'),
+        return dict(action_code='create_service_port' if self.operation.kind == 'CREATE' else 'delete_service_port',
+                    operation=self.operation.model_dump(mode='json'),
                     target=dict(serial_number=self.operation.serial_number, fsp=self.operation.mapping.fsp,
                         ont_id=self.operation.mapping.ont_id, line_profile_id=self.operation.line_profile_id,
                         service_profile_id=self.operation.service_profile_id), consumers=list(self.operation.consumers),

@@ -105,21 +105,22 @@ Task 3（2026-10-14）：相关 60 passed，完整后端 752 passed（370.00s）
 - [x] 实现只读核验 → 审批 → 即时重查 → 意图短事务提交 → 命令 → 后验/Evidence → 结果短事务；显式命令确认和完整一致后验同时成立才 VERIFIED，前后证据均重验。
 - [x] 写并运行超时、后验不符、证据失败、结果提交失败、取消及前验证据篡改反例；保留意图/不确定记录，不自动重试。
 - [x] 创建、审批、Runner、契约、账本和计划相关 151 passed（58.32s）；最终完整后端 774 passed（348.58s）。预览/事件不含凭据。
-- [ ] 提交建议 `feat(local-runner): create approved service ports safely`，等待用户指令。
+- [x] 已按后续用户指令提交 `feat(local-runner): create approved service ports safely`（a3830fa4d8eae6da628655c994f4bf5132d1246f），未推送或合并。
 
 Task 4 限制：仅接受当前支持的完整映射及显式成功回执；陌生回执、不完整读取和同 VLAN 冲突均不判成功。离线通过不是现场创建授权，清理/恢复仍为 Tasks 5–6。详见 docs/LOCAL_RUNNER_LIVE_ACCEPTANCE.md。
 
 ### Task 5：逐条清理与共享保留
 
-**Files:** 修改 backend/app/skill_execution/service_port_lifecycle.py、backend/app/local_runner/ma5800/actions.py、backend/app/skill_execution/coordinator.py；新增 backend/tests/test_service_port_cleanup.py。
+**Files:** 修改 backend/app/skill_execution/service_port_lifecycle.py、backend/app/local_runner/ma5800/actions.py、backend/app/skill_execution/coordinator.py、backend/app/local_runner/runtime.py、backend/app/local_runner/ma5800/service_port_contracts.py；新增 backend/tests/test_service_port_cleanup.py。Runner 增加全局 ID 资源级只读核验和持久化删除审批守卫；契约修正 DELETE 预览动作标签，CREATE 预览保持不变。
 **Interfaces:** lifecycle.preview_cleanup(session_id:str, retained_consumers:frozenset[str]) -> tuple[PortPreview,...]；lifecycle.cleanup(session_id:str, previews:tuple[PortPreview,...], approval_hash:str) -> ActionOutcome。remove_test_services 不从测试前 affected_service_ports 直接得到删除授权；每条单独意图、查询与证据，批次审批 hash 覆盖有序完整集合。
 
-- [ ] 写 test_reused_and_cross_session_ports_are_never_deleted、test_shared_active_port_is_retained、test_all_created_ports_are_processed；断言正确逐条处理，而非仅第一条。
-- [ ] 写 test_second_delete_failure_keeps_partial_outcomes，断言第一条已确认删除、第二条不确定、第三条未处理，整体非 PASS。
-- [ ] 写 test_mapping_drift_or_id_reuse_stops_cleanup、test_already_absent_records_observation_without_delete、test_keep_retains_all_created_ports。
-- [ ] 运行 `python -m pytest backend/tests/test_service_port_cleanup.py -q`，确认 RED。
-- [ ] 实现逐条核验与 DELETE_INTENT/DELETE_VERIFIED/UNCERTAIN；空清理集合不发生 I/O。未知/旧账本不得用快照已有端口替代，本次创建与原有资源分离。
-- [ ] 运行清理、账本与 test_ma5800_actions.py、test_skill_approval_scope.py，全部 PASS；不自动补建删除资源、不删除 ONT。提交建议 `fix(local-runner): clean only verified session service ports`，等待指令。
+- [x] 写 test_reused_and_cross_session_ports_are_never_deleted、test_shared_active_port_is_retained、test_all_created_ports_are_processed；额外验证外部会话审批不能获取归属。
+- [x] 写 test_second_delete_failure_keeps_partial_outcomes；当前双 WAN 最多两条合法映射，验证第二条失败和第一条失败后剩余项 NOT_PROCESSED，不伪造第三条资源。
+- [x] 写 test_mapping_drift_or_id_reuse_stops_cleanup、test_already_absent_records_observation_without_delete、test_keep_retains_all_created_ports；包含审批篡改、数据库提交失败、证据损坏、取消和幂等反例。
+- [x] 清理核心 RED 15 failed；Runner/KEEP 接入 RED 3 failed；继续实施前 Runner 再次 RED 2 failed；DELETE 标签 RED 1 failed。仅使用脱敏离线设备替身。
+- [x] 实现逐条核验与 DELETE_INTENT/DELETE_VERIFIED/UNCERTAIN；空清理集合不发生 I/O。未知/旧账本不得用快照已有端口替代，本次创建与原有资源分离；KEEP 追加 PORT_RETAINED。
+- [x] 清理、创建、账本、MA5800 动作、审批、Runner、契约、计划及 Coordinator 相关 204 passed（99.90s）；不自动补建删除资源、不删除 ONT。
+- [ ] 提交建议 `fix(local-runner): clean only verified session service ports`，等待用户指令。完整后端 800 passed（375.68s），详见验收文档与本地实施账本；未现场执行。
 
 ### Task 6：中断恢复与只读详情
 

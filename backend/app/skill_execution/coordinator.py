@@ -310,6 +310,11 @@ class SkillCoordinator:
                     task.manual_resolution = 'KEEP explicitly selected; restoration waived, not performed.'
                 db.get(RunResult, execution.run_result_id).recovery_status = 'NOT_REQUIRED'
         self._set_status(execution,'RUNNING')
+        if (interaction.interaction_ref == 'END_POLICY' and choice == 'KEEP'
+                and db.get(TestRun, execution.test_run_id).execution_plan_snapshot.get('version') == 2):
+            from app.skill_execution.service_port_lifecycle import ServicePortLifecycle
+            ServicePortLifecycle(repo, inspect_device=None, create_device=None, persist_evidence=None,
+                                 storage=self.storage).retain(session_id)
         db.commit()
         return execution
 

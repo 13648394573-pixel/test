@@ -11,7 +11,13 @@ from app.local_runner.ma5800.service_port_contracts import (
     PortOperation, PortPreview, PortRead, ServicePortMapping, port_read_payload, read_port_payload)
 from app.models.evidence import Evidence
 from app.models.test_execution import RunResult, TestRun
-from app.skill_execution.service_port_ledger import replay_port_ledger
+from app.skill_execution.service_port_ledger import replay_port_ledger, cleanup_candidates
+
+
+def cleanup_batch_payload(previews, retained_consumers):
+    body = dict(action_code='cleanup_service_ports', previews=[p.to_payload() for p in previews],
+                retained_consumers=sorted(retained_consumers))
+    return {**body, 'preview_hash': sha256(json.dumps(body, sort_keys=True, separators=(',', ':')).encode()).hexdigest()}
 
 
 def olt_binding_hash(binding: RuntimeBinding) -> str:
@@ -20,10 +26,12 @@ def olt_binding_hash(binding: RuntimeBinding) -> str:
 
 
 class ServicePortLifecycle:
-    def __init__(self, repository, *, inspect_device, create_device, persist_evidence, storage):
+    def __init__(self, repository, *, inspect_device, create_device, persist_evidence, storage,
+                 delete_device=None, inspect_cleanup_device=None):
         self.repository = repository
         self.inspect_device, self.create_device = inspect_device, create_device
         self.persist_evidence, self.storage = persist_evidence, storage
+        self.delete_device, self.inspect_cleanup_device = delete_device, inspect_cleanup_device
 
     def _scope(self, sid, mapping):
         repo = self.repository
@@ -73,10 +81,11 @@ class ServicePortLifecycle:
             valid = False
         return read if valid else replace(read, status='UNCONFIRMED')
 
-    def _capture(self, sid, mapping):
+    def _capture(self, sid, mapping, *, cleanup=False):
         self._scope(sid, mapping)
         self.repository.session.commit()  # Release the DB boundary before device I/O.
-        outcome = self.inspect_device(sid, mapping)
+        callback = self.inspect_cleanup_device if cleanup and self.inspect_cleanup_device else self.inspect_device
+        outcome = callback(sid, mapping)
         values = {o.fact_key: o.value for o in outcome.observations if o.source == 'MA5800'}
         read = (read_port_payload(values['port.read']) if 'port.read' in values else
                 PortRead(mapping.olt_binding_hash, sha256(str(outcome.error_code).encode()).hexdigest()))
@@ -202,3 +211,153 @@ class ServicePortLifecycle:
             except Exception:
                 repo.session.rollback()  # The committed INTENT remains the durable recovery authority.
             return self._blocked('PORT_CREATION_UNCERTAIN')
+
+    def _resources(self, sid):
+        return replay_port_ledger(sid, self.repository.events(sid))
+
+    def _creation_proof(self, sid, resource):
+        event = next((e for e in self.repository.events(sid) if e.id == resource.creation_event_id
+                      and e.event_type == 'PORT_CREATE_VERIFIED'), None)
+        if (event is None or resource.origin != 'CREATED'
+                or event.payload_json['mapping'] != resource.mapping.model_dump(mode='json')
+                or event.payload_json['port_id'] != resource.port_id):
+            raise ValueError('Verified session creation is required')
+        self._proofs(sid, (*event.payload_json['before_evidence_ids'], *event.payload_json['after_evidence_ids']))
+
+    def preview_cleanup(self, session_id: str, retained_consumers: frozenset[str]) -> tuple[PortPreview, ...]:
+        candidates = cleanup_candidates(self._resources(session_id), retained_consumers)
+        previews = []
+        for resource in candidates:
+            baseline, consumers = self._scope(session_id, resource.mapping)
+            self._creation_proof(session_id, resource)
+            read = self._capture(session_id, resource.mapping, cleanup=True)
+            if read.status == 'UNCONFIRMED' or (read.status == 'FOUND' and read.items[0].port_id != resource.port_id):
+                raise ValueError('Cleanup mapping is unconfirmed')
+            values = self.repository.session.get(RunResult, self.repository.get(session_id).run_result_id).parameter_snapshot
+            operation = PortOperation(operation_id='delete-' + uuid4().hex, session_id=session_id,
+                mapping=resource.mapping, port_id=resource.port_id, kind='DELETE', baseline_hash=baseline,
+                read_hash=read.observation_hash, creation_event_id=resource.creation_event_id,
+                serial_number=values['onu_serial_number'].upper(), line_profile_id=values['line_profile_id'],
+                service_profile_id=values['service_profile_id'], consumers=consumers)
+            previews.append(PortPreview(operation, read))
+        batch = cleanup_batch_payload(tuple(previews), retained_consumers)
+        self.repository.append_event(session_id, 'SERVICE_PORT_CLEANUP_PREVIEW', batch, 'cleanup-' + batch['preview_hash'])
+        self.repository.session.commit()
+        return tuple(previews)
+
+    def retain(self, session_id: str):
+        for resource in self._resources(session_id):
+            if resource.state not in {'ACTIVE', 'REUSED'}:
+                continue
+            self._scope(session_id, resource.mapping)
+            # KEEP is a ledger decision, never a device call or an ownership upgrade.
+            event = next(e for e in self.repository.events(session_id) if e.id == resource.last_event_id)
+            payload = {**event.payload_json, 'operation_id': 'keep-' + resource.last_event_id,
+                'creation_event_id': resource.creation_event_id, 'command_result': 'KEPT',
+                'captured_at': datetime.now(UTC).isoformat()}
+            self._append(session_id, 'PORT_RETAINED', payload)
+
+    def cleanup(self, session_id: str, previews: tuple[PortPreview, ...], approval_hash: str) -> ActionOutcome:
+        repo, outcomes = self.repository, []
+        try:
+            saved = next((e.payload_json for e in repo.events(session_id)
+                if e.event_type == 'SERVICE_PORT_CLEANUP_PREVIEW' and e.payload_json.get('preview_hash') == approval_hash), None)
+            if saved is None or not isinstance(previews, tuple):
+                return self._blocked('PORT_CLEANUP_APPROVAL_MISMATCH')
+            retained = frozenset(saved['retained_consumers'])
+            if cleanup_batch_payload(previews, retained) != saved:
+                return self._blocked('PORT_CLEANUP_APPROVAL_MISMATCH')
+            resources = self._resources(session_id)
+            expected = {(r.mapping.mapping_key, r.port_id) for r in cleanup_candidates(resources, retained)}
+            remaining = {(p.operation.mapping.mapping_key, p.operation.port_id) for p in previews
+                         if not any(r.creation_event_id == p.operation.creation_event_id and r.state == 'DELETED'
+                                    for r in resources)}
+            # No caller-supplied subset, no new owned resources added since approval.
+            if expected != remaining:
+                return self._blocked('PORT_CLEANUP_SCOPE_CHANGED')
+            for preview in previews:
+                operation = preview.operation
+                baseline, consumers = self._scope(session_id, operation.mapping)
+                self._operation_target(operation, consumers)
+                resource = next(r for r in resources if r.port_id == operation.port_id
+                                and r.mapping.mapping_key == operation.mapping.mapping_key)
+                if (operation.session_id != session_id or operation.kind != 'DELETE'
+                        or baseline != operation.baseline_hash or resource.creation_event_id != operation.creation_event_id
+                        or resource.origin != 'CREATED' or resource.consumers & retained):
+                    return self._blocked('PORT_CLEANUP_SCOPE_CHANGED')
+                if resource.state == 'DELETED':
+                    done = next(e for e in repo.events(session_id) if e.id == resource.last_event_id)
+                    if done.payload_json['operation_id'] != operation.operation_id:
+                        return self._blocked('PORT_CLEANUP_SCOPE_CHANGED')
+                elif resource.state != 'ACTIVE':
+                    return self._blocked('PORT_RECOVERY_REQUIRED')
+                self._creation_proof(session_id, resource)
+                self._proofs(session_id, preview.read.evidence_ids)
+        except Exception:
+            repo.session.rollback()
+            return self._blocked('PORT_CLEANUP_SCOPE_CHANGED')
+        for index, preview in enumerate(previews):
+            operation, payload = preview.operation, None
+            if any(r.port_id == operation.port_id and r.state == 'DELETED' for r in self._resources(session_id)):
+                outcomes.append(dict(port_id=operation.port_id, status='DELETED'))
+                continue
+            try:
+                fresh = self._capture(session_id, operation.mapping, cleanup=True)
+                if fresh.observation_hash != operation.read_hash or fresh.status != preview.read.status:
+                    raise ValueError('Cleanup approval stale')
+                if fresh.status == 'UNCONFIRMED' or (fresh.status == 'FOUND' and fresh.items[0].port_id != operation.port_id):
+                    raise ValueError('Cleanup mapping changed')
+                resource = next(r for r in self._resources(session_id) if r.creation_event_id == operation.creation_event_id)
+                if resource.state != 'ACTIVE':
+                    raise ValueError('Cleanup provenance changed')
+                self._creation_proof(session_id, resource)
+                self._proofs(session_id, preview.read.evidence_ids)
+                baseline, consumers = self._scope(session_id, operation.mapping)
+                self._operation_target(operation, consumers)
+                if baseline != operation.baseline_hash:
+                    raise ValueError('Baseline changed')
+                before = (*preview.read.evidence_ids, *fresh.evidence_ids)
+                payload = {**self._payload(operation, consumers, approval=approval_hash, before=before),
+                           'creation_event_id': operation.creation_event_id}
+                self._append(session_id, 'PORT_DELETE_INTENT', payload)
+                if fresh.status == 'ABSENT':
+                    after = self._capture(session_id, operation.mapping, cleanup=True)
+                    ids = after.evidence_ids
+                    repo.append_event(session_id, 'SERVICE_PORT_ABSENCE_OBSERVED',
+                        {'operation_id': operation.operation_id, 'port_id': operation.port_id, 'command_executed': False},
+                        operation.operation_id + ':absence')
+                else:
+                    if self.delete_device is None:
+                        raise ValueError('Delete device boundary unavailable')
+                    outcome = self.delete_device(operation, saved)
+                    values = {o.fact_key: o.value for o in outcome.observations if o.source == 'MA5800'}
+                    ids = self.persist_evidence(session_id, outcome)
+                    after = self._normalize(read_port_payload(values['port.read']), operation.mapping)
+                    if (outcome.status != 'PASS' or values.get('port.command_succeeded') is not True
+                            or values.get('olt.profile_gem.verified') is not True):
+                        raise ValueError('Delete command unconfirmed')
+                self._proofs(session_id, ids)
+                self._proofs(session_id, before)
+                self._creation_proof(session_id, resource)
+                self._scope(session_id, operation.mapping)
+                if after.status != 'ABSENT' or after.query_port_id != operation.port_id:
+                    raise ValueError('Delete absence unconfirmed')
+                verification = sha256(json.dumps(port_read_payload(replace(after, evidence_ids=tuple(ids))),
+                    sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+                self._append(session_id, 'PORT_DELETE_VERIFIED', {**payload, 'command_result': 'ABSENT_CONFIRMED',
+                    'after_evidence_ids': list(ids), 'verification_hash': verification,
+                    'captured_at': datetime.now(UTC).isoformat()})
+                outcomes.append(dict(port_id=operation.port_id, status='DELETED'))
+            except Exception:
+                repo.session.rollback()
+                if payload is not None:
+                    try:
+                        self._append(session_id, 'PORT_DELETE_UNCERTAIN', {**payload, 'command_result': 'UNKNOWN',
+                            'captured_at': datetime.now(UTC).isoformat()})
+                    except Exception:
+                        repo.session.rollback()
+                outcomes.append(dict(port_id=operation.port_id, status='UNCERTAIN' if payload else 'BLOCKED'))
+                outcomes.extend(dict(port_id=p.operation.port_id, status='NOT_PROCESSED') for p in previews[index + 1:])
+                return ActionOutcome('BLOCKED', (Observation('port.cleanup.items', outcomes, 'MA5800'),), (),
+                                     'PORT_CLEANUP_INCOMPLETE')
+        return ActionOutcome('PASS', (Observation('port.cleanup.items', outcomes, 'MA5800'),), ())

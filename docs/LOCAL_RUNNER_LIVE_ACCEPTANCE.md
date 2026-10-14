@@ -648,3 +648,66 @@ backend/tests/test_local_runner_binding.py backend/tests/test_local_runner_runti
 
 本轮无设备连接、无现场命令、无正式/验收库写入、无数据库结构或依赖变更；
 Task 3 未提交/推送/合并。Tasks 4–7 未开始，最终独立整体审核仍安排在 Task 7。
+
+## 生命周期 Task 4 复用与审批创建离线验证（2026-10-14）
+
+Task 3 后续已按用户指令提交 7b5c2e64ad816528e10a5e764744399e84d173f0；
+完成门禁再次 60 passed（37.45s），未推送/合并。Task 4 从此干净基线实施。
+
+新增 service_port_lifecycle.py、test_service_port_creation.py；调整
+ma5800/service_port_contracts.py、ma5800/actions.py、local_runner/runtime.py、
+skill_execution/coordinator.py，并同步本记录与实施计划（共八个交付文件）。
+复用现有 Repository/ExecutionEvent/Evidence/OperatorInteraction，不新增表、
+迁移、依赖、公开 API 或前端业务模块。
+
+只读核验冻结身份、注册/Profile/GEM、目标端口完整详情及全局候选 ID。唯一
+完整匹配记录 REUSED，不创建，不取得自动清理资格。重复、同目标/VLAN 的
+不同映射、候选在别处占用及不完整输出 BLOCKED；不自行换 ID。Profile 编号
+不作为 GEM 编号。同映射的 IPOE/PPPOE 共用一个创建操作及消费者集合。
+
+PortOperation/PortPreview 本任务补齐，冻结 SN、line/service Profile、消费者、
+映射、端口 ID、基线/读取 hash；预览显式展示目标和共享影响，全部参与 hash。
+PortRead 的证据引用成为 keyword-only，保留原位置参数。新 DTO 尚未发布，
+没有历史会话需要回填；未来清理/恢复调用须提供完整目标上下文。
+
+沿用现有确认入口：保存完整预览，等待 CONFIRM；旧 hash/篡改范围拒绝。
+审批后再次核验语义状态，先提交 CREATE_INTENT，再进入白名单 I/O；Runner
+另查持久预览/意图，缺失时连只读设备 I/O 都不开始。执行器只接受结构化
+CREATE 操作，不接受任意 CLI。数据库短事务与设备 I/O 分离，独立 Session
+能在设备替身调用时读到已提交意图，提交失败设备写入次数为零。
+
+显式成功回执、同 ID 的完整后验、前后证据文件/行归属/SHA256、当前会话
+及基线范围全部一致才追加 CREATE_VERIFIED。不以 prompt 到达替代成功。
+超时、命令不确认、后验不符、证据保存/篡改、取消或结果提交失败保留意图/
+UNCERTAIN，无自动清理资格，也不自动重发。已核验操作重复调用无额外读取
+或写入。新测试没有回写原配置快照、旧 Run/Result 或历史报告/归档。
+
+范围裁定及代价：当前仅支持已验证映射模式；同 VLAN 高级多 GEM 组合保守
+阻塞。读取 hash 使用稳定语义状态，预览额外覆盖保存的证据引用，不包含
+动态采集时间。成功回执目前严格限制已支持的显式确认文本，其他真实设备
+响应需另行授权采样，不自动当作失败可回滚或成功；现场创建尚未验收。
+本阶段不实现清理、自动认领或完整 WAN 恢复，Tasks 5–7 仍待实施/审核。
+
+TDD：初始夹具缺模块导致 13 errors，改为测试体断言后有效 RED 13 failed
+（12.92s），事务核心 GREEN 13 passed（13.18s）；Runner/命令证明 RED
+4 failed / 13 passed（17.10s）。接线过程中修复测试工作目录与 100KB 夹具
+容量问题，改用既有协调器测试的 1MB 测试容量，未放松生产路径/大小保护；
+相关 GREEN 49 passed（36.38s）。前验证据篡改 RED 1 failed（2.70s），
+取消 RED 1 failed（2.76s），随后相关 GREEN 149 passed（54.40s）；
+同 VLAN 冲突 RED 1 failed（2.96s），相关 GREEN 150 passed（54.35s）。
+显式目标预览 RED 1 failed（3.22s）；最终相关 GREEN 151 passed（58.32s）。
+
+相关命令：python -m pytest backend/tests/test_service_port_creation.py
+backend/tests/test_skill_approval_scope.py backend/tests/test_local_runner_runtime.py
+backend/tests/test_service_port_contracts.py backend/tests/test_service_port_ledger.py
+backend/tests/test_service_port_plan.py -q -p no:cacheprovider
+--basetemp=C:/Users/admin/AppData/Local/Temp/twb-task4-preview-green-20261014 --tb=short。
+第一轮全量 773 passed（363.28s）为最后预览身份修正之前的版本，不作为最终
+门禁。最终完整后端命令：python -m pytest backend/tests -q -p no:cacheprovider
+--basetemp=C:/Users/admin/AppData/Local/Temp/twb-task4-final-full-20261014 --tb=short；
+结果 774 passed（348.58s），退出码 0。git diff --check 通过，仅 LF/CRLF 提示；
+交付范围共八文件，无数据库、Evidence、ZIP、缓存或构建产物。前端未修改，
+本阶段未运行前端测试/构建。
+
+无 OLT/ONU 连接、无现场命令、无正式/验收数据库写入；main 未修改。
+Task 4 未提交/推送/合并，最终独立整体审核仍在 Task 7；不宣称现场闭环已完成。

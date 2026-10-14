@@ -125,8 +125,93 @@ class SkillCoordinator:
                 self._interaction(execution, step, step['interaction'], self._preview(result, step))
                 db.commit()
                 return execution
+            if run.execution_plan_snapshot.get('version') == 2 and step.get('action') in {
+                    'inspect_service_mapping', 'create_service_port', 'verify_service_port'}:
+                return self._port_action(execution, result, step, events)
             return self._action(execution, result, step, events)
         return self._finalize(execution)
+
+    def _port_action(self, execution, result, step, events):
+        from app.local_runner.configuration import RuntimeBinding
+        from app.local_runner.contracts import ActionOutcome, Observation
+        from app.local_runner.ma5800.service_port_contracts import PortOperation, ServicePortMapping, read_port_payload
+        from app.skill_execution.service_port_ledger import replay_port_ledger
+        from app.skill_execution.service_port_lifecycle import ServicePortLifecycle, olt_binding_hash
+        repo, db, sid = self.repository, self.repository.session, execution.id
+        binding = RuntimeBinding.model_validate(execution.plugin_snapshot['runtime_binding'])
+        parameters = result.parameter_snapshot
+        mapping = ServicePortMapping(**step['mapping'], olt_binding_hash=olt_binding_hash(binding),
+            fsp='/'.join(str(parameters[key]) for key in ('frame', 'slot', 'pon_port')), ont_id=parameters['ont_id'])
+        def context(action, operation=None, approval=None):
+            values = deepcopy(parameters)
+            values['service_port_mapping'] = mapping.model_dump(mode='json')
+            if operation is not None:
+                values.update(port_operation=operation.model_dump(mode='json'), port_approval=approval)
+            secrets = self.secrets_for(values, action)
+            return ActionContext(sid, action, values, secrets, self.workspace / sid)
+        lifecycle = ServicePortLifecycle(repo,
+            inspect_device=lambda _sid, _map: self.execute(context('inspect_service_mapping')),
+            create_device=lambda operation, approval: self.execute(context('create_service_port', operation, approval)),
+            persist_evidence=lambda _sid, outcome: self._store_artifacts(repo.get(sid), result, step, outcome.artifacts),
+            storage=self.storage)
+        attempt = 1 + sum(e.event_type == 'ACTION_STARTED' and e.payload_json['ref'] == step['ref'] for e in events)
+        key = f"{step['ref']}:{attempt}"
+        repo.append_event(sid, 'ACTION_STARTED', {'ref': step['ref'], 'attempt': attempt}, key + ':start',
+                          step_ref=step['step'], action_ref=step['action'], require_new=True)
+        self._set_status(execution, 'RUNNING')
+        db.commit()
+        try:
+            if step['action'] == 'create_service_port':
+                resources = replay_port_ledger(sid, repo.events(sid))
+                already = next((item for item in resources if item.mapping.mapping_key == mapping.mapping_key), None)
+                if already is not None and already.state in {'REUSED', 'ACTIVE'}:
+                    outcome = ActionOutcome('PASS', (), ())
+                else:
+                    reads = [e for e in repo.events(sid) if e.event_type == 'SERVICE_MAPPING_READ'
+                             and e.payload_json.get('mapping_key') == mapping.mapping_key]
+                    if not reads:
+                        raise ValueError('A captured mapping read is required')
+                    read = read_port_payload(reads[-1].payload_json['read'])
+                    op = PortOperation(operation_id='create-' + mapping.mapping_key[:24], session_id=sid,
+                        mapping=mapping, port_id=mapping.candidate_id, kind='CREATE',
+                        serial_number=parameters['onu_serial_number'].upper(), line_profile_id=parameters['line_profile_id'],
+                        service_profile_id=parameters['service_profile_id'], consumers=tuple(step['consumers']),
+                        baseline_hash=execution.configuration_snapshots[0].sha256, read_hash=read.observation_hash)
+                    saved = next((e for e in repo.events(sid) if e.idempotency_key == op.operation_id + ':preview'), None)
+                    preview = saved.payload_json if saved is not None else lifecycle.preview(op, read).to_payload()
+                    interaction = next((item for item in execution.operator_interactions
+                        if item.interaction_ref == step['ref'] and item.status == 'COMPLETED'), None)
+                    if interaction is None:
+                        repo.append_event(sid, 'ACTION_OUTCOME', {'ref': step['ref'], 'status': 'WAITING_OPERATOR',
+                            'observations': []}, key + ':outcome', step_ref=step['step'], action_ref=step['action'])
+                        self._interaction(execution, step, ['CONFIRM', 'CANCEL'], preview)
+                        db.commit()
+                        return execution
+                    outcome = lifecycle.execute_approved(op, interaction.impact_preview['preview_hash'])
+            else:
+                read = lifecycle.inspect(sid, mapping)
+                confirmed = read.status != 'UNCONFIRMED' and (step['action'] != 'verify_service_port' or read.status == 'FOUND')
+                outcome = ActionOutcome('PASS' if confirmed else 'BLOCKED',
+                    (Observation('port.mapping.status', read.status, 'MA5800'),), (),
+                    None if confirmed else 'PORT_MAPPING_UNCONFIRMED')
+            repo.append_event(sid, 'ACTION_OUTCOME', {'ref': step['ref'], 'status': outcome.status,
+                'observations': _clean([asdict(item) for item in outcome.observations])}, key + ':outcome',
+                step_ref=step['step'], action_ref=step['action'])
+            repo.append_event(sid, 'STEP_COMPLETED', {'ref': step['ref']}, step['ref'] + ':done')
+            if outcome.error_code in {'PORT_CREATION_UNCERTAIN', 'PORT_RECOVERY_REQUIRED'}:
+                execution.error_code = outcome.error_code
+                self._recovery(execution)
+            else:
+                self._set_status(execution, 'RUNNING')
+            db.commit()
+            return execution
+        except Exception:
+            db.rollback()
+            execution = repo.get(sid)
+            execution.error_code = 'PORT_ACTION_INTERRUPTED'
+            self._recovery(execution)
+            db.commit()
+            return execution
 
     def _snapshot(self, execution):
         return deepcopy(execution.configuration_snapshots[0].snapshot_json) if execution.configuration_snapshots else {}
@@ -314,6 +399,7 @@ class SkillCoordinator:
 
     def _store_artifacts(self, execution, result, step, artifacts):
         db = self.repository.session
+        evidence_ids = []
         for artifact in artifacts:
             if artifact.redacted is not True:
                 raise ValueError('Unredacted evidence rejected')
@@ -337,6 +423,8 @@ class SkillCoordinator:
             db.add(evidence)
             db.flush()
             db.add(EvidenceRunResultLink(evidence_id=evidence.id,run_result_id=result.id))
+            evidence_ids.append(evidence.id)
+        return tuple(evidence_ids)
 
     def _recovery(self, execution):
         db = self.repository.session

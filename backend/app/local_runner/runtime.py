@@ -18,7 +18,8 @@ from .evidence import GeneratedEvidenceWriter
 from .facts import derive_standard_facts, historical_observations, recent_history
 from .ma5800.actions import MA5800Actions, register_default_ma5800_actions
 from .ma5800.actions import _validated_target
-from .ma5800.parsers import PROMPT_LINE, normalize_cli_output, parse_ont_state, parse_profile_gem
+from .ma5800.parsers import PROMPT_LINE, normalize_cli_output, parse_ont_state, parse_profile_gem, parse_service_port_detail
+from .ma5800.service_port_contracts import PortOperation, PortPreview, PortRead, ServicePortMapping, port_read_payload, read_port_payload
 from .ma5800.transport import MA5800SSHConnector, MA5800Transport, SafeMA5800Command, HostKeyFingerprintMismatchError
 from .onu_web.neutral import NeutralONUWebAdapter
 from .pc_probe import PCProbe, ProbeRequest
@@ -27,7 +28,8 @@ from .registry import LocalActionRegistry
 
 OLT_ACTIONS = frozenset({'preflight', 'discover_onts', 'snapshot_ont', 'find_free_ont_id',
     'delete_ont', 'register_ont', 'provision_ipoe', 'provision_pppoe', 'read_wan_info',
-    'remove_test_services', 'restore_snapshot', 'verify_restore', 'verify_existing_registration'})
+    'remove_test_services', 'restore_snapshot', 'verify_restore', 'verify_existing_registration',
+    'inspect_service_mapping', 'create_service_port', 'verify_service_port'})
 WEB_ACTIONS = frozenset({'capture_onu_wan', 'run_onu_ping'})
 ALLOWED_ACTIONS = OLT_ACTIONS | WEB_ACTIONS | {'pc_connectivity_probe'}
 _GPON_COMMANDS = frozenset({'display_ont_port', 'display_wan_info', 'delete_ont',
@@ -152,10 +154,16 @@ class BoundExecutionRuntime:
                                  'Registration-only restoration cannot verify the complete WAN snapshot; manual recovery required.')
         executor = None
         try:
+            if action == 'create_service_port' and not self._port_create_guard(context, history):
+                return self._blocked(context, 'PORT_DURABLE_APPROVAL_REQUIRED')
             if action in OLT_ACTIONS:
                 executor = _OLTExecutor(self.binding, self.resources, context)
                 if action == 'verify_existing_registration':
                     outcome = self._verify_existing_registration(executor, context)
+                elif action in {'inspect_service_mapping', 'verify_service_port'}:
+                    outcome = self._inspect_service_mapping(executor, context)
+                elif action == 'create_service_port':
+                    outcome = self._create_service_port(executor, context)
                 else:
                     registry = LocalActionRegistry()
                     register_default_ma5800_actions(registry, MA5800Actions(executor))
@@ -226,9 +234,111 @@ class BoundExecutionRuntime:
             Observation('olt.retained_registration', asdict(registration), 'MA5800'),
             Observation('olt.registration.ready', True, 'MA5800'),
             Observation('olt.profile_gem.verified', True, 'MA5800'),
+            Observation('olt.profile_gem.mappings', [asdict(item) for item in mappings], 'MA5800'),
             Observation('olt.autofind.matched', True, 'MA5800',
                         'Existing registration proves the target is reported; no autofind observation was fabricated.'),
         ), ())
+
+    def _port_mapping(self, context):
+        mapping = ServicePortMapping.model_validate(context.parameters['service_port_mapping'])
+        binding_hash = sha256(json.dumps(self.binding.olt.model_dump(mode='json'), sort_keys=True,
+                                        separators=(',', ':')).encode()).hexdigest()
+        target = _validated_target(context.parameters)
+        spec = mapping.model_dump(mode='json', exclude={'olt_binding_hash', 'fsp', 'ont_id'})
+        profile = self.binding.service_port_profile
+        if (mapping.olt_binding_hash != binding_hash or mapping.ont_id != target['ont_id']
+                or mapping.fsp != '/'.join(str(target[key]) for key in ('frame', 'slot', 'pon_port'))
+                or profile is None or not any(item is not None and item.model_dump(mode='json') == spec
+                                              for item in (profile.ipoe, profile.pppoe))):
+            raise ValueError('Mapping differs from frozen binding')
+        return mapping, target
+
+    def _inspect_service_mapping(self, executor, context):
+        mapping, target = self._port_mapping(context)
+        verification = self._verify_existing_registration(executor, context)
+        if verification.status != 'PASS':
+            return verification
+        facts = {item.fact_key: item.value for item in verification.observations}
+        transcript = executor.run(SafeMA5800Command('display_service_ports', (mapping.fsp, mapping.ont_id)))
+        ports = MA5800Actions._target_service_ports(transcript, target)
+        details, ambiguous = [], False
+        for port in ports:
+            raw = executor.run(SafeMA5800Command('display_service_port_by_id', (port.service_port_id,)))
+            read = parse_service_port_detail(raw.normalized_output, binding_hash=mapping.olt_binding_hash)
+            if read.status != 'FOUND' or len(read.items) != 1 or read.items[0].port_id != port.service_port_id:
+                ambiguous = True
+            elif read.items[0].mapping.fsp != mapping.fsp or read.items[0].mapping.ont_id != mapping.ont_id:
+                ambiguous = True
+            else:
+                details.append(read.items[0])
+        ambiguous |= any(item.mapping.vlan == mapping.vlan and item.mapping.mapping_key != mapping.mapping_key
+                         for item in details)
+        matches = [item for item in details if item.mapping.mapping_key == mapping.mapping_key]
+        status, items = 'UNCONFIRMED', ()
+        if not ambiguous and len(matches) == 1:
+            status, items = 'FOUND', (matches[0],)
+        elif not ambiguous and not matches and mapping.candidate_id is not None:
+            raw = executor.run(SafeMA5800Command('display_service_port_by_id', (mapping.candidate_id,)))
+            candidate = parse_service_port_detail(raw.normalized_output, binding_hash=mapping.olt_binding_hash)
+            if candidate.status == 'ABSENT' and candidate.query_port_id == mapping.candidate_id:
+                status = 'ABSENT'
+        semantic = dict(binding_hash=mapping.olt_binding_hash, mapping=mapping.model_dump(mode='json'),
+            registration=facts['olt.retained_registration'], profile=facts['olt.profile_gem.mappings'],
+            ports=[dict(port_id=item.port_id, mapping=item.mapping.model_dump(mode='json'), state=item.state)
+                   for item in sorted(details, key=lambda item: item.port_id)], status=status)
+        digest = sha256(json.dumps(semantic, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+        read = PortRead(mapping.olt_binding_hash, digest, status, items, query_port_id=mapping.candidate_id)
+        return ActionOutcome('PASS' if status != 'UNCONFIRMED' else 'BLOCKED',
+            (Observation('port.read', port_read_payload(read), 'MA5800'),
+             Observation('olt.profile_gem.verified', True, 'MA5800')), (),
+            None if status != 'UNCONFIRMED' else 'PORT_MAPPING_UNCONFIRMED')
+
+    def _port_create_guard(self, context, history):
+        try:
+            operation = PortOperation.model_validate(context.parameters['port_operation'])
+            approval = context.parameters['port_approval']
+            mapping, _ = self._port_mapping(context)
+            if operation.session_id != context.session_id or operation.kind != 'CREATE' or operation.mapping != mapping:
+                return False
+            if (operation.serial_number != context.parameters['onu_serial_number'].upper()
+                    or operation.line_profile_id != context.parameters['line_profile_id']
+                    or operation.service_profile_id != context.parameters['service_profile_id']):
+                return False
+            if context.parameters.get('end_policy') != 'KEEP' or approval['operation'] != operation.model_dump(mode='json'):
+                return False
+            if PortPreview(operation, read_port_payload(approval['read'])).preview_hash != approval['preview_hash']:
+                return False
+            own = [event for event in history if event.session_id == context.session_id]
+            if any(event.event_type in {'PORT_CREATE_VERIFIED', 'PORT_CREATE_UNCERTAIN'}
+                   and event.payload_json.get('operation_id') == operation.operation_id for event in own):
+                return False
+            saved = next((event for event in own if event.idempotency_key == operation.operation_id + ':preview'), None)
+            intent = next((event for event in own if event.idempotency_key == operation.operation_id + ':PORT_CREATE_INTENT'), None)
+            if saved is None or saved.payload_json != approval or intent is None:
+                return False
+            payload = intent.payload_json
+            return (payload.get('approval_hash') == approval['preview_hash']
+                    and payload.get('mapping') == mapping.model_dump(mode='json')
+                    and payload.get('port_id') == operation.port_id and payload.get('baseline_hash') == operation.baseline_hash
+                    and payload.get('read_hash') == operation.read_hash and payload.get('command_result') == 'PENDING')
+        except (ValueError, KeyError, TypeError):
+            return False
+
+    def _create_service_port(self, executor, context):
+        operation = PortOperation.model_validate(context.parameters['port_operation'])
+        fresh = self._inspect_service_mapping(executor, context)
+        values = {item.fact_key: item.value for item in fresh.observations}
+        read = read_port_payload(values['port.read'])
+        if fresh.status != 'PASS' or read.status != 'ABSENT' or read.observation_hash != operation.read_hash:
+            return ActionOutcome('BLOCKED', fresh.observations, (), 'PORT_APPROVAL_STALE')
+        command = MA5800Actions(executor).create_service_port(operation)
+        if command.status != 'PASS':
+            return command
+        after = self._inspect_service_mapping(executor, context)
+        result = read_port_payload(next(item.value for item in after.observations if item.fact_key == 'port.read'))
+        verified = after.status == 'PASS' and result.status == 'FOUND' and result.items[0].port_id == operation.port_id
+        return ActionOutcome('PASS' if verified else 'BLOCKED', command.observations + after.observations, (),
+                             None if verified else 'PORT_POSTCONDITION_UNCONFIRMED')
 
     def _blocked(self, context, code):
         artifacts = ()

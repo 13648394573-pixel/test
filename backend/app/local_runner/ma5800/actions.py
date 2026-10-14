@@ -181,6 +181,22 @@ class MA5800Actions:
             return ActionOutcome("BLOCKED", (), (), "NO_FREE_ONT_ID", "No free ONT ID")
         return self._pass("olt.free_ont_id", free, transcript)
 
+    def create_service_port(self, operation) -> ActionOutcome:
+        """Typed command boundary; caller must have committed and checked approval."""
+        from .service_port_contracts import PortOperation
+        if not isinstance(operation, PortOperation) or operation.kind != 'CREATE':
+            raise ValueError('An immutable CREATE operation is required')
+        mapping = operation.mapping
+        transcript = self.executor.run(SafeMA5800Command('create_service_port', (
+            operation.port_id, mapping.vlan, mapping.fsp, mapping.ont_id, mapping.gemport,
+            mapping.user_vlan, mapping.tag_transform, mapping.business_type)))
+        result = parse_command_result(transcript.normalized_output)
+        acknowledged = result.success and bool(re.search(
+            r'(?im)^Command executed successfully\.?\s*$', transcript.normalized_output))
+        return ActionOutcome('PASS' if acknowledged else 'BLOCKED',
+            (Observation('port.command_succeeded', acknowledged, 'MA5800'),), (),
+            None if acknowledged else 'PORT_COMMAND_ACK_UNCONFIRMED')
+
     def delete_ont(self, context: ActionContext) -> ActionOutcome:
         return self._guarded_mutation(
             context,

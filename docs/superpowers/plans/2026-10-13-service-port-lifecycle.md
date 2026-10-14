@@ -89,22 +89,25 @@ Task 2 验证：相关 60 passed，完整后端 727 passed（332.39s，2026-10-1
 - [x] 创建时由冻结绑定选择新计划，不接受请求覆盖映射；VLAN 与既有 IPOE/PPPOE 参数必须相符，否则拒绝。旧绑定/旧计划没有新参数时不进入创建流程，不补默认 GEM/ID。
 - [x] 新计划在任何配置写入前检查 end_policy：要求完整 RESTORE 时 BLOCKED；KEEP 不绕过逐动作审批。现有恢复保护保持不变，注册缺失不自动转换为重注册。
 - [x] 运行计划与 test_skill_coordinator.py、test_local_runner_binding.py、test_local_runner_runtime.py，相关 60 passed；复查历史快照无变更。
-- [ ] 提交建议 `feat(skill-execution): add safe retained registration plan`，等待用户指令。
+- [x] 已按用户后续指令提交 `feat(skill-execution): add safe retained registration plan`（7b5c2e64ad816528e10a5e764744399e84d173f0），未推送/合并。
 
-Task 3（2026-10-14）：相关 60 passed，完整后端 752 passed（370.00s）；只接入只读注册/Profile/GEM 核验。通道检查、创建和后验为后续 Task 4 的 fail-closed 计划节点，目前不能运行完整生命周期。配置字段由 Task 1 提供，本任务不重复修改 configuration.py；Catalog 定义和旧 build_plan 不变。实现验证通过，尚未提交。详见 docs/LOCAL_RUNNER_LIVE_ACCEPTANCE.md。
+Task 3（2026-10-14）：相关 60 passed，完整后端 752 passed（370.00s），提交后门禁再次 60 passed（37.45s）。本阶段只接入只读注册/Profile/GEM 核验，通道节点交由 Task 4 实现。configuration.py 沿用 Task 1 字段；Catalog 定义和旧 build_plan 不变。详见 docs/LOCAL_RUNNER_LIVE_ACCEPTANCE.md。
 
 ### Task 4：复用、创建与事务边界
 
-**Files:** 新增 service_port_lifecycle.py、backend/tests/test_service_port_creation.py；修改 actions.py、runtime.py、coordinator.py、repository.py。
+**Files:** 新增 service_port_lifecycle.py、backend/tests/test_service_port_creation.py；修改 actions.py、runtime.py、coordinator.py、service_port_contracts.py；repository.py 复用现有追加事件接口，无需修改。契约文件补齐本任务依赖的 PortOperation/PortPreview，含显式目标与消费者。
 **Interfaces:** lifecycle.inspect(session_id:str, mapping:ServicePortMapping) -> PortRead；lifecycle.preview(operation:PortOperation, read:PortRead) -> PortPreview；lifecycle.execute_approved(operation:PortOperation, preview_hash:str) -> ActionOutcome。Runner inspect_service_mapping(context)/create_service_port(context) -> ActionOutcome；只调用 allowlist，不直接写事件。
 
-- [ ] 写 test_exact_match_reuses_without_write、test_duplicate_match_blocks、test_incomplete_profile_gem_blocks；断言完整匹配才 REUSED。
-- [ ] 写 test_candidate_globally_occupied_blocks、test_state_changed_after_approval_has_zero_writes、test_preview_hash_covers_full_mapping；断言旧 hash 无法批准新范围。
-- [ ] 写 test_intent_is_committed_before_device_write，使用另一数据库连接断言能看到 INTENT；提交失败断言 executor 未调用。
-- [ ] 运行 `python -m pytest backend/tests/test_service_port_creation.py -q`，确认 RED。
-- [ ] 实现只读核验 → 审批 → 即时重查 → 意图短事务提交 → 命令 → 后验/Evidence → 结果短事务。command success 与完整一致后验同时成立才 CREATE_VERIFIED；Evidence 保存失败不得 verified。
-- [ ] 写并运行 test_timeout_does_not_claim_created_resource、test_post_query_mismatch_is_uncertain、test_result_commit_failure_retains_intent；旧意图保留且进入人工处理，不自动重试。
-- [ ] 运行创建测试及 test_skill_approval_scope.py、test_local_runner_runtime.py，全 PASS；确认密码不进入预览/事件。提交建议 `feat(local-runner): create approved service ports safely`，等待指令。
+- [x] 写复用、重复匹配、Profile/GEM 缺失反例（部分采用参数化用例），断言完整匹配才 REUSED。
+- [x] 写全局 ID 占用、审批漂移、完整操作 hash 及显式 SN/Profile/消费者预览反例，旧 hash 无法批准新范围。
+- [x] 写意图先提交测试，文件型 SQLite 的独立 Session 读取已提交 INTENT；提交失败断言 executor 未调用。
+- [x] 运行创建测试，确认有效 RED（缺失模块断言从夹具移到测试体后为 13 failed）。
+- [x] 实现只读核验 → 审批 → 即时重查 → 意图短事务提交 → 命令 → 后验/Evidence → 结果短事务；显式命令确认和完整一致后验同时成立才 VERIFIED，前后证据均重验。
+- [x] 写并运行超时、后验不符、证据失败、结果提交失败、取消及前验证据篡改反例；保留意图/不确定记录，不自动重试。
+- [x] 创建、审批、Runner、契约、账本和计划相关 151 passed（58.32s）；最终完整后端 774 passed（348.58s）。预览/事件不含凭据。
+- [ ] 提交建议 `feat(local-runner): create approved service ports safely`，等待用户指令。
+
+Task 4 限制：仅接受当前支持的完整映射及显式成功回执；陌生回执、不完整读取和同 VLAN 冲突均不判成功。离线通过不是现场创建授权，清理/恢复仍为 Tasks 5–6。详见 docs/LOCAL_RUNNER_LIVE_ACCEPTANCE.md。
 
 ### Task 5：逐条清理与共享保留
 

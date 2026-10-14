@@ -562,3 +562,45 @@ translate、基线属性及队列模式；其他有效但未验证的模式仍�
 须按可选字段处理。Task 1 代码与验证已完成，提交仍待用户指令；Task 2–7
 尚未实现，整体独立审核安排在最后，当前不宣称生命周期或恢复闭环已完成。
 本轮未提交/推送/合并，main 未修改，原 Snapshot/LOCKED/报告归档保持原规则。
+
+## 生命周期 Task 2 追加式资源账本验证（2026-10-14）
+
+Task 1 后续已按授权提交为 53b8e4495cd0d20dd5babb42fcc9111293d9d29e 并同步
+远端 feature；前节的“等待提交”为当时状态。Task 2 从此提交继续，仅新增纯
+事件重放与清理候选筛选，不新增数据库表、迁移、依赖或设备动作。
+
+沿用 ExecutionEvent 和 Repository.events(session_id) 完整、有序、连续事件流，
+处理版本 1 的复用、创建/删除意图、核验、不确定和 KEEP 事件。幂等键为
+operation_id:event_type；相同已持久化事件不重复生成资源，冲突键、未知版本、
+缺序、非法状态转移均拒绝。投影冻结，不修改已有事件、旧快照或历史结果。
+
+只有本会话已核验创建、具有创建事件引用和前后证据、未被保留 WAN 消费者
+引用的 ACTIVE 资源进入候选。REUSED、未核验、不确定、KEEP、已删除资源
+不具备候选资格；混合会话及重复资源投影拒绝。整会话端口事件固定于同一
+OLT 绑定、FSP、ONT 和基线，避免第二映射带入另一设备或另一基线。
+
+范围裁定：完整事件流而非 PORT 事件子集用于重放；CREATED 消费者在创建
+意图冻结，同映射双 WAN 在后续 Task 3 一起规划。REUSED 可累计消费者但不
+获得所有权。不确定创建不自动认领；不确定删除可接受只读确认缺失的后验，
+再次删除意图必须使用新操作、新审批和不与旧前验证据重叠的证据。
+代价：部分事件流、多 DUT 会话或事后扩增 CREATED 消费者会被阻塞，需要
+另行明确契约；Task 4–6 仍须核验现场身份、证据文件/hash、时效和审批。
+纯投影不是现场所有权永久保证，也不是执行删除的授权入口。
+
+TDD：上一轮初始 RED 38 failed（2.39s），相关 GREEN 51 passed（10.22s）；
+补重复映射及中断恢复反例 RED 3 failed / 40 passed（3.15s），相关 GREEN
+56 passed（15.25s）。本轮补会话/重复投影反例 RED 4 failed / 43 passed
+（2.87s）；范围校验修复后仅剩重复投影反例失败，1 failed / 46 passed
+（2.44s）；完成修复后账本和 Repository 相关 GREEN 60 passed（11.88s）。
+
+验证命令：python -m pytest backend/tests/test_service_port_ledger.py
+backend/tests/test_skill_execution_repository.py -q -p no:cacheprovider
+--basetemp=C:/Users/admin/Documents/Codex/lrb-tests/port-ledger-final-green-20261014
+--tb=short。完整后端命令：python -m pytest backend/tests -q -p no:cacheprovider
+--basetemp=C:/Users/admin/Documents/Codex/lrb-tests/port-ledger-full-20261014
+--tb=short；结果 727 passed（332.39s），退出码 0。git diff --check 通过；
+仅有 Git LF/CRLF 转换提示。前端未修改，本阶段未运行前端测试或构建。
+未连接设备、未写正式/验收数据库、未执行创建/删除动作。
+
+Task 2 实现已通过相关及完整后端测试，未提交、推送或合并，提交仍待用户指令。Task 3–7
+未开始，整体独立审核仍在 Task 7；不宣称 service-port 现场闭环已完成。

@@ -69,11 +69,14 @@ Task 1 验证：相关 143 passed，完整后端 680 passed；端口/设备参�
 **Files:** 新增 service_port_ledger.py、backend/tests/test_service_port_ledger.py；必要修改 repository.py，仅复用现有事件表。
 **Interfaces:** replay_port_ledger(session_id:str, events:Sequence[ExecutionEvent]) -> tuple[PortResource,...]；cleanup_candidates(resources:Sequence[PortResource], retained_consumers:frozenset[str]) -> tuple[PortResource,...]。PortResource 包含映射、ID、origin、消费者、创建事件引用、状态和最后证据；未知事件版本或非法状态序列拒绝，不跳过。
 
-- [ ] 写 test_only_verified_session_created_resources_are_cleanup_candidates，断言 REUSED、其他会话、CREATE_INTENT/UNCERTAIN 均不在候选集合。
-- [ ] 写 test_shared_mapping_retains_active_consumer、test_keep_is_not_delete、test_duplicate_operation_does_not_duplicate_resource；断言创建仅一个、共享引用保留、KEEP 后无清理资格。
-- [ ] 运行 `python -m pytest backend/tests/test_service_port_ledger.py -q`，确认 RED。
-- [ ] 实现版本 1 事件重放，沿用唯一幂等键 `{operation_id}:{event_type}`，事件追加不改已有记录；资源索引含 session_id 与 mapping_key，不只使用 ID。
-- [ ] 运行账本及 test_skill_execution_repository.py，全部 PASS；无模型/迁移改动。提交建议 `feat(skill-execution): track service port ownership events`，等待指令。
+- [x] 写 test_only_verified_session_created_resources_are_cleanup_candidates，断言 REUSED、其他会话、CREATE_INTENT/UNCERTAIN 均不在候选集合。
+- [x] 写 test_shared_mapping_retains_active_consumer、test_keep_is_not_delete、test_duplicate_operation_does_not_duplicate_resource；断言创建仅一个、共享引用保留、KEEP 后无清理资格。
+- [x] 运行 `python -m pytest backend/tests/test_service_port_ledger.py -q`，确认 RED。
+- [x] 实现版本 1 事件重放，沿用唯一幂等键 `{operation_id}:{event_type}`，事件追加不改已有记录；资源索引含 session_id 与 mapping_key，不只使用 ID。
+- [x] 运行账本及 test_skill_execution_repository.py，全部 PASS；无模型/迁移改动。
+- [ ] 提交建议 `feat(skill-execution): track service port ownership events`，等待用户指令；尚未完成版本固化。
+
+Task 2 验证：相关 60 passed，完整后端 727 passed（332.39s，2026-10-14）。纯函数账本未接入设备写入流程，不把候选集合当作删除授权；范围裁定和验证见 docs/LOCAL_RUNNER_LIVE_ACCEPTANCE.md。实现验证通过，版本固化仍等待用户指令。
 
 ### Task 3：新计划与已有注册安全分支
 

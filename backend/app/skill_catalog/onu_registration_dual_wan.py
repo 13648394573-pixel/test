@@ -6,6 +6,57 @@ from app.skill_catalog.definitions import (
     RequirementDefinition,
     StepDefinition,
 )
+from app.local_runner.ma5800.service_port_contracts import ServicePortProfile
+
+
+def build_service_port_plan(parameters: dict, profile: ServicePortProfile | None) -> dict:
+    """New sessions only: retain registration, freeze mappings, preserve isolation."""
+    if not isinstance(profile, ServicePortProfile) or profile.ipoe is None or profile.pppoe is None:
+        raise ValueError('Explicit mappings for both WAN consumers are required')
+    concurrent = parameters.get('execution_mode') == 'CONCURRENT_DUAL_WAN'
+    if parameters.get('execution_mode') not in {'SEQUENTIAL_ISOLATED', 'CONCURRENT_DUAL_WAN'}:
+        raise ValueError('Unsupported WAN execution mode')
+    if parameters.get('end_policy') not in {'KEEP', 'RESTORE'}:
+        raise ValueError('Explicit end policy is required')
+    groups = {}
+    for wan in ('IPOE', 'PPPOE'):
+        spec = getattr(profile, wan.lower())
+        if type(parameters.get(wan.lower() + '_vlan')) is not int or spec.vlan != parameters[wan.lower() + '_vlan']:
+            raise ValueError('Frozen service-port profile and WAN VLAN differ')
+        mapping = spec.model_dump(mode='json')
+        key = tuple(sorted(spec.model_dump(exclude={'candidate_id'}).items()))
+        group = groups.setdefault(key, {'mapping': mapping, 'consumers': []})
+        if group['mapping']['candidate_id'] != spec.candidate_id:
+            raise ValueError('Shared mapping has conflicting explicit candidates')
+        group['consumers'].append(wan)
+    def action(ref, code, step, group=None, method='OLT_RENDER', wan=None):
+        return dict(ref=ref, action=code, step=step, group=group, method=method, wan=wan)
+    def interaction(ref, choices, step):
+        return dict(ref=ref, interaction=choices, step=step)
+    steps = [action('PREFLIGHT', 'preflight', 'PREFLIGHT'),
+             action('VERIFY_REGISTRATION', 'verify_existing_registration', 'REGISTER', 'E1_OLT_AUTOFIND'),
+             action('SNAPSHOT', 'snapshot_ont', 'REGISTER', 'E2_REGISTRATION')]
+    for index, group in enumerate(groups.values(), 1):
+        for suffix, code in [('INSPECT', 'inspect_service_mapping'), ('CREATE', 'create_service_port'),
+                             ('VERIFY', 'verify_service_port')]:
+            steps.append({**action(f'SERVICE_{index}_{suffix}', code, 'REGISTER'),
+                          'mapping': dict(group['mapping']), 'consumers': list(group['consumers'])})
+    steps.append(action('PROVISION_IPOE', 'provision_ipoe', 'IPOE_ADDRESS'))
+    if concurrent:
+        steps.append(action('PROVISION_PPPOE', 'provision_pppoe', 'PPPOE_ADDRESS'))
+    for wan, address_group, ping_group in [('IPOE', 'E3_IPOE_ADDRESS', 'E4_IPOE_PING'),
+                                          ('PPPOE', 'E5_PPPOE_ADDRESS', 'E6_PPPOE_PING')]:
+        if wan == 'PPPOE' and not concurrent:
+            steps += [interaction('ISOLATE_IPOE', ['IPOE_DISABLED', 'UNABLE', 'CANCEL'], 'PPPOE_ADDRESS'),
+                      action('PROVISION_PPPOE', 'provision_pppoe', 'PPPOE_ADDRESS')]
+        if concurrent:
+            steps.append(interaction(f'SWITCH_{wan}', [f'{wan}_ACTIVE', 'UNABLE', 'CANCEL'], f'{wan}_PING'))
+        steps += [action(f'{wan}_ADDRESS_OLT', 'read_wan_info', f'{wan}_ADDRESS', address_group, wan=wan),
+                  action(f'{wan}_ADDRESS_WEB', 'capture_onu_wan', f'{wan}_ADDRESS', address_group, 'ONU_WEB', wan),
+                  action(f'{wan}_PING_ONU', 'run_onu_ping', f'{wan}_PING', ping_group, 'ONU_WEB', wan),
+                  action(f'{wan}_PING_PC', 'pc_connectivity_probe', f'{wan}_PING', ping_group, 'PC_PROBE', wan)]
+    steps.append(interaction('END_POLICY', ['KEEP', 'CANCEL'], 'FINISH'))
+    return {'version': 2, 'steps': steps}
 
 
 CATALOG = CatalogDefinition(

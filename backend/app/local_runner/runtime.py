@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
 from hashlib import sha256
 from ipaddress import ip_address, ip_interface
 import json
+import re
 from typing import Callable
 from uuid import uuid4
 from urllib.parse import urlsplit
@@ -16,6 +17,8 @@ from .credentials import CredentialResolver, UnavailableCredentialError
 from .evidence import GeneratedEvidenceWriter
 from .facts import derive_standard_facts, historical_observations, recent_history
 from .ma5800.actions import MA5800Actions, register_default_ma5800_actions
+from .ma5800.actions import _validated_target
+from .ma5800.parsers import PROMPT_LINE, normalize_cli_output, parse_ont_state, parse_profile_gem
 from .ma5800.transport import MA5800SSHConnector, MA5800Transport, SafeMA5800Command, HostKeyFingerprintMismatchError
 from .onu_web.neutral import NeutralONUWebAdapter
 from .pc_probe import PCProbe, ProbeRequest
@@ -24,7 +27,7 @@ from .registry import LocalActionRegistry
 
 OLT_ACTIONS = frozenset({'preflight', 'discover_onts', 'snapshot_ont', 'find_free_ont_id',
     'delete_ont', 'register_ont', 'provision_ipoe', 'provision_pppoe', 'read_wan_info',
-    'remove_test_services', 'restore_snapshot', 'verify_restore'})
+    'remove_test_services', 'restore_snapshot', 'verify_restore', 'verify_existing_registration'})
 WEB_ACTIONS = frozenset({'capture_onu_wan', 'run_onu_ping'})
 ALLOWED_ACTIONS = OLT_ACTIONS | WEB_ACTIONS | {'pc_connectivity_probe'}
 _GPON_COMMANDS = frozenset({'display_ont_port', 'display_wan_info', 'delete_ont',
@@ -151,9 +154,12 @@ class BoundExecutionRuntime:
         try:
             if action in OLT_ACTIONS:
                 executor = _OLTExecutor(self.binding, self.resources, context)
-                registry = LocalActionRegistry()
-                register_default_ma5800_actions(registry, MA5800Actions(executor))
-                outcome = registry.resolve('ma5800', action).execute(context)
+                if action == 'verify_existing_registration':
+                    outcome = self._verify_existing_registration(executor, context)
+                else:
+                    registry = LocalActionRegistry()
+                    register_default_ma5800_actions(registry, MA5800Actions(executor))
+                    outcome = registry.resolve('ma5800', action).execute(context)
                 if executor.transcripts:
                     writer = GeneratedEvidenceWriter(context.workspace, clock=self.resources.clock)
                     artifacts = writer.write_text_and_png(uuid4().hex, title='OLT parsed transcript',
@@ -183,6 +189,46 @@ class BoundExecutionRuntime:
         finally:
             if executor is not None and not executor.close():
                 return self._blocked(context, 'RUNNER_RESOURCE_CLOSE_FAILED')
+
+    def _verify_existing_registration(self, executor, context):
+        profile = self.binding.service_port_profile
+        if profile is None or profile.ipoe is None or profile.pppoe is None:
+            return ActionOutcome('BLOCKED', (), (), 'SERVICE_PORT_PROFILE_REQUIRED')
+        target = _validated_target(context.parameters)
+        transcript = executor.run(SafeMA5800Command('display_ont_by_sn', (target['serial'],)))
+        text = normalize_cli_output(transcript.normalized_output)
+        lines = text.splitlines()
+        keys = [match[1].strip().casefold().replace('-', ' ') for line in lines
+                if (match := re.fullmatch(r'([^:]+?)\s*:\s*(.*?)', line))]
+        if (not lines or not PROMPT_LINE.fullmatch(lines[-1]) or len(keys) != len(set(keys))
+                or re.search(r'(?im)^(?:Failure:|Error:|%)', text)):
+            return ActionOutcome('BLOCKED', (), (), 'OLT_REGISTRATION_UNCONFIRMED')
+        try:
+            registration = parse_ont_state(text)
+        except (ValueError, TypeError):
+            return ActionOutcome('BLOCKED', (), (), 'OLT_REGISTRATION_UNCONFIRMED')
+        fsp = '/'.join(str(target[key]) for key in ('frame', 'slot', 'pon_port'))
+        if (registration.fsp != fsp or registration.ont_id != target['ont_id']
+                or registration.serial_number != target['serial']
+                or registration.line_profile_id != context.parameters.get('line_profile_id')
+                or registration.service_profile_id != context.parameters.get('service_profile_id')
+                or registration.run_state != 'online' or registration.match_state != 'match'):
+            return ActionOutcome('BLOCKED', (), (), 'OLT_REGISTRATION_PROFILE_MISMATCH')
+        transcript = executor.run(SafeMA5800Command('read_profile_gem', (registration.line_profile_id,)))
+        try:
+            mappings = parse_profile_gem(transcript.normalized_output, expected_profile_id=registration.line_profile_id)
+        except (ValueError, TypeError):
+            return ActionOutcome('BLOCKED', (), (), 'OLT_PROFILE_GEM_UNCONFIRMED')
+        for spec in (profile.ipoe, profile.pppoe):
+            if not any(item.gemport == spec.gemport and item.vlan == spec.user_vlan for item in mappings):
+                return ActionOutcome('BLOCKED', (), (), 'OLT_PROFILE_GEM_MISMATCH')
+        return ActionOutcome('PASS', (
+            Observation('olt.retained_registration', asdict(registration), 'MA5800'),
+            Observation('olt.registration.ready', True, 'MA5800'),
+            Observation('olt.profile_gem.verified', True, 'MA5800'),
+            Observation('olt.autofind.matched', True, 'MA5800',
+                        'Existing registration proves the target is reported; no autofind observation was fabricated.'),
+        ), ())
 
     def _blocked(self, context, code):
         artifacts = ()

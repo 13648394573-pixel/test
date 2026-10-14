@@ -1,5 +1,5 @@
 from copy import deepcopy
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from datetime import UTC, datetime
 from hashlib import sha256
 from io import BytesIO
@@ -16,6 +16,7 @@ from app.test_execution.repository import TestExecutionRepository
 from app.test_execution.service import TestExecutionService
 from app.local_runner.contracts import ActionContext
 from app.skill_execution.evaluator import evaluate
+from app.skill_catalog.onu_registration_dual_wan import build_service_port_plan
 
 
 MUTATIONS = frozenset({'delete_ont','register_ont','provision_ipoe','provision_pppoe',
@@ -96,6 +97,11 @@ class SkillCoordinator:
         result = db.get(RunResult, execution.run_result_id)
         if result.integrity_status == 'LOCKED':
             raise ValueError('Locked result cannot execute')
+        if run.execution_plan_snapshot.get('version') == 2 and result.parameter_snapshot.get('end_policy') != 'KEEP':
+            execution.error_code = 'COMPLETE_WAN_RESTORE_UNSUPPORTED'
+            repo.append_event(session_id, 'ACTION_OUTCOME',
+                {'ref': 'RESTORE_GUARD', 'status': 'BLOCKED', 'observations': []}, 'restore-guard:blocked')
+            return self._finalize(execution)
         events = repo.events(session_id)
         starts = {e.idempotency_key.removesuffix(':start') for e in events if e.event_type == 'ACTION_STARTED'}
         outcomes = {e.idempotency_key.removesuffix(':outcome') for e in events if e.event_type == 'ACTION_OUTCOME'}
@@ -230,7 +236,7 @@ class SkillCoordinator:
         parameters['configuration_snapshot'] = self._snapshot(execution)
         free = [o['value'] for e in events if e.event_type == 'ACTION_OUTCOME'
                 for o in e.payload_json.get('observations', []) if o['fact_key'] == 'olt.free_ont_id']
-        if free and step['ref'] not in {'SNAPSHOT','DELETE_EXISTING'}:
+        if result.run.execution_plan_snapshot.get('version') == 1 and free and step['ref'] not in {'SNAPSHOT','DELETE_EXISTING'}:
             parameters['ont_id'] = free[-1]
         if step['action'] in MUTATIONS:
             parameters['affected_service_ports'] = self._owned_snapshot_ports(parameters)
@@ -252,6 +258,11 @@ class SkillCoordinator:
             secrets = self.secrets_for(parameters, step['action'])
             outcome = self.execute(ActionContext(execution.id, step['action'], parameters, secrets,
                                                  self.workspace / execution.id))
+            if result.run.execution_plan_snapshot.get('version') == 2 and step['action'] == 'verify_existing_registration':
+                proofs = {o.fact_key: o.value for o in outcome.observations if o.source == 'MA5800'}
+                if outcome.status != 'PASS' or any(proofs.get(key) is not True
+                        for key in ('olt.registration.ready', 'olt.profile_gem.verified')):
+                    outcome = replace(outcome, status='BLOCKED', error_code='RETAINED_REGISTRATION_UNCONFIRMED')
             secret_values = tuple(value.reveal() for value in secrets.values())
             observations = _clean([asdict(o) for o in outcome.observations], secret_values)
             if outcome.status not in {'PASS','FAIL','BLOCKED','ERROR','WAITING_OPERATOR'}:
@@ -276,6 +287,9 @@ class SkillCoordinator:
                         restore_action_ref='restore_snapshot',verify_action_ref='snapshot_ont'))
                     result.recovery_status = 'PENDING'
             self._store_artifacts(execution,result,step,outcome.artifacts)
+            if result.run.execution_plan_snapshot.get('version') == 2 and step['action'] == 'verify_existing_registration' and outcome.status != 'PASS':
+                execution.error_code = outcome.error_code
+                return self._finalize(execution)
             repo.append_event(execution.id,'STEP_COMPLETED',{'ref':step['ref']},step['ref'] + ':done')
             if step['ref'] == 'RESTORE_VERIFY':
                 observed = next((o['value'] for o in observations if o['fact_key'] == 'olt.configuration_snapshot'), None)

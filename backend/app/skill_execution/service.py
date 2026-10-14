@@ -86,11 +86,13 @@ class SkillExecutionService:
             evidence_rules = [{'rule_code': item.rule_code, 'min_count': item.min_count,
                 'capture_methods': list(next(e.capture_methods for e in CATALOG.evidence if e.code == item.rule_code))}
                 for item in skill.evidence_rules]
-            from app.skill_execution.coordinator import build_plan
-            plan = build_plan(parameters)
+            from app.skill_execution.coordinator import build_plan, build_service_port_plan
+            frozen_profile = runtime_binding.service_port_profile if runtime_binding is not None else None
+            plan_snapshot = (build_service_port_plan(parameters, frozen_profile) if frozen_profile is not None
+                             else {'version': 1, 'steps': build_plan(parameters)})
             run = TestRun(run_no=next_run_no(db), project_id=project.id, device_source_id=device.id,
                 device_snapshot=build_device_snapshot(device), source='LOCAL_RUNNER',
-                execution_status='CREATED', execution_plan_snapshot={'version': 1, 'steps': plan},
+                execution_status='CREATED', execution_plan_snapshot=plan_snapshot,
                 standard_profile_source_id=profile.id,
                 standard_snapshot={'profile_code': profile.profile_code, 'version': profile.version, 'rules': rules})
             result = RunResult(case_source_id=skill.case_bindings[0].test_case_id,

@@ -74,21 +74,24 @@ Task 1 验证：相关 143 passed，完整后端 680 passed；端口/设备参�
 - [x] 运行 `python -m pytest backend/tests/test_service_port_ledger.py -q`，确认 RED。
 - [x] 实现版本 1 事件重放，沿用唯一幂等键 `{operation_id}:{event_type}`，事件追加不改已有记录；资源索引含 session_id 与 mapping_key，不只使用 ID。
 - [x] 运行账本及 test_skill_execution_repository.py，全部 PASS；无模型/迁移改动。
-- [ ] 提交建议 `feat(skill-execution): track service port ownership events`，等待用户指令；尚未完成版本固化。
+- [x] 已按用户后续指令提交 `feat(skill-execution): track service port ownership events`（79a1231e932a383168beace807e3abe56de41bbf），未推送或合并。
 
-Task 2 验证：相关 60 passed，完整后端 727 passed（332.39s，2026-10-14）。纯函数账本未接入设备写入流程，不把候选集合当作删除授权；范围裁定和验证见 docs/LOCAL_RUNNER_LIVE_ACCEPTANCE.md。实现验证通过，版本固化仍等待用户指令。
+Task 2 验证：相关 60 passed，完整后端 727 passed（332.39s，2026-10-14）；提交后完成门禁再次 60 passed（13.16s）。纯函数账本未接入设备写入流程，不把候选集合当作删除授权；范围裁定和验证见 docs/LOCAL_RUNNER_LIVE_ACCEPTANCE.md。
 
 ### Task 3：新计划与已有注册安全分支
 
 **Files:** 修改 coordinator.py、service.py、configuration.py、runtime.py、onu_registration_dual_wan.py；新增 backend/tests/test_service_port_plan.py。
 **Interfaces:** build_service_port_plan(parameters:dict, profile:ServicePortProfile|None) -> dict（version=2、steps）；旧 build_plan 和旧计划快照不重写。新动作 verify_existing_registration、inspect_service_mapping、create_service_port、verify_service_port；消费者 IPOE/PPPOE。Profile/GEM 必须先由只读查询确认，Profile 编号不等于 GEM。
 
-- [ ] 写 test_v2_reuses_registration_without_delete_or_register，断言不含 FREE_ID/DELETE_EXISTING/REGISTER；身份/Profile 不匹配断言 BLOCKED 且写命令数 0。
-- [ ] 写 test_old_plan_snapshot_is_unchanged；test_required_restore_blocks_before_any_write；test_shared_mapping_does_not_delete_for_wan_switch，断言保留人工隔离节点。
-- [ ] 运行 `python -m pytest backend/tests/test_service_port_plan.py -q`，确认 RED。
-- [ ] 创建时由冻结绑定选择新计划，不接受请求覆盖映射；VLAN 与既有 IPOE/PPPOE 参数必须相符，否则拒绝。旧绑定/旧计划没有新参数时不进入创建流程，不补默认 GEM/ID。
-- [ ] 新计划在任何配置写入前检查 end_policy：要求完整 RESTORE 时 BLOCKED；KEEP 不绕过逐动作审批。现有恢复保护保持不变，注册缺失不自动转换为重注册。
-- [ ] 运行计划与 test_skill_coordinator.py、test_local_runner_binding.py，全部 PASS；复查历史快照无变更。提交建议 `feat(skill-execution): add safe retained registration plan`，等待指令。
+- [x] 写 test_v2_reuses_registration_without_delete_or_register，断言不含 FREE_ID/DELETE_EXISTING/REGISTER；身份/Profile 不匹配断言 BLOCKED 且写命令数 0。
+- [x] 写 test_old_plan_snapshot_is_unchanged；test_required_restore_blocks_before_any_write；test_shared_mapping_does_not_delete_for_wan_switch，断言保留人工隔离节点。
+- [x] 运行 `python -m pytest backend/tests/test_service_port_plan.py -q`，确认 RED。
+- [x] 创建时由冻结绑定选择新计划，不接受请求覆盖映射；VLAN 与既有 IPOE/PPPOE 参数必须相符，否则拒绝。旧绑定/旧计划没有新参数时不进入创建流程，不补默认 GEM/ID。
+- [x] 新计划在任何配置写入前检查 end_policy：要求完整 RESTORE 时 BLOCKED；KEEP 不绕过逐动作审批。现有恢复保护保持不变，注册缺失不自动转换为重注册。
+- [x] 运行计划与 test_skill_coordinator.py、test_local_runner_binding.py、test_local_runner_runtime.py，相关 60 passed；复查历史快照无变更。
+- [ ] 提交建议 `feat(skill-execution): add safe retained registration plan`，等待用户指令。
+
+Task 3（2026-10-14）：相关 60 passed，完整后端 752 passed（370.00s）；只接入只读注册/Profile/GEM 核验。通道检查、创建和后验为后续 Task 4 的 fail-closed 计划节点，目前不能运行完整生命周期。配置字段由 Task 1 提供，本任务不重复修改 configuration.py；Catalog 定义和旧 build_plan 不变。实现验证通过，尚未提交。详见 docs/LOCAL_RUNNER_LIVE_ACCEPTANCE.md。
 
 ### Task 4：复用、创建与事务边界
 

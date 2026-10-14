@@ -604,3 +604,47 @@ backend/tests/test_skill_execution_repository.py -q -p no:cacheprovider
 
 Task 2 实现已通过相关及完整后端测试，未提交、推送或合并，提交仍待用户指令。Task 3–7
 未开始，整体独立审核仍在 Task 7；不宣称 service-port 现场闭环已完成。
+
+## 生命周期 Task 3 保留已有注册的新计划验证（2026-10-14）
+
+Task 2 随后已按用户指令提交 79a1231e932a383168beace807e3abe56de41bbf，完成
+门禁再次 60 passed（13.16s）；未推送/合并。Task 3 从此干净基线开始。
+
+新增 build_service_port_plan 返回 version=2 的冻结计划，新会话仅在已有
+RuntimeBinding 中提供完整 IPOE/PPPOE 映射时选择；没有新 profile 的旧绑定
+继续 version=1。部分 profile、业务 VLAN 不符或同一映射候选冲突直接拒绝，
+不补默认 GEM/端口 ID，不让请求覆盖映射。configuration.py 沿用 Task 1 字段，
+无需新增配置或修改旧配置 hash。已安装 CATALOG 定义和旧 build_plan 不变。
+
+新计划取消自动发现、空闲 ID、删 ONT 和注册节点，先核验已注册目标的
+SN/FSP/ONT、line/service Profile、online/match，再查询实际线路 Profile 的
+ETH/VLAN/GEM 映射。重复字段、失败标记、截断、身份/Profile/GEM 不符均
+BLOCKED。仅新核验入口强化协议完整性，不修改旧解析器行为。注册证据以
+MA5800 来源和解释记录：现有注册证明目标已上报，不伪造 autofind 记录。
+沿用旧 E1 证据组名字，读取者不能据此推断本次执行了 autofind 命令。
+
+新计划 RESTORE 在任何动作之前 BLOCKED；结束仅提供 KEEP/CANCEL，完整
+WAN 自动恢复仍不支持。顺序测试保留 ISOLATE_IPOE 人工确认；并发模式保留
+SWITCH_IPOE/SWITCH_PPPOE，不通过 remove_test_services 删除共用映射。共享
+映射一次规划 IPOE/PPPOE 消费者，不同映射分开。KEEP 不授权自动写入，也
+不跳过后续逐动作预览/审批。协调器拒绝没有 MA5800 注册及 GEM 核验证据的
+PASS 返回，不让未证实的注册继续推进，旧空闲 ID 事件不覆盖 version=2 目标。
+
+范围裁定及代价：完整双 WAN profile 才可用新路径；要求 RESTORE 的用户仍
+受阻塞；版本 2 的通道 inspect/create/verify 节点仅为 Task 4 预留，尚无可执行
+写入处理器，当前会安全阻塞，不能宣称现场通道闭环已完成。旧计划不升级。
+
+基线协调器/绑定 19 passed（22.38s）。TDD 初次 RED 16 failed / 4 passed
+（12.21s），补成功/证据门禁 RED 18 failed / 4 passed（14.24s）；第一轮相关
+GREEN 41 passed（35.35s）。协议反例 RED 3 failed（3.74s），新入口检查后
+相关 GREEN 60 passed（37.61s）。命令：python -m pytest
+backend/tests/test_service_port_plan.py backend/tests/test_skill_coordinator.py
+backend/tests/test_local_runner_binding.py backend/tests/test_local_runner_runtime.py
+-q -p no:cacheprovider --basetemp=C:/Users/admin/AppData/Local/Temp/twb-task3-final-related-20261014
+--tb=short。完整后端命令：python -m pytest backend/tests -q -p no:cacheprovider
+--basetemp=C:/Users/admin/AppData/Local/Temp/twb-task3-full-20261014 --tb=short；
+结果 752 passed（370.00s），退出码 0。git diff --check 通过，仅有 LF/CRLF
+转换提示；未改前端，本阶段未运行前端测试/构建。
+
+本轮无设备连接、无现场命令、无正式/验收库写入、无数据库结构或依赖变更；
+Task 3 未提交/推送/合并。Tasks 4–7 未开始，最终独立整体审核仍安排在 Task 7。

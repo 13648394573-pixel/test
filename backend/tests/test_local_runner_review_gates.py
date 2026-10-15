@@ -7,7 +7,7 @@ import paramiko
 from app.local_runner.contracts import ActionContext, Observation
 from app.local_runner.credentials import SecretValue
 from app.local_runner.ma5800.actions import MA5800Actions
-from app.local_runner.ma5800.transport import CommandTranscript, MA5800SSHConnector, host_key_fingerprint
+from app.local_runner.ma5800.transport import CommandTranscript, HostKeyFingerprintMismatchError, MA5800SSHConnector, host_key_fingerprint
 from test_local_runner_runtime import parameters, runtime, execute
 from app.local_runner.runtime import RuntimeResources
 from app.local_runner.pc_probe import InterfaceAddress, PCProbe
@@ -79,8 +79,11 @@ def test_known_host_pin_checked_before_authentication_on_real_paramiko_flow(monk
         def connect(self, value): pass
         def close(self): pass
     class Transport:
+        gss_kex_used = False
         def __init__(self, *args, **kwargs): pass
         def use_compression(self, **kwargs): pass
+        def set_gss_host(self, **kwargs):
+            assert kwargs['gssapi_requested'] is False
         def get_security_options(self): return SimpleNamespace(key_types=('rsa-sha2-512',))
         def start_client(self, **kwargs): pass
         def get_remote_server_key(self): return key
@@ -100,7 +103,7 @@ def test_known_host_pin_checked_before_authentication_on_real_paramiko_flow(monk
         connect()
         assert authenticated == [('fixture-user', 'fixture-password')]
     else:
-        with pytest.raises(Exception):
+        with pytest.raises(HostKeyFingerprintMismatchError):
             connect()
         assert authenticated == []
 

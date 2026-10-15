@@ -15,6 +15,8 @@ from app.db.dependencies import get_session
 from app.evidence.storage import EvidenceStorage, EvidenceFileMissingError
 from app.local_runner.contracts import ActionContext, ActionOutcome
 from app.local_runner.ma5800.actions import ParameterValidationError
+from app.local_runner.ma5800.service_port_contracts import PortOperation, PortPreview, read_port_payload
+from app.skill_execution.service_port_lifecycle import cleanup_batch_payload
 from app.local_runner.credentials import InvalidCredentialReferenceError, UnavailableCredentialError
 from app.models.evidence import Evidence
 from app.models.test_execution import RunResult
@@ -22,7 +24,7 @@ from app.skill_execution.coordinator import SkillCoordinator
 from app.skill_execution.repository import SkillExecutionRepository
 from app.skill_execution.service import SkillExecutionService, RuntimeBindingRequiredError
 from app.skill_execution.schemas import (
-    ExecutionCreate, ExecutionRead, InteractionResponse, ExecutionEvidenceRead, ReconcileRequest,
+    ExecutionCreate, ExecutionRead, InteractionResponse, ExecutionEvidenceRead, ReconcileRequest, CleanupApproval,
 )
 
 
@@ -123,18 +125,50 @@ def _observations(events):
     return list(items.values())
 
 
+def _port_approval(preview, session_id):
+    """Expose typed, hash-checked impact only; never copy arbitrary stored payloads."""
+    batch = preview.get('action_code') == 'cleanup_service_ports'
+    if not batch and 'operation' not in preview:
+        return None
+    try:
+        items = preview['previews'] if batch else [preview]
+        if not isinstance(items, list):
+            raise ValueError('Invalid preview collection')
+        checked = []
+        for item in items:
+            operation = PortOperation.model_validate(item['operation'])
+            read = read_port_payload(item['read'])
+            typed = PortPreview(operation, read)
+            if (operation.session_id != session_id or typed.preview_hash != item['preview_hash']
+                or (batch and operation.kind != 'DELETE')
+                or item.get('action_code') != typed.to_payload()['action_code']):
+                raise ValueError('Unverifiable approval scope')
+            checked.append(typed)
+        retained = preview.get('retained_consumers', []) if batch else []
+        if not isinstance(retained, list) or any(v not in ('IPOE', 'PPPOE') for v in retained):
+            raise ValueError('Invalid retained consumers')
+        if batch and cleanup_batch_payload(checked, frozenset(retained))['preview_hash'] != preview['preview_hash']:
+            raise ValueError('Invalid batch hash')
+        return dict(operations=[p.operation.model_dump(mode='json') for p in checked],
+            evidence_ids=list(dict.fromkeys(e for p in checked for e in p.read.evidence_ids)),
+            retained_consumers=retained)
+    except (ValueError, KeyError, TypeError):
+        raise HTTPException(409, 'Service-port approval cannot be verified') from None
+
+
 def _pending(execution, result):
     pending = next((item for item in execution.operator_interactions if item.status == 'PENDING'), None)
     if pending is None:
         return None
     preview = pending.impact_preview or {}
+    port_approval = _port_approval(preview, execution.id)
     raw = preview.get('target', preview)
     target = {}
     for key in ('frame', 'slot', 'pon_port', 'ont_id'):
         value = raw.get(key)
         if type(value) is int and 0 <= value <= 65535:
             target[key] = value
-    fsp = raw.get('target_fsp')
+    fsp = raw.get('target_fsp', raw.get('fsp'))
     if isinstance(fsp, str) and re.fullmatch(r'\d+/\d+/\d+', fsp):
         target['fsp'] = fsp
     serial = raw.get('serial_number', raw.get('onu_serial_number'))
@@ -144,6 +178,16 @@ def _pending(execution, result):
         if s['ref'] == pending.interaction_ref), {})
     ports = [value for value in preview.get('affected_service_ports', [])
         if type(value) is int and 0 <= value <= 65535]
+    action = step.get('action')
+    if port_approval is not None:
+        operations = port_approval['operations']
+        ports = [op['port_id'] for op in operations]
+        action = preview['action_code']
+        if operations:
+            op = operations[0]
+            target = dict(fsp=op['mapping']['fsp'], ont_id=op['mapping']['ont_id'],
+                serial_number=op['serial_number'], line_profile_id=op['line_profile_id'],
+                service_profile_id=op['service_profile_id'])
     return dict(id=pending.id, ref=pending.interaction_ref, type=pending.interaction_type,
         risk_level=pending.risk_level, title=pending.interaction_ref,
         instructions=('请连接指定测试网卡；这是接线确认，非配置修改授权。确认后需再次推进。'
@@ -151,7 +195,7 @@ def _pending(execution, result):
                       else '请核对目标及影响范围；确认后不会立即执行，需再次推进。UNABLE/CANCEL 将阻塞或转入恢复。'),
         completion_condition='选择有效选项，并确认当前 preview_hash。',
         options=pending.options_json, preview_hash=preview.get('preview_hash', ''), target=target,
-        action_code=step.get('action'), affected_service_ports=ports)
+        action_code=action, affected_service_ports=ports, service_port_preview=port_approval)
 
 
 def _view(service, session_id, configured):
@@ -161,6 +205,10 @@ def _view(service, session_id, configured):
         resources = service.service_port_resources(session_id)
     except ValueError:
         raise HTTPException(409, 'Service-port ledger cannot be verified') from None
+    from app.skill_execution.service_port_cleanup_flow import ServicePortCleanupFlow
+    cleanup_available, cleanup_raw, cleanup_outcome = ServicePortCleanupFlow(service.coordinator).view(session_id)
+    cleanup_preview = ({**_port_approval(cleanup_raw, session_id), 'preview_hash': cleanup_raw['preview_hash']}
+                       if cleanup_raw is not None else None)
     return dict(session_id=execution.id, test_run_id=execution.test_run_id, run_result_id=result.id,
         skill_code=result.skill_snapshot['skill_code'], skill_version=result.skill_snapshot['version'],
         wan_mode=result.parameter_snapshot['execution_mode'], mode=execution.mode, status=execution.status,
@@ -170,6 +218,7 @@ def _view(service, session_id, configured):
             for e in events if e.event_type in _EVENT_TYPES], observations=_observations(events),
         pending_interaction=_pending(execution, result),
         service_port_resources=resources,
+        cleanup_available=cleanup_available, cleanup_preview=cleanup_preview, cleanup_outcome=cleanup_outcome,
         recovery_tasks=[dict(id=t.id, status=t.status,
             instructions='请人工核对注册、WAN 和 service-port；未确认恢复前不要重复执行。') for t in execution.recovery_tasks])
 
@@ -226,6 +275,19 @@ def _mutate(request, service, session_id, operation):
 def advance_execution(session_id: str, request: Request, response: Response, service: ServiceDependency):
     _no_store(response)
     return _mutate(request, service, session_id, lambda: service.advance(session_id))
+
+
+@router.post('/{session_id}/cleanup-preview', response_model=ExecutionRead)
+def preview_cleanup(session_id: str, payload: ReconcileRequest, request: Request, response: Response, service: ServiceDependency):
+    _no_store(response)
+    return _mutate(request, service, session_id, lambda: service.preview_service_port_cleanup(session_id))
+
+
+@router.post('/{session_id}/cleanup-execute', response_model=ExecutionRead)
+def execute_cleanup(session_id: str, payload: CleanupApproval, request: Request, response: Response, service: ServiceDependency):
+    _no_store(response)
+    return _mutate(request, service, session_id,
+        lambda: service.execute_service_port_cleanup(session_id, payload.preview_hash, payload.approved))
 
 
 @router.post('/{session_id}/interactions/{interaction_id}/respond', response_model=ExecutionRead)

@@ -16,6 +16,7 @@ import { testCaseApi as defaultTestCaseApi } from "../testCases/api";
 import type { TestCase, TestCaseApi } from "../testCases/types";
 import { testExecutionApi } from "./api";
 import ResultEditor from "./ResultEditor";
+import LocalExecutionApproval from "./LocalExecutionApproval";
 import type {
   TestExecutionApi,
   TestProject,
@@ -307,6 +308,8 @@ export default function TestExecutionPage({
           </div>
         </form>
       )}
+
+      <LocalExecutionApproval />
 
       <div className="table-panel">
         {loading ? (

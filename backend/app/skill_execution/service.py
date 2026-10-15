@@ -186,6 +186,16 @@ class SkillExecutionService:
         self.coordinator.execute = runtime.execute
         self.coordinator.secrets_for = runtime.secrets_for
 
+    def preview_service_port_cleanup(self, session_id):
+        from app.skill_execution.service_port_cleanup_flow import ServicePortCleanupFlow
+        self._bind_runtime(session_id)
+        return ServicePortCleanupFlow(self.coordinator).preview(session_id)
+
+    def execute_service_port_cleanup(self, session_id, approval_hash, approved):
+        from app.skill_execution.service_port_cleanup_flow import ServicePortCleanupFlow
+        self._bind_runtime(session_id)
+        return ServicePortCleanupFlow(self.coordinator).execute(session_id, approval_hash, approved)
+
     def get_view(self, session_id):
         execution = self.repository.get(session_id)
         return {'session_id': execution.id, 'test_run_id': execution.test_run_id,

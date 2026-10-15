@@ -14,7 +14,7 @@
 
 - 单机 B/S、DEVELOPMENT、现有隔离分支 codex/skill-execution；不修改 main、不合并、不推送。
 - 不修改旧 Run、Result、Snapshot、LOCKED 规则；不自动升级旧执行计划。
-- 不新增数据库表、前端模块、LAN/NAT/DNS 功能测试或完整 WAN 自动恢复。
+- 不新增数据库表、独立前端业务模块、LAN/NAT/DNS 功能测试或完整 WAN 自动恢复；2026-10-14 用户允许 Task 7 最小接入现有测试执行页的审批展示与确认。
 - 匹配则复用，缺失才创建；REUSED 永不自动删除，CREATED 需本会话已核验归属。
 - 未经具体现场审批不连接设备；本计划批准不授权注册、删除或 WAN 下发。
 - 先持久化意图，再设备 I/O，再后验与短事务；不将设备写入视为数据库可回滚事务。
@@ -139,8 +139,14 @@ Task 4 限制：仅接受当前支持的完整映射及显式成功回执；陌�
 
 集成审核需专项核验完整 PortPreview 到 Router `_pending` / 真实前端的字段投影，尤其 `fsp` / `target_fsp`、Profile、VLAN/GEM、候选 ID 与消费者。只读资源摘要不能代替完整人工审批展示；未验证前不通过现场写入门禁。
 
-**Files:** 新增 backend/tests/test_service_port_lifecycle_acceptance.py；更新 docs/LOCAL_RUNNER_LIVE_ACCEPTANCE.md 和现有非敏感配置说明；不修改前端业务文件。
+**Files:** 新增 backend/tests/test_service_port_lifecycle_acceptance.py；更新 docs/LOCAL_RUNNER_LIVE_ACCEPTANCE.md 和现有非敏感配置说明。2026-10-14 用户批准最小范围调整：修正 Router/Schema 的完整审批字段投影，在现有 TestExecutionPage 内接入 LocalExecutionApproval 组件及测试，不新增导航模块、会话创建或测试功能。
 **Interfaces:** 真实 Service → Coordinator → 注入离线 Runner → EvidenceStorage → 事件/API；复用现有 Report/Archive API，仅测试兼容性。
+
+Task 7 本轮记录（2026-10-14）：最小审批接入及审核发现的 ID 漂移/取消恢复问题已修复；最终后端 828 passed，前端 61 passed，生产构建 PASS，diff 检查通过。必要修改另含既有 Vite 同源代理和独立 Node 代理测试。整体审核无 Critical/Minor，两项 Important 已 RED→GREEN 修复；第三项 Important（安全清理核心无正常平台入口）仍需用户范围决策，完整门禁 HOLD。未提交，不标 Task 7 complete；详细文件/证据见 LOCAL_RUNNER_LIVE_ACCEPTANCE.md。
+
+后续用户已批准并确认安全清理入口设计（spec 第 11 节）；本段以上保留原时点状态。新增小型 service_port_cleanup_flow.py 和实际 API/Runner 接线测试；仅 END_POLICY 待确认或人工恢复的 DRAFT/v2 会话可预览/审批，结束后仍需人工恢复，不放宽原执行状态或重写历史计划。沿用现有本地请求串行锁/同源校验与受保护删除 Runner。旧任务不重做，不自动提交、推送或设备验收。
+
+最终软件验收（2026-10-15）：入口真实接线通过；新入口独立审核的终态复活 Important 已 RED→GREEN 修复；后端 846 passed（480.91s），前端 62 passed（84.74s），构建 exit 0，diff 检查通过，无未处理 Critical/Important 或延期 Minor。软件门禁 PASS，18 个文件待用户审核提交。完整 WAN 恢复及现场写入验收不在此 PASS 内；提交前不记录 Task 7 complete 或清理工作区。
 
 - [ ] 先写集成反例：旧 Run/Snapshot/Report hash 不变、新结果不自动 LOCK、共享映射不产生两次创建、超时不产生错误 PASS。
 - [ ] 运行该测试确认反例有效，再补齐最少集成接线；成功结果仍由既有人工 LOCK/报告规则约束。

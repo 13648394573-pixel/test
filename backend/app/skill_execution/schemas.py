@@ -4,7 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, StrictBool
 from app.skill_execution.service import CreateSkillExecutionCommand
-from app.local_runner.ma5800.service_port_contracts import ServicePortMapping
+from app.local_runner.ma5800.service_port_contracts import ServicePortMapping, PortOperation
 
 
 class ReconcileRequest(BaseModel):
@@ -67,6 +67,32 @@ class ObservationRead(BaseModel):
     source: Literal['MA5800', 'ONU_WEB', 'PC_PROBE']
 
 
+class ServicePortApprovalRead(BaseModel):
+    operations: list[PortOperation]
+    evidence_ids: list[str]
+    retained_consumers: list[Literal['IPOE', 'PPPOE']]
+
+
+class CleanupApproval(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    approved: StrictBool
+    preview_hash: str = Field(pattern=r'^[0-9a-f]{64}$')
+
+
+class CleanupPreviewRead(ServicePortApprovalRead):
+    preview_hash: str
+
+
+class CleanupItemRead(BaseModel):
+    port_id: int
+    status: Literal['DELETED', 'UNCERTAIN', 'BLOCKED', 'NOT_PROCESSED']
+
+
+class CleanupOutcomeRead(BaseModel):
+    status: Literal['PASS', 'BLOCKED']
+    items: list[CleanupItemRead]
+
+
 class InteractionRead(BaseModel):
     id: str
     ref: str
@@ -80,6 +106,7 @@ class InteractionRead(BaseModel):
     target: dict[str, str | int]
     action_code: str | None
     affected_service_ports: list[int]
+    service_port_preview: ServicePortApprovalRead | None = None
 
 
 class RecoveryRead(BaseModel):
@@ -107,6 +134,9 @@ class ExecutionRead(BaseModel):
     pending_interaction: InteractionRead | None
     recovery_tasks: list[RecoveryRead]
     service_port_resources: list[ServicePortResourceRead] = Field(default_factory=list)
+    cleanup_available: bool = False
+    cleanup_preview: CleanupPreviewRead | None = None
+    cleanup_outcome: CleanupOutcomeRead | None = None
 
 
 class ExecutionEvidenceRead(BaseModel):

@@ -198,6 +198,14 @@ class SkillCoordinator:
                 'observations': _clean([asdict(item) for item in outcome.observations])}, key + ':outcome',
                 step_ref=step['step'], action_ref=step['action'])
             repo.append_event(sid, 'STEP_COMPLETED', {'ref': step['ref']}, step['ref'] + ':done')
+            if step['action'] == 'create_service_port' and outcome.status == 'PASS':
+                resources = replay_port_ledger(sid, repo.events(sid))
+                if any(item.origin == 'CREATED' and item.state == 'ACTIVE' for item in resources):
+                    if not execution.recovery_tasks:
+                        db.add(RecoveryTask(session_id=sid, status='PENDING',
+                            configuration_snapshot_id=execution.configuration_snapshots[0].id,
+                            manual_resolution='Created service-port requires explicit KEEP or verified cleanup; cancellation requires manual recovery.'))
+                    result.recovery_status = 'PENDING'
             if outcome.error_code in {'PORT_CREATION_UNCERTAIN', 'PORT_RECOVERY_REQUIRED'}:
                 execution.error_code = outcome.error_code
                 self._recovery(execution)
@@ -294,7 +302,15 @@ class SkillCoordinator:
         repo.append_event(session_id,'OPERATOR_RESPONSE',{'ref':interaction.interaction_ref,'choice':choice},
                           response_key,step_ref=interaction.interaction_ref)
         if choice in {'CANCEL','UNABLE'}:
-            if execution.recovery_tasks:
+            port_obligation = False
+            if db.get(TestRun, execution.test_run_id).execution_plan_snapshot.get('version') == 2:
+                from app.skill_execution.service_port_ledger import replay_port_ledger
+                try:
+                    port_obligation = any(item.origin == 'CREATED' and item.state not in {'DELETED', 'RETAINED'}
+                        for item in replay_port_ledger(session_id, repo.events(session_id)))
+                except ValueError:
+                    port_obligation = True  # Unverifiable provenance cannot waive recovery.
+            if execution.recovery_tasks or port_obligation:
                 self._recovery(execution)
                 db.commit()
                 return execution

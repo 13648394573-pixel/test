@@ -756,3 +756,84 @@ Task 4 未提交/推送/合并，最终独立整体审核仍在 Task 7；不宣�
 完整后端回归：`python -m pytest backend/tests -q -p no:cacheprovider --basetemp=C:/Users/admin/AppData/Local/Temp/twb-task6-full-20261014 --tb=short` → **817 passed（397.04s）**，exit 0。相关测试 154 passed；`git diff --check` 通过（仅 LF/CRLF 提示）。未修改前端，前端完整验证留在 Task 7。
 
 九个交付文件：coordinator.py、service.py、schemas.py、router.py、service_port_lifecycle.py，两份恢复/API 测试，以及本验收记录和实施计划。没有数据库、Evidence、ZIP、构建产物或临时文件进入变更集。软件实现已离线验证，待用户审核提交；未提交、未推送、未合并，main 不变。Task 7 未开始，真实设备恢复/写入验收未执行；不写入 Task 6 complete，阶段提交门禁仍待完成。
+
+## Task 7：集成验收与现场交接（2026-10-14，验证中）
+
+Tasks 1–6 已分别按用户指令提交，当前功能分支基线为 `c619a4a96cc508b737a5e7d5a7fce482c81f370d`；上文阶段记录保留原时点状态，不代表当前提交状态。main 未修改，Task 7 未提交/推送/合并，现场验收未执行。
+
+### 已批准的最小审批接入
+
+真实 API 反例发现：完整 PortPreview 已保存，但 `_pending` 旧字段筛选遗漏 FSP、Line/Service Profile、映射和消费者。首次三项 RED；扩展完整创建/清理及篡改预览后六项 RED。实际前端此前无该执行器审批消费者，用户随后批准在现有测试执行页最小接入，不新增导航业务模块、会话创建或测试功能。
+
+- API 对单条/批次预览进行严格类型与 hash 校验，返回完整操作列表、目标、候选 ID、VLAN/GEM/user VLAN、转换/业务类型、消费者、创建事件引用、基线/读取 hash 和证据引用；不透传命令、密码或原始 payload。无法核验返回 409。
+- 测试执行页输入已有会话 ID 后显式读取；GET 不连接设备。页面逐条展示 CREATE/DELETE 和完整范围，勾选核对后使用当前审批 hash 响应。缺少完整端口预览、LOCKED、未配置 Runner 均禁止审批。
+- 审批响应不自动执行、不 LOCK Result。仅独立点击并确认“推进一步”才能调用已有 advance；该操作可能连接设备或执行已经审批的配置动作，不能当作只读查看。错误后清空旧审批，重复点击不会重复提交；没有后台轮询/自动推进。
+- 本组件只接入已有会话，不提供新建自动测试会话、任意命令、恢复认领或批量无人值守执行。现有人工结果编辑、LOCK、报告与归档规则不变。
+
+### 离线链路及兼容性
+
+验收测试使用真实 FastAPI/Service/Coordinator/BoundExecutionRuntime、SQLite 事务、事件账本与 EvidenceStorage，仅物理 SSH 传输替换为脱敏协议替身。基线前置步骤由离线夹具提供；这不是现场完整业务测试。
+
+核验同映射双消费者只创建一次，审批无设备动作，独立后验产生 ACTIVE；结果保持 DRAFT，端口创建不代表业务 PASS。设备写后丢失响应进入 CREATE_UNCERTAIN / RECOVERY_REQUIRED，无自动重试/认领。下载每条证据逐一核对 SHA256；旧 LOCKED Run、环境/用例快照、Report 内容和 HTML/Archive 字节保持不变。未完成或未 LOCKED 的新 Run 仍不能生成报告。
+
+首轮兼容测试 8 passed / 1 failed：比较的是归档关联前后的报告响应，差异为合法新增 archive 字段；已将历史基线固定在归档创建之后，没有放松内容/字节校验或修改报告业务逻辑。完整后端、前端回归/构建与独立整体审核正在运行，最终结果另记；不引用前阶段数量作为本阶段结论。
+
+### 现场验收门禁与顺序（待单独授权）
+
+1. 使用新 TestRun 和独立验收库，冻结经人工确认的 OLT/ONU 身份、指纹、Profile、完整两路映射与候选 ID；不得改历史 Run 或测试前快照。
+2. 另行取得具体目标的只读授权，先精确复用已有端口并确认 REUSED、证据 hash、原有业务未改变；复用端口永不自动清理。
+3. 创建验收另行批准完整 CREATE 预览，明确候选 ID 全局空闲；执行前重新查询。逐一核对持久意图、真实成功回执、完整映射后验和证据。协议未识别或超时即停止，不猜成功、不重试。
+4. 清理验收另行批准完整集合，只对本会话 CREATE_VERIFIED 且无保留消费者的资源逐条操作；中途异常保留部分结果和未处理项，不删 ONT、不删复用或跨会话资源。KEEP 验证应为零删除。
+5. 中断演练另行授权，确认重启只重放本地事件；显式只读核对不自动授予所有权/重试许可。无痕同 ID/同属性外部重建仍有无法观察的竞争窗口，不声称跨 OLT 操作者原子性。
+
+门禁：软件离线通过不等于现场通过。新生命周期真实创建/清理尚未验收；完整 WAN 自动恢复仍 HOLD，RESTORE 在设备动作前阻塞。不得以端口动作 PASS 或单独 Ping PASS 宣称 IPoE/PPPoE 或整个平台全闭环 PASS。
+
+### 独立整体审核与当前未通过项
+
+一次独立审核覆盖 Tasks 1–7 生产代码、相关测试与本轮未提交文件；无 Critical、无 Minor，三项 Important。没有将设计未列举的输入默认为无风险。
+
+1. 可观察的端口 ID 替换：已核验 53 后被外部换成相同映射的 55，旧验证错误接受 FOUND；反例实际 RED。现在读回必须匹配账本 ID 和允许状态，否则停止进入人工恢复，不重写原资源/快照、不继续 WAN 配置。
+2. 创建后取消遗漏恢复义务：创建/验证后在首次 WAN 审批取消，旧路径终结 BLOCKED 却留下 ACTIVE 端口、NOT_REQUIRED；反例实际 RED。现在受核验创建持久化 PENDING 恢复义务，取消还检查追加式账本兜底，无明确 KEEP 不免除人工恢复。
+3. 平台清理入口缺失：preview_cleanup/cleanup 与受保护删除 Runner 已实现，但没有正常 Coordinator/Service/API 调用链。清理审批展示测试通过手动构造合法交互验证字段投影，不证明正常用户流程可达。本轮批准限于已有接口的最小前端接入，不擅自新增写入入口或改变结束策略；清理接入需要用户单独确认方案。**这是未通过的闭环门禁，不是已经批准延期的小问题。**
+
+第一次全量回归（两项审核修复前）826 passed（422.14s），前端 60 passed（78.42s），生产构建 PASS；这些数字不替代修复后的最终后端门禁。审核修复反例为 2 failed / 9 deselected（9.44s）；最后修复版本的相关及全量验证另记。
+
+当前结论：待最终修复回归及清理入口范围决策，Task 7 不标完成，不合并、不提交、不推送、不开始现场设备验收。完整恢复仍不在本范围。
+
+### 本轮最终离线验证与交付范围
+
+- 后端最终：`python -m pytest backend/tests -q -p no:cacheprovider --basetemp=C:/Users/admin/AppData/Local/Temp/twb-task7-final-full-20261014 --tb=short` → **828 passed（406.89s）**，exit 0；两项审核修复反例 RED→GREEN，相关 89 passed（124.85s）。
+- 前端最终：`npm.cmd test -- --reporter=dot --maxWorkers=1` → **61 passed / 26 files（79.27s）**；`npm.cmd run build` → PASS，exit 0。
+- 实际开发代理补验：原 Vite 字符串代理默认重写 Host，审批同源检查收到不一致来源，临时随机端口协议替身测试正确 RED 为 403。改为 `changeOrigin=false` 后保留浏览器 Host/Origin，后端严格同源规则不变。第一次测试初始化错误曾指向无服务的本地默认端口，随后在代理初始化前正确重定向到随机测试端口；没有设备连接。
+- 代理测试初放在 src 导致浏览器 TypeScript 构建报 Node 类型缺失；已移到 frontend/tests，未增加依赖或放宽编译校验，最终测试/构建全部通过。
+- `git diff --check` 通过；变更集仅以下 15 个交付文件，无数据库、Evidence、ZIP、缓存、临时文件或构建产物。构建输出仅位于既有忽略目录。main 未改，当前 feature HEAD 仍为 c619a4a，所有本轮变更未提交。
+
+修改/新增：backend/app/skill_execution/{coordinator.py,router.py,schemas.py,service_port_lifecycle.py}；backend/tests/test_service_port_lifecycle_acceptance.py；frontend/src/testExecution/{LocalExecutionApproval.tsx,LocalExecutionApproval.test.tsx,TestExecutionPage.tsx,TestExecutionPage.test.tsx}；frontend/tests/LocalExecutionProxy.test.ts；frontend/vite.config.ts；docs/{LOCAL_RUNNER_LIVE_ACCEPTANCE.md,LOCAL_RUNNER_SETUP.md}；docs/superpowers/plans/2026-10-13-service-port-lifecycle.md；docs/superpowers/specs/2026-10-13-service-port-lifecycle-design.md。
+
+结论更新：本轮批准的最小审批接入和两项安全修复已离线验证。**Task 7 完整生命周期门禁仍 HOLD：安全清理核心尚未接入正常平台审批执行流程，需要用户决定接入或明确延期。**没有声称完整平台/现场闭环完成；不标 Task 7 complete，不自动提交/推送/合并，不删除计划账本或 worktree。
+
+## 已批准的清理入口接入与最终收尾（2026-10-15）
+
+上节 HOLD 原因随后经用户“批准”及短设计“确认”获得软件接入授权；仅开发/离线测试，不授权任何现场操作。新入口在既有隔离分支实施，保留全部未提交工作，不修改 main、数据库结构、依赖或历史执行计划。
+
+- `POST /api/skill-executions/{id}/cleanup-preview`：严格 `{}`，从账本推导本会话已核验创建、无保留消费者的完整集合；逐条只读全局 ID/身份/Profile/映射核对并保存真实证据。不删除设备配置。GET 新增 cleanup_available、完整 cleanup_preview、逐条 cleanup_outcome，无设备 I/O。
+- `POST .../cleanup-execute`：仅 approved=true 与最新 preview_hash；禁止端口、owned、命令、保留消费者等客户端授权替代。只在 v2 / DEVELOPMENT / DRAFT / KEEP 的 END_POLICY 待确认或 MANUAL_REQUIRED 恢复阶段开放；普通执行、LOCKED、终态和未知资源均不授权。
+- 调用链实际可达：Router → Service → 独立小型 ServicePortCleanupFlow → 已有生命周期 → BoundExecutionRuntime 持久审批/INTENT 守卫 → 类型化删除 → 全局 ID 缺失后验。沿用本地同源校验与串行锁。cleanup_flow 仅为可信内部清理接线选项，不改变一般创建/推进权限。
+- 预览和执行分别由页面显式点击，执行另需独立勾选“不代表恢复 WAN”。逐条记录成功、异常、未处理项；相同已完成请求零额外 I/O，未完成 STARTED 拒绝重发。清理启动使旧审批失效，结束仍需人工恢复，不自动 PASS、LOCK 或继续测试；没有恢复认领、任意 CLI 或完整 WAN 恢复功能。
+
+测试先行：新 API 初始 RED 13 failed（404），页面 RED 1 failed。初次接线 12 passed / 1 failed，定位清理后复核仍用一般状态限制，修正清理专用调用；相关 50 passed（71.77s），页面 10 passed（8.03s）。读取途中 LOCKED 的反例证明旧证据保存缺少后复核，RED 1 failed / 1 passed（8.56s）；修正后入口 15 passed（25.99s），包括真实 Bound Runner 的持久意图/类型化删除/全局缺失链路，物理 SSH 为离线替身。
+
+新增入口独立审核（不是重审此前已修问题）：无 Critical/Minor，一项 Important 为 I/O 后无条件 `_recovery` 可能覆盖 CANCELLED/COMPLETED/LOCKED。通过实际 API 的三项反例 RED 3 failed（9.50s），增加返回后的 cleanup_stage 检查，禁止追加新成功结论或覆盖终态/LOCKED；已有意图和不确定事实保留，返回 409。审核未判定的现场效果/最终回归/自动恢复等项均明确裁定：现场另授权；最终结果必须读取真实输出；自动恢复/PASS/LOCK/续跑保持禁止。
+
+第一轮后端 843 passed（450.63s）是最终审核修复之前的版本，不作最终门禁。2026-10-15 正在独立临时目录运行修复后的完整后端；前端最终 62 passed（84.74s），生产构建 PASS，exit 0。最终后端结果另记，不提前标 Task 7 complete。
+
+本轮合计 18 个交付文件：前述 15 个文件，加 backend/app/skill_execution/service.py、service_port_cleanup_flow.py、backend/tests/test_service_port_cleanup_flow.py。无数据库、附件、ZIP、缓存、node_modules/dist 或临时文件进入变更集。真实创建/清理/完整平台验收仍未进行；软件通过后等待审核提交，不自动推送/合并或清理 worktree。
+
+### 最终软件门禁结果（2026-10-15）
+
+- 后端：`python -m pytest backend/tests -q -p no:cacheprovider --basetemp=C:/Users/admin/AppData/Local/Temp/twb-cleanflow-final-20261015 --tb=short` → **846 passed（480.91s）**，exit 0，含新增入口全部 18 项反例/链路测试；审核终态复活问题已 RED 3 failed → GREEN，未重新派发审核。
+- 前端：`npm.cmd test -- --reporter=dot --maxWorkers=1` → **62 passed / 26 files（84.74s）**，exit 0；`npm.cmd run build` → PASS，exit 0。npm 版本更新提示未执行，不改依赖。
+- `git diff --check` 通过（仅 LF/CRLF 提示），main 未修改且干净；功能分支 12 个修改文件、6 个新增文件，合计 18 个。本轮仍未提交、推送或合并。
+- 软件 gate：**PASS，待用户审核提交**。此前“平台清理入口缺失”的 Important 已由确认方案的生产接线及实际 API→Bound Runner→证据/账本测试解决；新增入口独立审核仅一项 Important，已测试先行修复。没有遗留 Critical/Important 或延期 Minor。
+
+该 PASS 仅指获批范围的软件离线验收，不表示现场创建/清理已验收，也不表示完整 WAN 恢复已实现。完整恢复仍 HOLD；清理后保持人工核对，不自动锁定或续跑。按阶段提交门禁，未提交前不写 Task 7 complete、不运行完成提交收尾或删除账本/worktree；下一步为用户审核本轮变更并明确提交指令。

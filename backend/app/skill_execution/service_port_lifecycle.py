@@ -27,13 +27,14 @@ def olt_binding_hash(binding: RuntimeBinding) -> str:
 
 class ServicePortLifecycle:
     def __init__(self, repository, *, inspect_device, create_device, persist_evidence, storage,
-                 delete_device=None, inspect_cleanup_device=None):
+                 delete_device=None, inspect_cleanup_device=None, cleanup_flow=False):
         self.repository = repository
         self.inspect_device, self.create_device = inspect_device, create_device
         self.persist_evidence, self.storage = persist_evidence, storage
         self.delete_device, self.inspect_cleanup_device = delete_device, inspect_cleanup_device
+        self.cleanup_flow = cleanup_flow
 
-    def _scope(self, sid, mapping, *, recovery=False):
+    def _scope(self, sid, mapping, *, recovery=False, cleanup=False):
         repo = self.repository
         execution = repo.get(sid)
         result = repo.session.get(RunResult, execution.run_result_id)
@@ -42,6 +43,10 @@ class ServicePortLifecycle:
         parameters = result.parameter_snapshot
         fsp = '/'.join(str(parameters[key]) for key in ('frame', 'slot', 'pon_port'))
         statuses = {'RECOVERY_REQUIRED'} if recovery else {'CREATED', 'RUNNING'}
+        if cleanup and self.cleanup_flow:
+            from app.skill_execution.service_port_cleanup_flow import cleanup_stage
+            cleanup_stage(repo, sid)
+            statuses = {'WAITING_OPERATOR', 'RECOVERY_REQUIRED'}
         if (execution.status not in statuses
                 or run.execution_plan_snapshot.get('version') != 2 or result.integrity_status == 'LOCKED'
                 or parameters.get('end_policy') != 'KEEP' or mapping.olt_binding_hash != olt_binding_hash(binding)
@@ -83,7 +88,7 @@ class ServicePortLifecycle:
         return read if valid else replace(read, status='UNCONFIRMED')
 
     def _capture(self, sid, mapping, *, cleanup=False, recovery=False):
-        self._scope(sid, mapping, recovery=recovery)
+        self._scope(sid, mapping, recovery=recovery, cleanup=cleanup)
         self.repository.session.commit()  # Release the DB boundary before device I/O.
         callback = self.inspect_cleanup_device if cleanup and self.inspect_cleanup_device else self.inspect_device
         outcome = callback(sid, mapping)
@@ -93,6 +98,7 @@ class ServicePortLifecycle:
         if outcome.status != 'PASS' or values.get('olt.profile_gem.verified') is not True:
             read = replace(read, status='UNCONFIRMED')
         read = self._normalize(read, mapping)
+        self._scope(sid, mapping, recovery=recovery, cleanup=cleanup)
         ids = self.persist_evidence(sid, outcome)
         self._proofs(sid, ids)
         read = replace(read, evidence_ids=tuple(ids))
@@ -119,7 +125,11 @@ class ServicePortLifecycle:
         baseline, consumers = self._scope(session_id, mapping)
         read = self._capture(session_id, mapping)
         existing = replay_port_ledger(session_id, self.repository.events(session_id))
-        if read.status == 'FOUND' and not any(item.mapping.mapping_key == mapping.mapping_key for item in existing):
+        recorded = next((item for item in existing if item.mapping.mapping_key == mapping.mapping_key), None)
+        if recorded is not None and (recorded.state not in {'REUSED', 'ACTIVE'}
+                or read.status != 'FOUND' or read.items[0].port_id != recorded.port_id):
+            raise ValueError('Recorded service-port identity or state cannot be verified')
+        if read.status == 'FOUND' and recorded is None:
             op = dict(version=1, operation_id='reuse-' + mapping.mapping_key[:24], mapping_key=mapping.mapping_key,
                 mapping=mapping.model_dump(mode='json'), port_id=read.items[0].port_id, origin='REUSED',
                 consumers=list(consumers), approval_hash=None, baseline_hash=baseline,
@@ -280,7 +290,7 @@ class ServicePortLifecycle:
         candidates = cleanup_candidates(self._resources(session_id), retained_consumers)
         previews = []
         for resource in candidates:
-            baseline, consumers = self._scope(session_id, resource.mapping)
+            baseline, consumers = self._scope(session_id, resource.mapping, cleanup=True)
             self._creation_proof(session_id, resource)
             read = self._capture(session_id, resource.mapping, cleanup=True)
             if read.status == 'UNCONFIRMED' or (read.status == 'FOUND' and read.items[0].port_id != resource.port_id):
@@ -329,7 +339,7 @@ class ServicePortLifecycle:
                 return self._blocked('PORT_CLEANUP_SCOPE_CHANGED')
             for preview in previews:
                 operation = preview.operation
-                baseline, consumers = self._scope(session_id, operation.mapping)
+                baseline, consumers = self._scope(session_id, operation.mapping, cleanup=True)
                 self._operation_target(operation, consumers)
                 resource = next(r for r in resources if r.port_id == operation.port_id
                                 and r.mapping.mapping_key == operation.mapping.mapping_key)
@@ -364,7 +374,7 @@ class ServicePortLifecycle:
                     raise ValueError('Cleanup provenance changed')
                 self._creation_proof(session_id, resource)
                 self._proofs(session_id, preview.read.evidence_ids)
-                baseline, consumers = self._scope(session_id, operation.mapping)
+                baseline, consumers = self._scope(session_id, operation.mapping, cleanup=True)
                 self._operation_target(operation, consumers)
                 if baseline != operation.baseline_hash:
                     raise ValueError('Baseline changed')
@@ -391,7 +401,7 @@ class ServicePortLifecycle:
                 self._proofs(session_id, ids)
                 self._proofs(session_id, before)
                 self._creation_proof(session_id, resource)
-                self._scope(session_id, operation.mapping)
+                self._scope(session_id, operation.mapping, cleanup=True)
                 if after.status != 'ABSENT' or after.query_port_id != operation.port_id:
                     raise ValueError('Delete absence unconfirmed')
                 verification = sha256(json.dumps(port_read_payload(replace(after, evidence_ids=tuple(ids))),

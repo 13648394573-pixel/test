@@ -431,6 +431,35 @@ def parse_service_ports(value: str) -> tuple[ServicePortObservation, ...]:
     return tuple(observations)
 
 
+def is_scoped_service_port_absence(value: str, *, fsp: str, ont_id: int) -> bool:
+    """Recognize only the sampled empty-list reply for the exact requested ONT."""
+    lines = normalize_cli_output(value).splitlines()
+    query = f'display service-port port {fsp} ont {ont_id}'
+    absence = 'Failure: No service virtual port can be operated'
+    if (len(lines) < 3 or lines[0] != query or not PROMPT_LINE.fullmatch(lines[-1])
+            or lines[-2] != absence or lines.count(absence) != 1):
+        return False
+    return all(line in {query, 'Command:'} or re.fullmatch(r'\{[ \t]*<cr>[^{}]*\}:', line)
+               for line in lines[1:-2])
+
+
+def is_silent_service_port_create_reply(value: str, *, expected_command: str) -> bool:
+    """An exact command echo is completion evidence, never creation proof by itself."""
+    lines = normalize_cli_output(value).splitlines()
+    if len(lines) < 2 or not PROMPT_LINE.fullmatch(lines[-1]):
+        return False
+    compact = lambda text: re.sub(r'\s+', '', text)
+    expected = compact(expected_command)
+    body = lines[:-1]
+    if body.count('Command:') == 1:
+        marker = body.index('Command:')
+        echoed = [line for line in body[:marker]
+                  if line != '{ <cr>|bundle<K>|inbound<K>|rx-cttr<K> }:']
+        return (compact(''.join(echoed)) == expected
+                and compact(''.join(body[marker + 1:])) == expected)
+    return 'Command:' not in body and compact(''.join(body)) == expected
+
+
 def parse_command_result(value: str, *, expected_kind: str | None = None) -> CommandResult:
     normalized = normalize_cli_output(value)
     failure = re.search(

@@ -837,3 +837,339 @@ Tasks 1–6 已分别按用户指令提交，当前功能分支基线为 `c619a4
 - 软件 gate：**PASS，待用户审核提交**。此前“平台清理入口缺失”的 Important 已由确认方案的生产接线及实际 API→Bound Runner→证据/账本测试解决；新增入口独立审核仅一项 Important，已测试先行修复。没有遗留 Critical/Important 或延期 Minor。
 
 该 PASS 仅指获批范围的软件离线验收，不表示现场创建/清理已验收，也不表示完整 WAN 恢复已实现。完整恢复仍 HOLD；清理后保持人工核对，不自动锁定或续跑。按阶段提交门禁，未提交前不写 Task 7 complete、不运行完成提交收尾或删除账本/worktree；下一步为用户审核本轮变更并明确提交指令。
+
+## 现场只读身份预检（2026-10-15）：BLOCKED
+
+基线：codex/skill-execution / ed9f33e5b35dde8faba94dc4f24145118442769a；检查前工作区干净。此前 Task 7 已提交 ea2d91d，隔离环境收尾提交 ed9f33e；以上“待提交”表述保留其历史时点。
+
+用户确认设备已连接，仅授权按下一阶段先行只读核对；没有注册、WAN 下发、创建/删除端口、恢复、重启或网卡修改授权。本次使用隔离解释器和现有本机配置/OS 凭据，没有创建平台 Run/Result/Session，没有启动应用或打开数据库。
+
+| 项目 | 当前实测 | 判定 |
+|---|---|---|
+| 测试网卡 | 以太网 4 为 Up，包含 192.168.1.10/24，另有 192.168.8.254/24 | 仅本机链路/地址事实，不证明 ONU 或 WAN 归属 |
+| OLT 管理端口 | 按本机已配置地址 TCP 连接成功后立即关闭 | TCP 可达；SSH 认证/指纹未在本次执行 |
+| ONU Web | 登录提交后停留 /boaform/admin/formLogin；正文 `ERROR: invalid username!`，状态页链接 0 | 认证未成功 |
+| 当前 ONU SN/型号 | 未能进入状态页 | NOT_EXECUTED，不套用历史设备信息 |
+| OLT 注册/Profile/GEM/端口/WAN | 未取得实时 Web SN，安全停止后续查询 | NOT_EXECUTED |
+| 平台 REUSED/创建/清理验收 | 未创建新会话，未推进任何动作 | NOT_EXECUTED |
+
+本次有限诊断中累计使用同一已登记凭据提交 3 次，没有猜测其他账号密码；最后响应确认拒绝后停止重试。第一次只读探测因身份字段缺失而停止，页面结构核对确认没有导航，最终脱敏正文解释原因。临时探测将组件正常返回写为 ONU_WEB_LOGIN=True 的早期输出 **不是实际登录成功**，本记录明确更正。
+
+现有 NeutralPlaywrightSurface.authenticate 仅在仍可见密码框时判定拒绝；该固件错误响应没有密码框，因而组件正常返回。这是此次发现的失败响应判定覆盖缺口，不表示已获得 SN、PON O5 或 Web 读取 PASS。没有为赶进度修改适配器或降低身份门禁；后续如需修复须先有独立失败测试与授权。
+
+证据目录：功能分支已忽略的 `data/local-runner/readonly-20261015/dcd5bb2bc0d941a881cf6ff0ac1694bf/`。
+
+- login-response.txt：SHA256 ce34504981d4fd5ea721cfbd308e521afe2adfcdce9f01fca9db436762b42cfa。
+- login-response.png：SHA256 5fc2b29a2b03ebb04c2109ffe529914415e68ba4e9979ac45107f4e58078f41d。此 PNG 为脱敏响应文本渲染，不冒充浏览器实截屏或平台 Evidence。
+
+没有凭据值进入文档或证据。未记录人工/自动恢复成功；设备配置写入 0，数据库未打开，main 未修改。不提交或推送本次文档。下一步先由用户确认当前 ONU Web 账号，通过现有隐藏输入入口重新登记后，再核对真实 SN 和 OLT 状态；本次不依据早期历史位置继续执行。
+
+## 确认新凭据后的只读补验（2026-10-15）：BLOCKED，注册位置不一致
+
+同一代码基线 ed9f33e；保留上述拒绝响应和初次登录误判记录，不覆盖历史。用户明确提供并确认账号/密码分隔方式，通过现有隐藏输入登记流程，仅更新本机 Windows 凭据库中的 ONU_WEB 访问对；没有改设备账号、OLT/PPPoE 凭据或配置 JSON。凭据未写入命令参数、脚本、文档或证据。
+
+### 实际观测
+
+| 项目 | 当前证据 | 判定边界 |
+|---|---|---|
+| ONU Web 登录 | 成功进入设备状态页并取得唯一实时 SN，尾号 CD73 | 登录阻塞解除；不是仅凭 authenticate 未抛异常 |
+| Web 版本 | Firmware V3.1.20p11，Hardware V1.0 | 本次读取值，不沿用此前 C999 设备身份 |
+| OLT SSH | 现有固定公钥指纹验证后查询并正常关闭 | 未放宽指纹保护 |
+| Web/OLT 身份 | 按实时 Web SN 查询，OLT SN 一致 | 只做当前设备定位，不套用旧 ONT ID |
+| 旧注册 | 0/2/2，ONT ID 2，Line/Service Profile 10/10 | run offline，config initial，match initial |
+| Line Profile/GEM | 完整解析 Profile 10，含 GEM 1 / VLAN 1000 | 未修改共享 Profile；其他映射保留 |
+| 已有 service-port | 298，0/2/2:2，VLAN 1000 / GEM 1 / user VLAN 1000，完整详情 FOUND | 旧资源，不是本会话 CREATED，不认领/清理 |
+| 当前 ONU 自动发现 | 同一 SN 在 0/2/9，Equipment ID BT-G711AX | 当前发现位置与旧注册不一致 |
+| PON 实截屏 | Status → PON（status_pon.asp），ONU State O2 | 未达成 O5，不能判 PASS |
+| 光功率 | Rx -14.089354 dBm，Tx 2.208155 dBm | 仅采集，不做未定义阈值的范围合格判定 |
+| 其他 PON 读值 | 温度 24.687500 C，电压 3.291600 V，Bias 12.250000 mA；截图显示 LOID Error | 不据此认定唯一根因或已修复 |
+| OLT WAN 查询 | 当前旧注册的查询未解析出 WAN 条目 | 不证明 WAN 未配置，也不证明 IPoE/PPPoE 通过 |
+| 平台新生命周期 | 未创建 Run/Result/Session，未执行 REUSED 账本/创建/清理流程 | 当前仅组件只读采集，平台现场闭环 NOT_EXECUTED |
+
+自动发现中设备自带时间为 2025-07-13 14:23:57-03:00，与本次 2026-10-15 采集日期不同；保留为设备读值，不拿它证明真实发现时刻或持续时长。仅保存匹配当前 SN 的自动发现摘要，其他 ONU 详情不保存。
+
+### 证据与安全边界
+
+目录：功能分支已忽略的 `data/local-runner/readonly-20261015/929852c327434407ab3df7ae1b6dc9a8/`，共 17 个文件：身份字段、OLT SN 查询、Profile、端口列表/详情、WAN 查询的脱敏文本及文本渲染 PNG，以及 PON 字段、真实浏览器截图和过滤后的发现摘要。
+
+- pon-current-browser.png：真实浏览器截图，保存前调用敏感控件/正文遮挡，画面已检查；SHA256 dbbfd01e3b6e163ffcb46d3dc796e215cfca6706daaf9470998e3f84e7e32d9d。
+- pon-current-fields.txt：SHA256 fdc46536b88d7e8b0940b5ddef76606c19c556e5cf938df7c9a9b77280d9d71b。
+- autofind-current-target.txt：SHA256 cf9e875fcfce0cfad41a5acb3f02fe470a66ce1b22b8a29957f8507e37031fef。
+
+各生成文件的大小与 SHA256 在采集脚本中逐项核对；证据仅本地文件，不冒充平台 Evidence/Report/Archive。没有账号密码进入证据或提交集。临时采集命令打印的 READONLY_COMPONENT_RESULT=PASS 只表示读操作与解析成功，**不代表 O5、WAN 或整体测试通过**；本次总体结论为 BLOCKED。
+
+本轮设备配置写入 0、数据库未打开；没有重启、恢复出厂、改变网卡/路由、删除旧注册或 service-port，也没有生产代码修改。新增凭据登记只发生于本机 OS 凭据库。当前两份文档未提交/推送，main 不变。
+
+### 下一步需用户决定
+
+1. 无 OLT 配置变更路径：将光纤接回现有注册的 0/2/2，再只读核对是否 online/match/O5；这不是保证自动成功。
+2. 保留当前 0/2/9：先单独授权迁移方案和只读变更预览，核对旧注册/端口归属、备份和目标占用后，再逐项批准实际操作。不自动删除旧口 0/2/2:2 或端口 298，也不沿用针对其他设备的历史注册授权。
+
+在选择和必要授权前停止设备操作。完整 WAN 恢复、LAN/NAT 功能测试及登录拒绝检测修复均未在此次只读任务中展开。
+
+## 用户明确授权的旧注册删除（2026-10-15）：完成，尚未新注册
+
+用户选择保留 0/2/9，要求删除 0/2/2 上此台 ONU 的配置，并明确修正为 `undo service-port port 0/2/2 ont 2`，其余删除步骤同意。授权只针对当前 SN 尾号 CD73 的旧 0/2/2:2，不包含共享 Profile 删除或新口注册/WAN。
+
+本次是一次性人工授权的现场维护，不经过自动清理 API；没有修改其资源归属门禁或将旧 service-port 298 伪造为本会话 CREATED。业务代码、平台数据库和历史 Run 均未修改。
+
+### 前置核对与实际执行
+
+1. 从当前 ONU Web 重新读取唯一 SN，再在固定 SSH 指纹验证后按完整 SN 查询：旧位置 0/2/2、ONT 2、offline、Profile 10/10。端口完整列表仅 298；全局详情核对 VLAN 1000、GEM 1、user VLAN 1000，状态 down。保存注册详情、端口列表/详情和 WAN 查询的脱敏前置快照，在写入前再查身份/端口。
+2. 持久保存用户批准的精确命令与范围记录后，仅下发 `undo service-port port 0/2/2 ont 2`。设备提示释放 service virtual ports，按已批准范围确认；实际回执 need be deleted=1、have been deleted=1。
+3. 删除后目标查询返回 `Failure: No service virtual port can be operated`。现有严格列表解析器将 Failure 拒绝，临时流程安全停止，未继续 ONT 删除；不重发业务端口删除、不把所有 Failure 都视为空。
+4. 新建只读连接，独立全局查询 298 得到严格解析的 ABSENT；旧 ONT 范围查询再次给出上述明确无端口响应。重新核对 Web SN 与旧注册仍一致/offline，保存新的核对证据后，只执行已批准的 `ont delete 2 2`。
+5. OLT 返回 `Number of ONTs that can be deleted: 1, success: 1`。随后按同一完整 SN 查询返回 `The required ONT does not exist`，设备提示符正常结束。该实际无 Failure 前缀的缺失文案使临时脚本的旧格式断言停止；读取真实回执后，独立核验文件中明确成功/不存在结论，不重试任何删除。
+
+最终确认：业务端口删除命令发出 1 次，ONT 删除命令发出 1 次，各成功删除 1 个对象；298 全局不存在、同一 SN 的旧注册不存在。两个临时脚本的 BLOCKED_OR_PARTIAL 输出是严格后验格式检查停止，不代表两项设备命令被拒绝或可重试。原样保留全部阶段证据，不伪造脚本 exit 0，也不声称已修复解析器。
+
+### 审计证据与恢复边界
+
+目录：功能分支已忽略的 `data/local-runner/old-registration-delete-20261015/21e08dcca0b444a689229a8d4c82e8e7/`，共 32 个文本/渲染 PNG 文件；逐个生成时验证大小与 SHA256，终局另检查成功回执及精确缺失响应。
+
+| 关键证据 | SHA256 |
+|---|---|
+| delete-old-services-response.txt | ed7050c5b3392d4fa7ec249190fecce1d318262b11db28da04a4de0fb282139b |
+| continued-global-port-298.txt | ec60cf2f5fd41b3b1bda9d78d7c3f55151126ce51611e670dea7f834122b4cd8 |
+| continued-ont-delete-response.txt | c9c71e44e2a6d144ebeb144de18e9ca2568d12a18a7f52045baabf68f5a7af63 |
+| continued-after-registration-by-sn.txt | 45ac7b944bab4ed357f99d6e631ad815bd14062ff67f7f7602c8760179fe0041 |
+
+只移除了旧注册及关联业务端口，没有清空 PON 口、删除 Profile 10/10、恢复出厂或重启 ONU。前置快照保留，可供人工重新注册/重建端口参考；它不是完整 OLT 配置备份，不保证一键或完整 WAN 自动恢复。当前设备在新口的 O5/WAN 尚未验收，不能把旧配置删除成功写为整体测试 PASS。
+
+新注册 0/2/9、选择新 ONT ID、创建端口及下发 WAN 均未执行。下一步先只读查询新口实时发现/占用，再明确批准新注册范围；旧 ONT ID 不自动沿用。此次生产代码/依赖/平台数据库/历史 Run/共享 Profile 均未改动；两份现场文档未提交/推送，main 不变。
+
+## 新口只读占用核对与注册预览（2026-10-15）：待用户确认
+
+同一代码基线 ed9f33e，仅执行 Web 登录/身份读取和 OLT 只读查询，没有 ont add、端口创建、WAN 下发或数据库操作。
+
+- 当前 Web 唯一 SN 尾号 CD73；按完整 SN 查询明确返回未注册，唯一匹配的自动发现记录位于 0/2/9，Equipment ID BT-G711AX。
+- `display ont info 9 all` 读取 0/2/9 当前完整列表，解析到 21 个已占用 ID，和设备 total=21 一致：0–18、100、101。按当前支持的 0–127 范围选择最小空闲候选 **19**，不是沿用旧 ONT 2，也不是默认使用 0。
+- 现场只读获取 Line Profile 10 和 Service Profile 10，确认存在；Line Profile 完整 GEM 映射包含 GEM 1 / VLAN 1000，没有改共享 Profile。
+- 注册预览仅包含：当前 ONU、0/2/9、ONT 19、SN 认证、OMCI、Line/Service Profile 10/10。预览 hash 包含完整目标、Profile、配置绑定 hash 和本轮读取 hash；尚未提交给设备。
+
+```text
+interface gpon 0/2
+ont add 9 19 sn-auth <当前已核对的完整SN> omci ont-lineprofile-id 10 ont-srvprofile-id 10
+```
+
+预览 hash：`53e65724d3abf3d66efe42734b7b15e838c0b8ecc752260563d4d39e93ebfaaf`。
+这里是人工维护的注册预览，不冒充已创建的平台 OperatorInteraction 或审批完成状态；本轮没有 Run/Result/Session，不更新历史绑定或生产配置 JSON。
+
+证据目录：功能分支已忽略的 `data/local-runner/register-preview-20261015/b9d97ffda5ba43688f58e8f959e0a6ee/`，12 个脱敏文本/渲染 PNG 文件，采集时核验大小与 SHA256。包含 SN 注册缺失、自动发现、目标端口占用、两个 Profile 和未执行的注册预览。
+
+当前状态：**PREVIEW_READY，NOT_EXECUTED**。需要用户确认新注册后，执行前再次核对当前完整 SN、唯一发现位置、Profile 及 ID 19 空闲；若任何条件改变，停止并重新给出预览。注册后只核对 online/match/O5，不因注册授权自动创建 service-port 或下发 IPoE/PPPoE。端口和 WAN 需后续单独批准，完整恢复仍非本次能力。
+
+## 用户确认后新口注册与只读核验（2026-10-15）：注册成功，配置异常保留
+
+用户回复“是”，批准上述单台 ONU 的 0/2/9:19、SN 认证、OMCI、Profile 10/10 注册及 online/match/O5 核验，不包含 service-port 或 WAN。执行前实时读取完整 Web SN，将其代入前次预览 proposal，以相同 canonical JSON 计算 SHA256，确认与批准的 `53e65724d3abf3d66efe42734b7b15e838c0b8ecc752260563d4d39e93ebfaaf` 完全一致；配置 hash 也不变，不仅依据 SN 尾号辨识设备。
+
+### 前置安全检查与执行结果
+
+1. 固定公钥指纹校验后连接 OLT；完整 SN 查询明确未注册，唯一对应自动发现为 0/2/9。读取完整占用列表并校验设备 total 与解析数量一致，ONT 19 仍空闲；Line/Service Profile 10/10 重新读取确认，Line Profile 的 GEM 1 / VLAN 1000 映射存在。没有修改共享 Profile。
+2. 使用现有证据写入器先保存批准范围、前次预览 hash、当前读取 hash、精确命令和最多发送一次的写入意图。通过现有类型化安全命令，只下发一次 `ont add 9 19 sn-auth <已核对完整SN> omci ont-lineprofile-id 10 ont-srvprofile-id 10`。
+3. OLT 明确返回 `Number of ONTs that can be added: 1, success: 1`，并返回 PortID 9、ONTID 19；没有重试写入。
+4. 按完整 SN 有界只读查询：第 1、2 次 offline / initial / initial，第 3 次 **online / failed / match**。SN、F/S/P=0/2/9、ONT 19、Line/Service Profile 10/10 全部一致。
+5. 返回真实 Status → PON（status_pon.asp），字段与实截屏共同确认 **ONU State O5 / ONU ID 19**。Rx -13.936186 dBm，Tx 2.449209 dBm，温度 25.753906 C，电压 3.291600 V，Bias 12.900000 mA；光功率仅记录，不作未定义阈值的合格判定。
+
+### 结果边界与剩余观测
+
+- 注册成功、online、match 和 O5 有实时证据；不是完整 IPoE/PPPoE 或平台 Skill 闭环 PASS。
+- **Config state=failed**，PON 截图仍有 **LOID Error**。这两个现象未定位原因，不套用历史设备的 Accepted Observation，也不静默改认证方式、Profile 或其他配置。
+- 没有创建 service-port、下发 WAN、改变 LAN/NAT、重启/恢复出厂或打开平台数据库。没有创建/修改 Run、Result、Session、平台 Evidence、Report 或 Archive。
+- 这是用户授权的一次性现场维护，使用现有连接/类型化命令组件，不代表已完成平台操作审批、资源归属账本或自动恢复验收。SSH 和 Web 浏览器均已关闭。
+
+### 证据
+
+独立且已忽略目录：`data/local-runner/register-execute-20261015/a7a705574ad747eeb013fdbbcedfd16f/`。共 25 个文件：脱敏前置核对、持久写入意图、注册回执、3 次注册后查询、PON 字段和真实截图、终局摘要。逐项核验文件大小与 SHA256；凭据文本泄漏检查通过，截图已目视确认是 PON 页面，含 O5 / ONU ID 19，非文本渲染替代。
+
+| 关键证据 | SHA256 |
+|---|---|
+| registration-response.txt | cceae2b44beed1e88d62d428659e900bbd07217b699bb15b92e9f848dc34e940 |
+| post-registration-state-3.txt | 022d5e75e840b7cfcc3950b8092f32f2aa87346fa1f79846acc2dbee9a2a58b6 |
+| pon-after-registration.png | ea817e359a548623c380c3bd2de8a99bdf24f4dcf3a2d338af3008233430e9ae |
+
+未修改业务代码，因此本轮未重复执行全量单元测试；验证依据为实际设备回执、独立只读字段和截图，不以历史测试数替代现场结果。两份文档仅追加真实记录，未提交/推送，main 不变。下一步可只读排查配置失败并准备端口/WAN 独立预览；任何新增设备写入都需另行批准。
+
+## 配置失败只读排查（2026-10-15）：UNDETERMINED，无写入
+
+用户要求“下一步”后，仅按前述建议读取配置异常与当前业务状态。重新从 Web 获取唯一完整 SN，并还原已批准注册预览 hash 验证身份；OLT 固定公钥指纹校验保持启用。
+
+| 项目 | 实际证据 | 结论边界 |
+|---|---|---|
+| 注册状态 | 0/2/9:19，Profile 10/10，online / failed / match | 在线且能力匹配，配置失败仍在 |
+| PON | O5，ONU ID 19，LOID Error | 注册上线保持，LOID 状态未消除；不据此判为当前 SN 认证失败 |
+| WAN | `display ont wan-info 9 19` 返回 `WAN port does not exist` | 当前无 WAN，不是 IPoE/PPPoE 测试 FAIL 或 PASS |
+| 业务端口 | 指定 0/2/9:19 查询返回 `Failure: No service virtual port can be operated` | 保留精确设备响应，表明该范围没有业务端口；未改严格列表解析器 |
+| 失败详情查询 | `display ont failed-configuration 9 19` 返回 `% Unknown command` | 当前命令不受该视图支持，不把查询失败当作 ONU 根因 |
+| 设备命令帮助 | GPON 接口视图、config 视图各读取一次 `display ont ?`，均未列出上述查询 | 尚未取得具体 OMCI 失败项；不声称所有视图/所有诊断方法均不可用 |
+
+注册详情没有给出具体配置失败原因。现阶段没有证据证明缺少 WAN/service-port 导致 Config failed，也没有证据将 LOID Error 与其确定为同一根因；更没有证据据此判固件故障。**配置失败原因仍为 UNDETERMINED**。没有试改 Profile、认证方式或下发 WAN 来验证猜测。
+
+只读帮助读取处理了分页，随后清除待输入命令并确认返回提示符；没有进入 diagnose 模式。两次 SSH 连接均正常关闭，Web 浏览器已关闭。光功率本次 Rx -13.936186 dBm、Tx 2.462778 dBm，仅留作观测，不作阈值判定。
+
+独立证据目录：`data/local-runner/config-failure-readonly-20261015/5200890ba66f4f0abde23169bf191f55/`。第一阶段 13 个文件（注册详情、WAN、失败查询原始拒绝、端口查询、PON 字段/真实截图及摘要），第二阶段增加 6 个文件（目标身份核对、两个视图的完整命令帮助及渲染图）；共 19 个文件，各阶段逐项核验大小/SHA256并检查当前凭据未出现在文本中。未将这些本地文件冒充平台 Evidence。
+
+设备配置写入 0、数据库未打开、业务代码未修改；只追加两份现场文档，不提交/推送，main 不变。下一步可在保留异常的前提下准备独立业务下发预览并请求明确批准，不能称为已确认的修复方案；LAN 端口绑定/NAT 按用户要求留在其他功能测试中，不夹带执行。
+
+## 双 WAN 下发前只读预览（2026-10-15）：PREVIEW_READY，NOT_EXECUTED
+
+用户要求继续下一步，本轮仅生成预览，不执行设备写入。实时 Web 完整 SN 还原原注册预览 hash 一致，配置绑定 hash 不变；OLT 0/2/9:19、SN、Profile 10/10 全部匹配，online / failed / match。重新取得目标无 WAN 和无 service-port 的精确响应，完整解析 Line Profile 10 的 GEM 1 / VLAN 1000，读取确认 VLAN 1000 存在。
+
+候选端口 298 采用独立全局 `display service-port 298` 严格详情解析，状态 **ABSENT**；不因曾删除过旧目标上的同号端口就假定现在仍空闲。本次只查询此一个候选，未扫描全局端口或读取其他 ONU 的无关详情。
+
+待批准范围为同一目标的三个配置动作：
+
+```text
+# config 视图：新建同映射共享端口，尚未执行
+service-port 298 vlan 1000 gpon 0/2/9 ont 19 gemport 1 multi-service user-vlan 1000 tag-transform translate
+# interface gpon 0/2：使用不同 IP host index，尚未执行
+ont ipconfig 9 19 ip-index 1 dhcp vlan 1000 priority 0
+ont ipconfig 9 19 ip-index 0 pppoe user-account username <已登记用户名> password <已登记密码> vlan 1000
+```
+
+两个 WAN 的 GEM/VLAN/user-VLAN/translate 完全相同，因此预览只新建一个 298，明确 consumers 为 IPOE、PPPOE，不重复创建两条相同映射。PPPoE 凭据仅在内存中供现有类型化命令验证，预览保存凭据绑定引用与占位符，不保存账号密码或其命令明文。
+
+预览 SHA256：`7bc1667955221fdc1df90ea472d3d553c438cd7b3eb0826ac6b21d7f49ac85ec`，包含完整目标、配置绑定、当前读取 hash、候选资源、WAN host index、排除项和执行限制。它是人工维护预览，尚未获得本次设备写入批准，不冒充平台审批、会话资源账本或自动回滚能力。
+
+批准后仍需写入前实时重查完整身份、Profile/GEM、VLAN、候选 298 空闲和目标现状。任何变化均停止复核；每条配置最多发送一次，不明确回执只读核对，不能自动重试或删除。后验需读取端口完整详情、OLT WAN 与 ONU WAN 两侧状态；建链成功也不等于 LAN/NAT 或电脑上网通过。
+
+Config failed / LOID Error 仍为未解决观测；没有证据把下发 WAN 认定为其修复。范围明确排除修改共享 Profile、LAN 绑定/NAT、电脑网卡/路由、删除旧资源、重启/恢复出厂、平台数据库和历史 Run。
+
+证据：已忽略的 `data/local-runner/dual-wan-preview-20261015/f7c29c7f9cd44dbc9fac545d0079f565/`，共 14 个脱敏文本及渲染 PNG（当前注册、WAN 缺失、端口缺失、Profile、298 全局缺失、VLAN 1000、未执行预览）。逐项核验大小与 SHA256，当前 OS 凭据文本泄漏检查通过。连接已关闭；设备配置写入 0，数据库未打开，代码未修改，仅两份文档更新且未提交/推送，main 不变。等待批准后再执行，不将预览标为测试 PASS。
+
+## 已批准双 WAN 配置与最终交叉核验（2026-10-15）：IPv4 建链 PASS WITH OBSERVATIONS
+
+用户回复“是”，明确批准上述同一预览内的 298 创建、IPoE index 1、PPPoE index 0 及双侧只读核验。原预览 SHA256 `7bc1667955221fdc1df90ea472d3d553c438cd7b3eb0826ac6b21d7f49ac85ec`，执行前用实时 Web 完整 SN 还原 canonical JSON 校验一致，配置绑定 hash 未变。OLT 连接继续固定公钥指纹校验。
+
+### 执行顺序与真实回执
+
+1. 重验 0/2/9:19、完整 SN、Profile 10/10、online/match、GEM 1 / VLAN 1000、VLAN 存在、目标无 WAN/业务端口、全局 298 严格 ABSENT。保存批次及单动作意图后，发送 298 创建命令一次。
+2. 设备回到正常提示符，无独立错误行，也没有 `Command executed successfully`。本地严格 ACK 检查因此暂停，没有重发，也没有继续盲下发。独立按 298 读取完整详情得到 FOUND / up，精确核对目标、VLAN/user-VLAN 1000、GEM 1、translate，证明本次创建已生效；这不是“端口创建失败”。原停止记录保留，不改成显式 ACK 成功。
+3. 在原批准范围内另存继续意图，只执行未尝试的 IPoE index 1 一次。该命令同样静默返回，严格 ACK 检查暂停；独立查询确认目标出现唯一 DHCP/IPoE VLAN 1000 WAN，起初 Connecting，之后取得 192.168.87.19 / 网关 192.168.87.1。没有重发 IPoE，也没有重建 298。
+4. 再查身份、298 完整映射、唯一 IPoE 且尚无 PPPoE，保存最后一项意图，在原批准范围内只发送 PPPoE index 0 一次。随后仅只读轮询与 Web 采集，无重试、重拨、断开、删除或额外配置。
+5. 初期 OLT 读值经历 PPPoE Connecting、VLAN 0 后变 1000，以及一次 IPoE 重新 Connecting。后续 Web 先显示两条 IPv4 up；没有将时间不同的读值拼成同时通过。最后另建只读连接，OLT 和 Web 都重新采集，确认同一设备两侧地址、网关、VLAN 与状态一致后，才给出下表结论。
+
+三条设备配置命令的实际发送次数分别为 **298 创建 1 次、IPoE 1 次、PPPoE 1 次**。无自动重试/清理；每次继续依据已批准且尚未尝试的动作与新的确定读回，不重复不确定写入。未修改现有 Runner 的强 ACK 门禁或自动资源归属逻辑。
+
+### 最终实测结果
+
+| 项目 | OLT | ONU Web / 实截屏 | 本次结论 |
+|---|---|---|---|
+| 目标注册 | 0/2/9:19，Profile 10/10，online / match | 当前 SN 与 OLT 一致 | 身份/在线确认 |
+| 业务端口 | 298，up，GEM 1，VLAN/user-VLAN 1000，translate | 两条 WAN 相同 VLAN | 映射创建读回确认 |
+| IPoE IPv4 | CONNECTED，192.168.87.19，网关 192.168.87.1，VLAN 1000 | nas0_0，INTERNET，up，相同地址/网关 | IPv4 建链 PASS |
+| PPPoE IPv4 | CONNECTED，10.11.20.117，网关 10.11.20.1，VLAN 1000 | ppp0_nas0_1，TR069，up，相同地址/网关 | IPv4 建链 PASS |
+| PON | 注册 online / match | O5，ONU ID 19 | O5 确认 |
+| 光功率 | 未读取 OLT 光功率 | Rx -13.925450 dBm，Tx 2.435350 dBm | 仅记录，不作阈值判定 |
+| 配置/LOID | Config state=failed | LOID Error | 原因未定，未修复，未转为已接受豁免 |
+
+OLT 本轮显示的 WAN Index 是 IPoE 1 / PPPoE 2，而下发 ip-index 为 IPoE 1 / PPPoE 0；仅记录设备实际显示，不推断两套编号的通用映射。PPPoE 服务类型 TR069 不证明 ACS 测试通过。
+
+IPv6 不在本轮验收结论内：最终截图中 IPoE IPv6 up、有地址，PPPoE IPv6 down；不将 IPv4 建链 PASS 写成 IPv6 或全业务 PASS。本轮未执行 Ping、LAN 绑定/NAT、电脑侧 DHCP/DNS/公网出口或 HTTP/HTTPS、重启恢复、ACS、吞吐或长期稳定性测试。
+
+### 组件兼容性观测与平台边界
+
+本次 MA5800 对创建端口和 IPconfig 的成功配置仅返回正常提示符，没有显式成功文案。当前代码的端口 ACK 门禁要求该文案，因此会安全停下；现场通过独立完整读取确定状态后，按原用户批准分阶段完成剩余人工维护动作。这是需要后续单独评审/测试的兼容性观测，不是本轮已修复的代码缺陷。没有放宽解析、修改门禁或声称整个平台能自主续跑。
+
+操作调用现有连接、类型化命令、解析和证据组件，是一次性用户授权维护；没有创建持久化 Skill Session、OperatorInteraction 或自动 CREATED/REUSED 账本，也未创建/修改 TestRun、RunResult、平台 Evidence、Report、Archive 或数据库。不能据此把完整平台现场闭环标为已通过。业务配置保留在设备上，没有自动删除；既有授权不包含后续清理。
+
+### 证据目录与核验
+
+全部位于已忽略的 `data/local-runner/`，四阶段互不覆盖，共 97 个文件：
+
+- `dual-wan-execute-20261015/40bd53c2d9e84ab08218eb7e921b0f57/`：28 个，写入前快照/意图、298 创建静默回执、停止记录及精确读回。
+- `dual-wan-continue-20261015/04413009d5c5445eb9f08a2630c37c5b/`：20 个，原授权继续意图、IPoE 单次下发、停止记录和 WAN 读回。
+- `dual-wan-final-20261015/68f28907c97a4c8ab6fec290b652036b/`：35 个，PPPoE 单次下发、早期状态轮询、首次双 WAN Web 实截图及当时 OLT 尚未一致的摘要。
+- `dual-wan-verify-20261015/9fd0e48a82914f93b49e21480b768a4a/`：14 个，最终独立只读 OLT/Web 一致性核验、298/PON、最终摘要与真实 WAN/PON 截图。
+
+每阶段生成时逐项核验大小和 SHA256，检查当前 OS 凭据不出现在证据文本；账号密码未写入脚本、配置、文档或提交集。最终 WAN/PON 真实截图均已目视核对。
+
+| 最终证据（位于最后一目录） | SHA256 |
+|---|---|
+| verified-summary.txt | 41787909a7e6575b4cfab9dab59773409792d2424ec0317e889fa4125b37c713 |
+| web-wan.png | cff7ce7f6f0e57bb1fd89a0ea3857e5929a1954ed6570f04cd3f5cf193369102 |
+| pon.png | 2ca0e7766f50d23d7ef44f917a6dee94dbd2e070f44bf1b249c5d9402f8d63cd |
+
+SSH/浏览器资源均已关闭。共享 Profile、LAN/NAT、电脑网卡/路由未修改；业务代码/依赖未改，本轮未重复跑全量软件测试。只追加两份现场文档，未提交/推送，main 不变。建议下一步以各自实际 WAN 接口进行网关、公网 IP、域名的分层 Ping；未经新指令不继续扩大测试或设备写入。
+
+## 双 WAN 显式接口分层 Ping（2026-10-15）：6/6 PASS
+
+用户要求“下一步”，按上一阶段建议执行网关、公网 IP、域名的 ONU 内置 IPv4 Ping，不包含设备配置变更。实时 Web 完整 SN 还原原批准目标预览 hash 一致，配置绑定不变；两条现有 WAN 的 VLAN、状态、接口名称、地址与各自网关重新核对。本次不调用电脑 Ping，不借用电脑其他网卡出口作为 ONU 证据。
+
+### 绑定与判定规则
+
+- WAN 状态接口 IPoE=nas0_0、PPPoE=ppp0_nas0_1；诊断下拉框真实名称为 nas0_0 / ppp0，内部 value 分别为 130816 / 65537。Any 的 value=65535，明确排除。每次从实际选项建立名称/值映射，验证执行前后唯一选中项和值一致，不把内部数字直接当作接口名称。
+- 每项发送 4 包。本固件没有包数输入项，按已有组件验证过的固定 4 包读取，不等待虚构第 5 包。
+- 保持现有 run_ping 导航/旧结果清除防护；另核验返回文本 PING 目标头、4 包统计与接口选中项，避免把前一次结果判为本轮。
+- 通过条件：4/4、丢包 0%、平均 RTT 有值且小于 100 ms；不只依赖原 parser 的零丢包状态。域名项只说明 ONU 的本次域名解析及 ICMP 可达，不证明 LAN DNS Proxy 或电脑 DNS 可用。
+
+### 实测结果
+
+| WAN / 诊断接口 | 目标 | 发/收 | 丢包 | 平均 RTT(ms) | 结果 |
+|---|---|---|---|---:|---|
+| IPoE / nas0_0 | 192.168.87.1（当前网关） | 4/4 | 0% | 2.090 | PASS |
+| IPoE / nas0_0 | 1.1.1.1 | 4/4 | 0% | 53.636 | PASS |
+| IPoE / nas0_0 | www.baidu.com | 4/4 | 0% | 9.639 | PASS |
+| PPPoE / ppp0 | 10.11.20.1（当前网关） | 4/4 | 0% | 1.789 | PASS |
+| PPPoE / ppp0 | 1.1.1.1 | 4/4 | 0% | 53.959 | PASS |
+| PPPoE / ppp0 | www.baidu.com | 4/4 | 0% | 9.862 | PASS |
+
+这六项各有一次完整有效结果，并非同时进行的长时间稳定性测量。没有重测已通过的首项来替换结果，也没有把前置阻塞误判为网络 FAIL。
+
+### 临时调用问题与保留的失败过程
+
+1. 第一批临时调用错误要求 select 的 value 等于 nas0_0/ppp0，实际是数字编码；六项均在 Ping 提交前被挡住。随后只读检查原始选项，确认正式选择策略已选对接口，错误在临时调用的额外断言，不是设备断网。未改现有选择器或放宽到 Any。
+2. 该批临时失败证据的 `*-blocked.png` 既用于文本渲染又用于浏览器截图，同名覆盖导致文件与先前返回的 ArtifactPayload hash 不一致，脚本最终 exit 1。原目录 `data/local-runner/dual-wan-ping-20261015/81612972eb554c04b03b43d91a28471a/` 保留，不声明整体 Hash 验证成功，不作为实际 Ping 验收依据。原文本保留；后续改为新的独立目录、`*-browser.png` 与不重复命名，并检查路径唯一，不覆写历史文件。
+3. 第二批用真实名称/值校验后，IPoE 网关成功；随后临时跨六项复用同一浏览器，旧结果子框架在重新导航时 detached，run_ping 的提交前 body 快照异常，剩余五项 BLOCKED。保留当时 1 PASS / 5 BLOCKED 的摘要，不伪造其为 6 PASS。
+4. 对照正式 NeutralONUWebAdapter 每次新建/关闭 surface 的调用方式后，采用相同生命周期逐项完成尚未通过的五项。没有修改 NeutralPlaywrightSurface、run_ping 的缓存/导航保护或平台业务代码。后续五项均取得对应目标的新鲜完整结果。该处理不等于已修复所有 iframe 兼容问题或平台整链路已验收。
+
+### 最终证据与边界
+
+有效结果来源及过程证据均被 Git 忽略：
+
+- `data/local-runner/dual-wan-ping-verified-20261015/d8e5d07e54e949f5a7abe1d2d9a96ff9/`：34 个唯一文件，含首个网关 PASS 和后续框架阻塞记录；大小/SHA256及凭据文本检查通过。
+- `data/local-runner/dual-wan-ping-isolated-20261015/7c643eed648543f28776f5d87242263b/`：29 个唯一文件，含其余五项原文、统计、真实截图及引用首个网关来源的最终 6/6 汇总；大小/SHA256及凭据文本检查通过。
+
+最终汇总不隐藏前两阶段失败，并引用首项原证据目录。两条 WAN 的域名 Ping 实截屏已目视确认所选接口、目标、4 包统计和延迟，没有用文本渲染图冒充浏览器截图。
+
+| 关键证据 | SHA256 |
+|---|---|
+| verified 目录 / ipoe-gateway-raw.txt | d472729e7824ef20aa56d65614d07c107f0cc02a24183e14a00e7d030ce71b38 |
+| isolated 目录 / diagnostic-final-summary.txt | ecd75151e890759dfacb7ff561b81fca4b1ce66a68be704a6277131fbaaf9d1f |
+| isolated 目录 / ipoe-domain-browser.png | 7e1437cb78a57b6688b6482f9b4c404f8995d7204f3e23dea1a1c089aa2b87ba |
+| isolated 目录 / pppoe-domain-browser.png | bc71a33e6420421e6471576fc7d5ba1da89f58e28e892aee887d1ca554b63af9 |
+
+本次仅证明 ONU 内置诊断经指定 WAN 到达上述 IPv4 目标。未验收电脑侧 LAN/NAT/DNS/HTTP、IPv6、ACS、吞吐、重连或长稳；此前 Config failed / LOID Error 仍保留，未证明修复。未操作 OLT 配置、WAN 开关、共享 Profile、电脑网卡/路由或数据库；未创建 Run、Result、Session、平台 Evidence/Report/Archive。浏览器均关闭。
+
+仅两份现场文档更新，未提交/推送，main 不变；无业务代码改动，本轮未重复跑全量单元测试。下一步应整理组件验收与平台执行闭环的差距，单独评审既有执行器兼容问题，不凭这次临时组件测试宣布 Skill 自主执行完成，也不扩展 LAN/NAT 等其他 Skill 范围。
+
+## MA5800 空列表与静默创建回执兼容修复（2026-10-16）：离线验证通过
+
+本节为用户批准后的软件修复验证，不是新的现场操作。此前各轮设备记录原样保留；本轮未连接设备、未操作凭据、未修改平台数据库或创建 Run/Result/Session。
+
+### 修复范围与安全边界
+
+- 仅对完整且命令目标 FSP/ONT 一致的 `Failure: No service virtual port can be operated` 响应识别为空服务端口列表；其他错误、目标不符、混杂内容、截断或缺少最终提示符继续阻塞。通用命令失败解析不放宽。
+- 仅对与本次 CREATE 命令严格匹配的已采样静默回显识别“命令交互完成”。显式 ACK、交互完成和独立读回证明分开记录，静默回执本身不能判成功。
+- 执行器在既有有效审批、持久化意图及最新 ABSENT 检查后，最多发送一次创建命令；随后独立完整读回，核对端口 ID、FSP/ONT、SN、Profile、GEM/VLAN 等既有约束。只有读回吻合且证据持久化，才可形成已验证创建及资源归属。
+- 超时、未知内容、明确错误、缺失或不匹配的读回仍为阻塞/不确定；不自动重放，不自动清理。删除逻辑、WAN 下发语义、Snapshot/LOCKED、数据库设计、API 和前端均未调整。
+
+### 测试先行与完整验证
+
+修改范围为 `ma5800/parsers.py`、`ma5800/actions.py`、`local_runner/runtime.py` 及两份关联测试。相关基线 63 项通过；新增测试先出现 3 项预期失败，首次实现后仍有 1 项失败，定位到快照上层的通用失败判断并完成同范围修复；最终定向回归 **85 passed**，未用放宽通用解析替代目标校验。
+
+2026-10-16 完整验证：
+
+| 验证 | 结果 |
+|---|---|
+| 后端 `python -m pytest backend/tests -q`（隔离 venv、新建短临时路径） | 868 passed，2 warnings，487.80 秒，退出 0 |
+| 前端 `npm.cmd test -- --reporter=dot --maxWorkers=1` | 26 个文件，62 passed，81.95 秒 |
+| 生产构建 `npm.cmd run build` | TypeScript 与 Vite 构建通过 |
+
+两项后端告警为未知 `asyncio_default_fixture_loop_scope` 配置和 Starlette TestClient/httpx 弃用提示，未修改依赖。默认临时目录权限及过长临时路径问题通过本次测试调用使用新建短路径避开；一次 JUnit 参数调用错误未执行测试，不作为通过依据。
+
+有效全量日志位于被 Git 忽略的 `data/validation/ma5800-compat-20261016-1792120685063/backend-tests-rerun.txt` 与 `backend.junit.xml`；前端测试/构建日志位于同级 `ma5800-compat-20261016-1792120685063-frontend/`。独立只读代码审核未发现 Critical/Important 问题；显式三种事实断言以及更多 SN/Profile 等漂移组合测试是非阻塞加固建议，未扩展本轮修改。
+
+### 当前结论
+
+离线兼容修复及全量软件回归通过；**平台持久化真机全流程仍为 NOT_EXECUTED**。下一步应先核对现有运行配置、审批与目标绑定，再单独安排平台端到端验收；不得将此前人工组件测试或本次模拟测试写成平台自主执行通过。现有两份现场文档保留全部历史，本轮修复与文档尚未提交、合并或推送，main 保持不变。

@@ -98,3 +98,34 @@ def test_approved_mutation_still_requires_confirmed_service_port_ownership(outpu
         assert [c.action_code for c in executor.commands] == ['display_ont_by_sn', 'display_service_ports']
     else:
         assert [c.action_code for c in executor.commands] == ['display_ont_by_sn', 'display_service_ports', 'delete_ont']
+
+
+def scoped_absence(fsp='0/2/10', ont_id=36):
+    query = f'display service-port port {fsp} ont {ont_id}'
+    return (query + '\n{ <cr>|e2e<K>|gemport<K>|sort-by<K>||<K> }:\nCommand:\n'
+            + query + '\nFailure: No service virtual port can be operated\nMA5800-X7(config)#')
+
+
+def test_snapshot_accepts_exact_scoped_device_absence_without_inventing_ports():
+    outcome = MA5800Actions(ServicePortExecutor(scoped_absence())).snapshot_ont(context('snapshot_ont'))
+    assert outcome.status == 'PASS'
+    assert observation(outcome, 'olt.configuration_snapshot')['service_ports'] == []
+
+
+@pytest.mark.parametrize('output', [
+    scoped_absence('0/2/9'),
+    scoped_absence(ont_id=37),
+    scoped_absence().replace('ont 36\nFailure:', 'ont 37\nFailure:'),
+    scoped_absence().replace('Failure: No service virtual port can be operated', 'Failure: Permission denied'),
+    scoped_absence().replace('Failure: No service virtual port can be operated',
+                            'Failure: No service virtual port can be operated\nFailure: Query failed'),
+    scoped_absence().replace('Failure: No service virtual port can be operated',
+                            ROW + '\nFailure: No service virtual port can be operated'),
+    scoped_absence().replace('MA5800-X7(config)#', ''),
+    scoped_absence() + '\nunknown trailing output',
+    'Failure: No service virtual port can be operated\nMA5800-X7(config)#',
+])
+def test_absence_requires_exact_target_complete_envelope_and_no_other_payload(output):
+    outcome = MA5800Actions(ServicePortExecutor(output)).snapshot_ont(context('snapshot_ont'))
+    assert outcome.status == 'BLOCKED'
+    assert not any(o.fact_key == 'olt.configuration_snapshot' for o in outcome.observations)

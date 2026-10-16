@@ -14,6 +14,8 @@ from app.local_runner.ma5800.parsers import (
     parse_ont_state,
     parse_service_ports,
     parse_wan_info,
+    is_scoped_service_port_absence,
+    is_silent_service_port_create_reply,
 )
 from app.local_runner.ma5800.transport import CommandTranscript, SafeMA5800Command
 from app.local_runner.registry import LocalActionRegistry
@@ -152,7 +154,9 @@ class MA5800Actions:
             SafeMA5800Command("display_service_ports", (self._fsp(target), target["ont_id"]))
         )
         wan = [asdict(item) for item in parse_wan_info(wan_transcript.normalized_output)]
-        if not self._wan_read_valid(wan_transcript, wan) or self._read_failed(port_transcript):
+        scoped_absence = is_scoped_service_port_absence(
+            port_transcript.normalized_output, fsp=self._fsp(target), ont_id=target['ont_id'])
+        if not self._wan_read_valid(wan_transcript, wan) or (self._read_failed(port_transcript) and not scoped_absence):
             return ActionOutcome("BLOCKED", (), (), "OLT_READ_UNRECOGNIZED")
         try:
             service_ports = [asdict(item) for item in self._target_service_ports(port_transcript, target)]
@@ -187,14 +191,19 @@ class MA5800Actions:
         if not isinstance(operation, PortOperation) or operation.kind != 'CREATE':
             raise ValueError('An immutable CREATE operation is required')
         mapping = operation.mapping
-        transcript = self.executor.run(SafeMA5800Command('create_service_port', (
+        command = SafeMA5800Command('create_service_port', (
             operation.port_id, mapping.vlan, mapping.fsp, mapping.ont_id, mapping.gemport,
-            mapping.user_vlan, mapping.tag_transform, mapping.business_type)))
+            mapping.user_vlan, mapping.tag_transform, mapping.business_type))
+        transcript = self.executor.run(command)
         result = parse_command_result(transcript.normalized_output)
         acknowledged = result.success and bool(re.search(
             r'(?im)^Command executed successfully\.?\s*$', transcript.normalized_output))
+        completed = result.success and (acknowledged or is_silent_service_port_create_reply(
+            transcript.normalized_output, expected_command=command.render()))
         return ActionOutcome('PASS' if acknowledged else 'BLOCKED',
-            (Observation('port.command_succeeded', acknowledged, 'MA5800'),), (),
+            (Observation('port.command_succeeded', acknowledged, 'MA5800'),
+             Observation('port.command_acknowledged', acknowledged, 'MA5800'),
+             Observation('port.command_completed', completed, 'MA5800')), (),
             None if acknowledged else 'PORT_COMMAND_ACK_UNCONFIRMED')
 
     def delete_service_port(self, operation) -> ActionOutcome:
@@ -420,6 +429,9 @@ class MA5800Actions:
 
     @classmethod
     def _target_service_ports(cls, transcript, target):
+        if (transcript.action_code == 'display_service_ports' and is_scoped_service_port_absence(
+                transcript.normalized_output, fsp=cls._fsp(target), ont_id=target['ont_id'])):
+            return ()
         if cls._read_failed(transcript):
             raise ValueError('Service-port query failed')
         ports = parse_service_ports(transcript.normalized_output)

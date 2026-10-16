@@ -339,12 +339,19 @@ class BoundExecutionRuntime:
         if fresh.status != 'PASS' or read.status != 'ABSENT' or read.observation_hash != operation.read_hash:
             return ActionOutcome('BLOCKED', fresh.observations, (), 'PORT_APPROVAL_STALE')
         command = MA5800Actions(executor).create_service_port(operation)
-        if command.status != 'PASS':
+        command_facts = {o.fact_key: o.value for o in command.observations}
+        silent_completion = (command.error_code == 'PORT_COMMAND_ACK_UNCONFIRMED'
+                             and command_facts.get('port.command_completed') is True)
+        if command.status != 'PASS' and not silent_completion:
             return command
         after = self._inspect_service_mapping(executor, context)
         result = read_port_payload(next(item.value for item in after.observations if item.fact_key == 'port.read'))
         verified = after.status == 'PASS' and result.status == 'FOUND' and result.items[0].port_id == operation.port_id
-        return ActionOutcome('PASS' if verified else 'BLOCKED', command.observations + after.observations, (),
+        # Keep explicit ACK distinct from proven application; the lifecycle still
+        # requires durable approval, fresh absence, full readback and stored proof.
+        observations = tuple(o for o in command.observations if o.fact_key != 'port.command_succeeded')
+        observations += after.observations + (Observation('port.command_succeeded', verified, 'MA5800'),)
+        return ActionOutcome('PASS' if verified else 'BLOCKED', observations, (),
                              None if verified else 'PORT_POSTCONDITION_UNCONFIRMED')
 
     def _inspect_service_port(self, executor, context):

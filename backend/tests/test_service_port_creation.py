@@ -242,10 +242,11 @@ def test_verified_operation_is_idempotent_without_more_reads_or_writes(lab):
     assert state['writes'] == [53] and state['reads'] == reads
 
 
-def attach_runtime(lab, monkeypatch, tmp_path):
+def attach_runtime(lab, monkeypatch, tmp_path, *, protocol=None):
     lifecycle, repo, sid, mapping, _, _ = lab
     binding = RuntimeBinding.model_validate(repo.get(sid).plugin_snapshot['runtime_binding'])
     commands, ports = [], {}
+    protocol = {} if protocol is None else protocol
     class Executor:
         def __init__(self, *_):
             self.transcripts = []
@@ -258,18 +259,27 @@ def attach_runtime(lab, monkeypatch, tmp_path):
                 text = (fixtures / 'profile_gem.txt').read_text(encoding='utf-8')
             elif command.action_code == 'display_service_ports':
                 text = ''.join(f'{identifier} 1000 0/2/9 {ont} {2 if identifier == 54 else 1} 1000\n' for identifier, ont in ports.items() if ont == 12) + 'Total : ' + str(sum(ont == 12 for ont in ports.values())) + '\nMA5800-X7#'
+                if protocol.get('empty_failure') and not any(ont == 12 for ont in ports.values()):
+                    query = 'display service-port port 0/2/9 ont 12'
+                    text = (query + '\n{ <cr>|e2e<K>|gemport<K>|sort-by<K>||<K> }:\nCommand:\n'
+                            + query + '\nFailure: No service virtual port can be operated\nMA5800-X7(config)#')
             elif command.action_code == 'display_service_port_by_id':
                 identifier = command.arguments[0]
                 if identifier in ports:
                     text = (fixtures / 'service_port_detail.txt').read_text(encoding='utf-8').replace('51', str(identifier)).replace('0/1/2', '0/2/9').replace('ONT ID              : 7', f'ONT ID              : {ports[identifier]}')
                     if identifier == 54:
                         text = text.replace('GEM port index      : 1', 'GEM port index      : 2')
+                    for before, after in protocol.get('detail_changes', {}).items():
+                        text = text.replace(before, after)
                 else:
                     text = f'display service-port {identifier}\nFailure: Service virtual port does not exist\nMA5800-X7(config)#'
             elif command.action_code == 'create_service_port':
                 assert command.render() == 'service-port 53 vlan 1000 gpon 0/2/9 ont 12 gemport 1 multi-service user-vlan 1000 tag-transform translate'
-                ports[53] = 12
-                text = 'Command executed successfully\nMA5800-X7(config)#'
+                if protocol.get('timeout'):
+                    raise TimeoutError('fixture write outcome unknown')
+                if protocol.get('apply', True):
+                    ports[53] = protocol.get('created_ont', 12)
+                text = protocol.get('create_reply', 'Command executed successfully\nMA5800-X7(config)#')
             else:
                 pytest.fail('Unexpected offline command: ' + command.action_code)
             transcript = CommandTranscript(command.action_code, text, text, 'MA5800-X7(config)#', sha256(text.encode()).hexdigest())
@@ -362,3 +372,68 @@ def test_coordinator_waits_for_exact_mapping_approval_before_creation(lab, monke
     resources = replay_port_ledger(sid, repo.events(sid))
     assert len(resources) == 1 and resources[0].state == 'ACTIVE'
     assert json.dumps(repo.get(sid).configuration_snapshots[0].snapshot_json, sort_keys=True) == original
+
+
+SILENT_CREATE = (
+    'service-port 53 vlan 1000 gpon 0/2/9 ont 12 gemport 1 multi-s ervice user-vlan 1000 tag-transform translate\n'
+    '{ <cr>|bundle<K>|inbound<K>|rx-cttr<K> }:\nCommand:\n'
+    'service-port 53 vlan 1000 gpon 0/2/9 ont 12 gemport 1 multi-service\n'
+    'user-vlan 1000 tag-transform translate\nMA5800-X7(config)#'
+)
+
+
+@pytest.mark.parametrize('empty_failure', [False, True])
+def test_silent_create_requires_matching_readback_then_commits_once(lab, monkeypatch, tmp_path, empty_failure):
+    current = lab()
+    lifecycle, repo, sid, _, _, _ = current
+    commands, _, _ = attach_runtime(current, monkeypatch, tmp_path,
+        protocol={'create_reply': SILENT_CREATE, 'empty_failure': empty_failure})
+    baseline = json.dumps(repo.get(sid).configuration_snapshots[0].snapshot_json, sort_keys=True)
+    op, preview = prepared(current)
+    assert lifecycle.execute_approved(op, preview.preview_hash).status == 'PASS'
+    resources = replay_port_ledger(sid, repo.events(sid))
+    assert len(resources) == 1 and resources[0].origin == 'CREATED' and resources[0].state == 'ACTIVE'
+    assert commands.count('create_service_port') == 1
+    assert 'display_service_port_by_id' in commands[commands.index('create_service_port') + 1:]
+    event = next(e for e in repo.events(sid) if e.event_type == 'PORT_CREATE_VERIFIED')
+    assert event.payload_json['after_evidence_ids']
+    before_repeat = list(commands)
+    assert lifecycle.execute_approved(op, preview.preview_hash).status == 'PASS'
+    assert commands == before_repeat
+    assert json.dumps(repo.get(sid).configuration_snapshots[0].snapshot_json, sort_keys=True) == baseline
+
+
+@pytest.mark.parametrize('case', ['no-port', 'wrong-ont', 'wrong-gem', 'wrong-vlan', 'error',
+    'unknown-payload', 'only-prompt', 'wrong-command', 'truncated', 'timeout'])
+def test_silent_or_uncertain_create_never_claims_or_retries_without_full_proof(lab, monkeypatch, tmp_path, case):
+    current = lab()
+    lifecycle, repo, sid, _, _, _ = current
+    protocol = {'create_reply': SILENT_CREATE}
+    if case == 'no-port':
+        protocol['apply'] = False
+    elif case == 'wrong-ont':
+        protocol['created_ont'] = 13
+    elif case == 'wrong-gem':
+        protocol['detail_changes'] = {'GEM port index      : 1': 'GEM port index      : 2'}
+    elif case == 'wrong-vlan':
+        protocol['detail_changes'] = {'VLAN ID             : 1000': 'VLAN ID             : 2000'}
+    elif case == 'error':
+        protocol['create_reply'] = SILENT_CREATE.replace('MA5800-X7(config)#', 'Failure: Permission denied\nMA5800-X7(config)#')
+    elif case == 'unknown-payload':
+        protocol['create_reply'] = SILENT_CREATE.replace('MA5800-X7(config)#', 'Unexpected status: pending\nMA5800-X7(config)#')
+    elif case == 'only-prompt':
+        protocol['create_reply'] = 'MA5800-X7(config)#'
+    elif case == 'wrong-command':
+        protocol['create_reply'] = SILENT_CREATE.replace('ont 12', 'ont 13')
+    elif case == 'truncated':
+        protocol['create_reply'] = SILENT_CREATE.replace('MA5800-X7(config)#', '')
+    else:
+        protocol['timeout'] = True
+    commands, _, _ = attach_runtime(current, monkeypatch, tmp_path, protocol=protocol)
+    op, preview = prepared(current)
+    assert lifecycle.execute_approved(op, preview.preview_hash).status == 'BLOCKED'
+    assert commands.count('create_service_port') == 1
+    assert not any(e.event_type == 'PORT_CREATE_VERIFIED' for e in repo.events(sid))
+    assert cleanup_candidates(replay_port_ledger(sid, repo.events(sid)), frozenset()) == ()
+    assert lifecycle.execute_approved(op, preview.preview_hash).status == 'BLOCKED'
+    assert commands.count('create_service_port') == 1

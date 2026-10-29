@@ -227,3 +227,15 @@ def test_service_inlines_screenshot_evidence_and_customer_code(
     assert "CUST-2026-001" in html
 
 
+
+
+def test_service_persists_report_mode_in_snapshot(db_session, tmp_path) -> None:
+    project, run, _evidence = create_completed_run(db_session, tmp_path)
+    service = build_service(db_session, tmp_path)
+
+    formal = service.generate_report(run.id, mode="formal")
+    internal = service.generate_report(run.id, mode="internal")
+
+    assert formal.report_snapshot["mode"] == "formal"
+    assert internal.report_snapshot["mode"] == "internal"
+    assert formal.id != internal.id

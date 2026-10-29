@@ -1,3 +1,4 @@
 .pytest-tmp*\n.venv/
 .pytest-tmp*
 .venv/
+smoke/

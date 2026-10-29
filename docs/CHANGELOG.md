@@ -105,3 +105,11 @@
 ## 2026-10-29（4）— 移除 PDF 导出
 
 - 按产品决策移除 `POST/GET /reports/{id}/pdf` 与相关服务/存储/异常处理代码；报告交付以自包含 HTML 为准。PDF 导出如有需要后续再议。
+
+## 2026-10-29（5）— 端到端冒烟验证与修复
+
+- 新增 `backend/scripts/smoke_e2e.py`：对运行中的后端走完整生命周期（用例→设备→环境凭据→项目→run→证据上传与自动解析→锁定→缺陷→回归→关闭→双模式报告→归档），32 项断言，可重复执行。
+- 修复：环境参数明文密码守卫抛出 `ValueError` 未转换，接口返回 500；现映射为 `PlaintextSecretError` → 422（新增服务层与 API 测试）。
+- 修复：报告 `mode`（formal/internal）未持久化，事后无法分辨报告版本；现写入 `report_snapshot["mode"]`。
+- 改进：`EvidenceRead.parsed_metadata` 由 JSON 字符串改为对象返回（前端可直接消费），非法 JSON 容错为 null，附测试。
+- 确认既有行为正确：证据上传须在结果锁定前完成；缺陷需 OPEN→IN_PROGRESS→RESOLVED 后才能登记回归；回归 PASS 自动写 `closed_at`；归档证据路径为 `evidence/` + `storage_path`。

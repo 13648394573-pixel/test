@@ -99,3 +99,22 @@ def test_environment_profile_api_validates_conflicts_and_parameters(
     )
     assert invalid.status_code == 422
     assert client.get("/api/environment-profiles/missing").status_code == 404
+
+
+def test_api_returns_422_for_plaintext_secret(client) -> None:
+    response = client.post(
+        "/api/environment-profiles",
+        json={
+            "name": "Bad Profile API",
+            "enabled": True,
+            "parameters": [
+                {
+                    "section": "OLT",
+                    "param_key": "super_password",
+                    "param_value": "plain-text-secret",
+                    "display_order": 1,
+                }
+            ],
+        },
+    )
+    assert response.status_code == 422, response.text

@@ -68,6 +68,7 @@ from app.environments.service import (
     DuplicateEnvironmentProfileError,
     EnvironmentProfileNotFoundError,
     InvalidEnvironmentProfileError,
+    PlaintextSecretError,
 )
 from app.test_cases.router import router as test_case_router
 from app.test_cases.service import DuplicateCaseCodeError, TestCaseNotFoundError
@@ -428,6 +429,7 @@ def create_app(
     for exception_type in (
         DuplicateEnvironmentParameterError,
         InvalidEnvironmentProfileError,
+        PlaintextSecretError,
     ):
         application.add_exception_handler(
             exception_type,

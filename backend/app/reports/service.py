@@ -104,6 +104,7 @@ class ReportService:
         snapshot["report_title"] = report_title
         snapshot["report_no"] = report_no
         snapshot["report_version"] = version
+        snapshot["mode"] = mode
         snapshot["customer_code"] = (
             customer_code.strip() if customer_code and customer_code.strip() else None
         )

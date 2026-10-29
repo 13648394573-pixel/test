@@ -23,6 +23,10 @@ class InvalidEnvironmentProfileError(Exception):
     pass
 
 
+class PlaintextSecretError(Exception):
+    """Raised when a password-like parameter carries a plaintext value."""
+
+
 class EnvironmentService:
     def __init__(self, repository: EnvironmentRepository) -> None:
         self.repository = repository
@@ -40,7 +44,10 @@ class EnvironmentService:
         profile_values, parameters = self._prepare(values)
         if self.repository.get_by_name(profile_values["name"]) is not None:
             raise DuplicateEnvironmentProfileError(profile_values["name"])
-        return self.repository.create(profile_values, parameters)
+        try:
+            return self.repository.create(profile_values, parameters)
+        except ValueError as error:
+            raise PlaintextSecretError(str(error)) from error
 
     def update_profile(
         self,
@@ -52,7 +59,10 @@ class EnvironmentService:
         duplicate = self.repository.get_by_name(profile_values["name"])
         if duplicate is not None and duplicate.id != profile.id:
             raise DuplicateEnvironmentProfileError(profile_values["name"])
-        return self.repository.update(profile, profile_values, parameters)
+        try:
+            return self.repository.update(profile, profile_values, parameters)
+        except ValueError as error:
+            raise PlaintextSecretError(str(error)) from error
 
     def delete_profile(self, profile_id: str) -> None:
         self.repository.delete(self.get_profile(profile_id))

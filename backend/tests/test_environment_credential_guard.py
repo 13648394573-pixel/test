@@ -67,3 +67,29 @@ def test_model_rejects_plaintext_password_parameter(db_session) -> None:
     db_session.add(good)
     db_session.commit()
     assert good.param_value.startswith("credential:")
+
+
+def test_service_maps_plaintext_secret_to_dedicated_error(db_session) -> None:
+    """The model guard must surface as 422, not an unhandled 500."""
+    from app.environments.repository import EnvironmentRepository
+    from app.environments.service import EnvironmentService, PlaintextSecretError
+
+    service = EnvironmentService(EnvironmentRepository(db_session))
+    with pytest.raises(PlaintextSecretError):
+        service.create_profile(
+            {
+                "name": "Bad Profile",
+                "description": None,
+                "enabled": True,
+                "parameters": [
+                    {
+                        "section": "OLT",
+                        "param_key": "root_password",
+                        "param_value": "plain-text-secret",
+                        "display_order": 1,
+                    }
+                ],
+            }
+        )
+    db_session.rollback()
+    assert service.list_profiles() == []

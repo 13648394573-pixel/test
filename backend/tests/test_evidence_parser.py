@@ -50,3 +50,48 @@ def test_parse_payload_pon_status_o5_and_optical() -> None:
 
 def test_parse_payload_returns_none_for_unknown_text() -> None:
     assert parse_payload("random page content") is None
+
+
+def test_evidence_read_exposes_parsed_metadata_as_object() -> None:
+    from app.evidence.schemas import EvidenceRead
+
+    read = EvidenceRead.model_validate(
+        {
+            "id": "ev-1",
+            "run_result_id": "rr-1",
+            "defect_id": None,
+            "run_result_ids": ["rr-1"],
+            "category": "LOG",
+            "original_name": "ont.txt",
+            "storage_path": "run-results/rr-1/ev-1.txt",
+            "media_type": "text/plain",
+            "file_size": 10,
+            "sha256": "a" * 64,
+            "description": None,
+            "parsed_metadata": '{"parser_version": 1, "checks": {"ont_online": true}}',
+            "created_at": "2026-10-29T00:00:00",
+        }
+    )
+    assert isinstance(read.parsed_metadata, dict)
+    assert read.parsed_metadata["checks"]["ont_online"] is True
+
+
+def test_evidence_read_tolerates_bad_json_and_null() -> None:
+    from app.evidence.schemas import EvidenceRead
+
+    base = {
+        "id": "ev-2",
+        "run_result_id": None,
+        "defect_id": None,
+        "run_result_ids": [],
+        "category": "OTHER",
+        "original_name": "x.bin",
+        "storage_path": "run-results/x/ev-2.bin",
+        "media_type": "application/octet-stream",
+        "file_size": 1,
+        "sha256": "b" * 64,
+        "description": None,
+        "created_at": "2026-10-29T00:00:00",
+    }
+    assert EvidenceRead.model_validate({**base, "parsed_metadata": None}).parsed_metadata is None
+    assert EvidenceRead.model_validate({**base, "parsed_metadata": "not-json"}).parsed_metadata is None

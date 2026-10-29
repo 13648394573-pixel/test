@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from typing import Any
 from uuid import uuid4
@@ -97,6 +98,31 @@ class EnvironmentParameter(Base):
         onupdate=func.current_timestamp(),
     )
     profile: Mapped[EnvironmentProfile] = relationship(back_populates="parameters")
+
+
+_SECRET_KEY_PATTERN = re.compile(
+    r"password|passwd|pwd|secret|token|credential", re.IGNORECASE
+)
+
+
+def _reject_plaintext_secret(_mapper, _connection, target: EnvironmentParameter) -> None:
+    """Block plaintext secrets in environment parameters.
+
+    Secret material must be stored in the keyring and referenced from the
+    profile as "credential:<credential_target_ref>"; snapshots redact that
+    reference to "***" automatically.
+    """
+    if _SECRET_KEY_PATTERN.search(target.param_key or "") and not (
+        target.param_value or ""
+    ).startswith("credential:"):
+        raise ValueError(
+            "param_key looks like a secret; store it in the keyring and use "
+            "a value of 'credential:<credential_target_ref>' instead"
+        )
+
+
+event.listen(EnvironmentParameter, "before_insert", _reject_plaintext_secret)
+event.listen(EnvironmentParameter, "before_update", _reject_plaintext_secret)
 
 
 class RunEnvironmentSnapshot(Base):

@@ -75,6 +75,7 @@ class Evidence(Base):
         default=False,
         server_default="0",
     )
+    parsed_metadata: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
         nullable=False,
@@ -112,6 +113,7 @@ def _reject_metadata_mutation(_mapper, _connection, target: Evidence) -> None:
         "step_ref",
         "capture_method",
         "redacted",
+        "parsed_metadata",
         "created_at",
     )
     if any(state.attrs[field].history.has_changes() for field in metadata_fields):

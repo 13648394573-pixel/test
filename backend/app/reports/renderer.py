@@ -42,6 +42,31 @@ def _summary_bar(summary: dict[str, Any]) -> str:
     )
 
 
+CHECK_LABELS = {
+    "ont_online": "ONT 在线",
+    "onu_o5": "O5 状态",
+    "rx_power_above_threshold": "光功率达标",
+    "no_packet_loss": "零丢包",
+    "avg_rtt_below_limit": "时延达标",
+}
+
+
+def _check_badges(parsed_meta: dict[str, Any] | None) -> str:
+    if not parsed_meta:
+        return ""
+    checks = parsed_meta.get("checks") or {}
+    badges = []
+    for key, label in CHECK_LABELS.items():
+        if key not in checks:
+            continue
+        passed = bool(checks[key])
+        badges.append(
+            f'<span class="check {"check-ok" if passed else "check-bad"}">'
+            f"{'✓' if passed else '✗'} {label}</span>"
+        )
+    return f'<div class="checks">{"".join(badges)}</div>' if badges else ""
+
+
 def _evidence_cell(evidences: list[dict[str, Any]]) -> str:
     if not evidences:
         return "—"
@@ -49,18 +74,20 @@ def _evidence_cell(evidences: list[dict[str, Any]]) -> str:
     for ev in evidences:
         name = _text(ev.get("original_name"))
         digest = _text(str(ev.get("sha256"))[:12])
+        checks = _check_badges(ev.get("parsed_metadata"))
         data_uri = ev.get("data_uri")
         if data_uri:
             parts.append(
                 f'<div class="ev"><a href="{data_uri}" target="_blank">'
                 f'<img class="shot" src="{data_uri}" alt="{name}"></a>'
                 f"<small>截图 {_text(ev.get('category'))} · {name}"
-                f"<br>SHA256 {digest}…</small></div>"
+                f"<br>SHA256 {digest}…</small>{checks}</div>"
             )
         else:
             parts.append(
                 f'<div class="ev">{name}'
-                f"<small>{_text(ev.get('category'))} · SHA256 {digest}…</small></div>"
+                f"<small>{_text(ev.get('category'))} · SHA256 {digest}…</small>"
+                f"{checks}</div>"
             )
     return "".join(parts)
 
@@ -243,6 +270,11 @@ STYLE = (
     ".defect-shots{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}"
     ".customer-code{display:inline-block;background:#eff6ff;color:#1d4ed8;"
     "font-weight:600;padding:2px 10px;border-radius:4px}"
+    ".checks{margin-top:4px}"
+    ".check{display:inline-block;font-size:11px;font-weight:600;"
+    "padding:0 6px;border-radius:8px;margin:1px 2px 1px 0}"
+    ".check-ok{background:#dcfce7;color:#15803d}"
+    ".check-bad{background:#fee2e2;color:#b91c1c}"
     ".defect-meta{color:var(--muted);font-size:12px;margin-top:4px}"
     ".regressions{margin:4px 0 0;padding-left:18px;font-size:12px}"
     ".muted{color:var(--muted)}.small{font-size:12px}"

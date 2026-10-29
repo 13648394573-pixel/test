@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import BinaryIO
 
+from app.evidence import parser
 from app.evidence.repository import EvidenceRepository
 from app.evidence.storage import (
     EvidenceFileMissingError,
@@ -136,6 +137,11 @@ class EvidenceService:
                             if description and description.strip()
                             else None
                         ),
+                        "parsed_metadata": self._parse_stored_evidence(
+                            stored.storage_path,
+                            item.get("media_type")
+                            or "application/octet-stream",
+                        ),
                     }
                 )
             return self.repository.create_batch(values_list, unique_ids)
@@ -223,11 +229,30 @@ class EvidenceService:
                         if description and description.strip()
                         else None
                     ),
+                    "parsed_metadata": self._parse_stored_evidence(
+                        stored.storage_path,
+                        media_type or "application/octet-stream",
+                    ),
                 }
             )
         except Exception:
             self.storage.delete(stored.storage_path)
             raise
+
+    def _parse_stored_evidence(
+        self,
+        storage_path: str,
+        media_type: str,
+    ) -> str | None:
+        """Best-effort structured parse of text evidence at upload time."""
+        if not media_type.startswith("text/"):
+            return None
+        try:
+            path = self.storage.open_path(storage_path)
+            raw = path.read_text(encoding="utf-8", errors="replace")
+        except (EvidenceFileMissingError, OSError):
+            return None
+        return parser.dumps(parser.parse_payload(raw))
 
     def _get(self, evidence_id: str) -> Evidence:
         evidence = self.repository.get(evidence_id)

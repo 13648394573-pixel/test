@@ -1,0 +1,105 @@
+{
+  "cases": [
+    {
+      "case_code": "R2-PON-002",
+      "title": "PON 光路中断恢复（LOS 到 O5）",
+      "device_type": "ONU",
+      "category": "PON",
+      "priority": "P1",
+      "preconditions": "ONU 已在线 O5；测试设备：华为 MA5800-X7 或同类 GPON OLT（管理地址见环境快照），可断开 ONU 侧尾纤；光功率计（可选）",
+      "description": "验证光路中断后 ONU 的掉线告警与自动恢复能力。测试设备：OLT 及光纤跳线；恢复判定以 OLT 侧 Run state=online 且 ONU Web 报 O5 为准。",
+      "steps": [
+        {"action": "记录基线：OLT display ont info 确认 online/O5，截图留存", "expected_result": "ONT online，ONU State O5"},
+        {"action": "断开 ONU 侧尾纤，等待 30 秒后查询 OLT ONT 状态", "expected_result": "Run state=offline，Last down cause 为 LOSi"},
+        {"action": "恢复尾纤连接，每 30 秒查询一次 OLT 状态直至恢复（最长 5 分钟）", "expected_result": "ONT 自动恢复 online 并进入 O5，无需人工干预"},
+        {"action": "ONU Web 查看 PON 状态与光功率", "expected_result": "O5，Rx 光功率在正常范围（>-27 dBm）"}
+      ]
+    },
+    {
+      "case_code": "R2-PON-003",
+      "title": "光功率临界验证（衰减至灵敏度边界）",
+      "device_type": "ONU",
+      "category": "PON",
+      "priority": "P2",
+      "preconditions": "ONU 在线 O5；测试设备：OLT、可调光衰减器（接入 ONU 上行链路）",
+      "description": "验证接收光功率接近 Class B+ 灵敏度（约 -27 dBm）时的行为边界。测试设备：光衰减器、光功率计。",
+      "steps": [
+        {"action": "以 1 dB 步进逐步增加衰减，记录每一档 OLT 侧 Rx 光功率与 ONU 状态", "expected_result": "衰减到 -27 dBm 附近前 ONT 保持 online/O5"},
+        {"action": "继续增加衰减至掉线，记录掉线时刻的实际 Rx 光功率", "expected_result": "得到实测灵敏度阈值，不低于 -28 dBm"},
+        {"action": "移除衰减，确认 ONU 自动恢复 O5", "expected_result": "3 分钟内恢复 online/O5"}
+      ]
+    },
+    {
+      "case_code": "R2-PON-004",
+      "title": "ONU 断电重启恢复",
+      "device_type": "ONU",
+      "category": "PON",
+      "priority": "P1",
+      "preconditions": "ONU 在线且 WAN 连接正常；测试设备：OLT",
+      "description": "验证 ONU 断电重启后注册、配置加载与业务自动恢复。测试设备：OLT；ONU 供电电源。",
+      "steps": [
+        {"action": "记录基线 WAN 状态（IPoE/PPPoE 连接与 IP）", "expected_result": "两种 WAN 均已连接"},
+        {"action": "切断 ONU 电源 10 秒后恢复供电", "expected_result": "ONU 重新启动"},
+        {"action": "等待并轮询 OLT 状态直至 ONT online（最长 5 分钟）", "expected_result": "ONT 自动注册上线并 O5，配置（线路/业务 Profile）保持不变"},
+        {"action": "复查 WAN 连接与外网 ping", "expected_result": "IPoE/PPPoE 自动重连，ping 外网丢包 0%"}
+      ]
+    },
+    {
+      "case_code": "R2-WAN-002",
+      "title": "PPPoE 断线重拨",
+      "device_type": "ONU",
+      "category": "WAN",
+      "priority": "P1",
+      "preconditions": "PPPoE WAN 已连接；测试设备：OLT；具备断开 PPPoE 会话的手段（BRAS 侧踢线或 ONU Web 断开）",
+      "description": "验证 PPPoE 会话中断后的自动重拨能力。测试设备：OLT、BRAS（或运营商链路）。",
+      "steps": [
+        {"action": "记录当前 PPPoE IP 与在线时长", "expected_result": "PPPoE connected"},
+        {"action": "断开 PPPoE 会话（BRAS 踢线或 ONU Web 断开）", "expected_result": "会话断开"},
+        {"action": "观察 3 分钟内 ONU Web WAN 状态", "expected_result": "PPPoE 自动重拨成功并获取 IP"},
+        {"action": "ping 外网验证连通性", "expected_result": "丢包 0%，平均时延 <100 ms"}
+      ]
+    },
+    {
+      "case_code": "R2-WAN-003",
+      "title": "PPPoE 认证失败处理",
+      "device_type": "ONU",
+      "category": "WAN",
+      "priority": "P2",
+      "preconditions": "可修改 PPPoE 账号信息；测试设备：OLT、BRAS",
+      "description": "验证错误凭据下 ONU 的表现（应持续重试且不崩溃），凭据从环境快照的 credential 引用获取。",
+      "steps": [
+        {"action": "将 PPPoE 密码改为错误值并保存", "expected_result": "配置保存成功"},
+        {"action": "观察 WAN 状态 2 分钟", "expected_result": "认证失败，ONU 持续重试，Web 界面正常响应"},
+        {"action": "恢复正确凭据（从凭据库引用）", "expected_result": "PPPoE 重拨成功"},
+        {"action": "确认外网连通", "expected_result": "ping 外网丢包 0%"}
+      ]
+    },
+    {
+      "case_code": "R2-SVC-001",
+      "title": "WLAN 2.4G/5G 连通性",
+      "device_type": "ONU",
+      "category": "Service",
+      "priority": "P2",
+      "preconditions": "ONU 在线，WLAN 已启用；测试设备：OLT、Wi-Fi 终端（手机或笔记本）",
+      "description": "验证两个频段的无线接入与外网连通。测试设备：OLT、无线终端。",
+      "steps": [
+        {"action": "终端连接 2.4G SSID 并获取 IP", "expected_result": "获取到网关下发的 IP"},
+        {"action": "ping 外网", "expected_result": "丢包 0%"},
+        {"action": "切换 5G SSID 重复上述两步", "expected_result": "同样连通"}
+      ]
+    },
+    {
+      "case_code": "R2-MGT-001",
+      "title": "TR069 管理通道状态确认",
+      "device_type": "ONU",
+      "category": "Management",
+      "priority": "P3",
+      "preconditions": "ONU 在线；TR069 ACS 地址已配置；测试设备：OLT、ACS（如可用）",
+      "description": "确认 TR069 管理通道注册状态。测试设备：OLT、ACS 平台（可选）。",
+      "steps": [
+        {"action": "ONU Web 查看 TR069 状态页", "expected_result": "ACS 连接状态为已注册/正常"},
+        {"action": "OLT 侧确认 ONU 管理 IP 可达", "expected_result": "ONU 管理 IP 可 ping 通"}
+      ]
+    }
+  ]
+}

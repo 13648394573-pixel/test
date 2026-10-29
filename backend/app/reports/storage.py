@@ -33,6 +33,11 @@ class ReportStorage:
         destination = self.resolve(relative)
         return self._atomic_write(destination, content.encode("utf-8"))
 
+    def write_pdf(self, report_id: str, content: bytes) -> StoredArtifact:
+        relative = f"reports/{report_id}/report.pdf"
+        destination = self.resolve(relative)
+        return self._atomic_write(destination, content)
+
     def open_verified(self, storage_path: str, expected_sha256: str) -> Path:
         path = self.resolve(storage_path)
         if not path.is_file():

@@ -17,8 +17,15 @@ def _evidence_snapshot(item) -> dict[str, Any]:
         "file_size": item.file_size,
         "sha256": item.sha256,
         "description": item.description,
+        "parsed_metadata": _parsed(getattr(item, "parsed_metadata", None)),
         "created_at": _iso(item.created_at),
     }
+
+
+def _parsed(raw: str | None) -> dict[str, Any] | None:
+    from app.evidence import parser
+
+    return parser.loads(raw)
 
 
 def build_report_snapshot(

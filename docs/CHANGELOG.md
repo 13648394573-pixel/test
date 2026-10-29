@@ -93,3 +93,11 @@
 - 报告正文不再展示测试环境；页眉改为"版本号 + 客户代码"（API 与前端新增 `customer_code` 字段），测试设备/环境信息在用例说明中体现（结果表显示用例 description）。
 - 截图证据内嵌：生成报告时将 image 类证据以 base64（SHA256 校验后）内嵌为缩略图，点击可查看原图，HTML 报告自包含，适合直接交付客户。
 - internal 模式文档信息中保留环境快照名称与版本一行，便于内部追溯。
+
+## 2026-10-29（3）— 证据自动解析、凭据安全、PDF 导出与用例库扩充
+
+- Evidence：新增 `parsed_metadata` 列（迁移 `20261029_0022`），上传文本证据时自动解析 OLT CLI/PON 状态/ping 诊断并存储结构化元数据与自动判定结果；报告证据栏显示判定徽章（ONT 在线/O5/光功率/丢包/时延）。
+- Environments：环境参数支持 `credential:<引用名>` 引用 keyring 凭据，快照自动脱敏为 `***`；模型层拒绝含 password/secret 等键名的明文值。
+- Reports：新增 `POST /reports/{id}/pdf` 与 `GET /reports/{id}/pdf`，经 SHA256 校验的 HTML 用 headless Chromium 打印为 PDF。
+- Seeds：`seeds/round2_cases.json` + `tools/seed_test_cases.py`，7 个新用例（异常恢复/光功率边界/PPPoE 重拨/WLAN/TR069），绑定 device_type 不绑定型号。
+- Docs：新增 `BETA_ROUND2_TEST_PLAN.md` 与 `DEVICE_MODEL_PORTABILITY.md`。

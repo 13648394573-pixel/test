@@ -18,4 +18,5 @@ class EvidenceRead(BaseModel):
     file_size: int
     sha256: str
     description: str | None
+    parsed_metadata: str | None
     created_at: datetime

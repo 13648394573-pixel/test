@@ -60,8 +60,6 @@ from app.reports.service import (
     ReportModeError,
     ReportNotFoundError,
     ReportNotReadyError,
-    ReportPdfNotGeneratedError,
-    ReportPdfRenderError,
     ReportSourceNotFoundError,
 )
 from app.environments.router import router as environment_router
@@ -381,20 +379,6 @@ def create_app(
             ),
         )
 
-    application.add_exception_handler(
-        ReportPdfNotGeneratedError,
-        lambda _request, _exception: JSONResponse(
-            status_code=404,
-            content={"detail": "PDF not generated; export first"},
-        ),
-    )
-    application.add_exception_handler(
-        ReportPdfRenderError,
-        lambda _request, exception: JSONResponse(
-            status_code=500,
-            content={"detail": f"PDF render failed: {exception}"},
-        ),
-    )
     application.add_exception_handler(
         ReportModeError,
         lambda _request, exception: JSONResponse(

@@ -46,4 +46,4 @@ python tools/seed_test_cases.py <workbench.db>
 - 每个用例至少 1 份 LOG + 1 份 SCREENSHOT
 - 文本证据上传后自动解析（OLT CLI / PON 状态 / ping 诊断），
   报告中显示自动判定徽章（ONT 在线、O5、光功率、丢包、时延）
-- 截图证据在报告 PDF/HTML 中内嵌展示
+- 截图证据在报告 HTML 中内嵌展示

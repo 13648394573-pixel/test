@@ -47,38 +47,6 @@ class ReportArtifactConflictError(Exception):
     pass
 
 
-class ReportPdfNotGeneratedError(Exception):
-    pass
-
-
-class ReportPdfRenderError(Exception):
-    pass
-
-
-def _print_html_to_pdf(html_path: Path) -> bytes:
-    """Render an HTML file to PDF with headless Chromium (lazy import)."""
-    try:
-        from playwright.sync_api import sync_playwright
-    except ImportError as error:  # pragma: no cover - environment issue
-        raise ReportPdfRenderError(
-            "playwright is not installed"
-        ) from error
-    try:
-        with sync_playwright() as playwright:
-            browser = playwright.chromium.launch(headless=True)
-            try:
-                page = browser.new_page()
-                page.goto(html_path.as_uri())
-                page.emulate_media(media="print")
-                return page.pdf(format="A4", print_background=True)
-            finally:
-                browser.close()
-    except Exception as error:
-        if isinstance(error, ReportPdfRenderError):
-            raise
-        raise ReportPdfRenderError(str(error)) from error
-
-
 def utc_now() -> datetime:
     return datetime.now(UTC).replace(tzinfo=None)
 
@@ -201,28 +169,6 @@ class ReportService:
         if report is None:
             raise ReportNotFoundError(report_id)
         return report
-
-    def export_report_pdf(self, report_id: str) -> StoredArtifact:
-        """Print an existing HTML report to PDF via headless Chromium.
-
-        The HTML is re-verified against its stored SHA256 before printing,
-        so the PDF always corresponds to the immutable report content.
-        """
-        report = self.get_report(report_id)
-        html_path = self.storage.open_verified(
-            report.html_storage_path,
-            report.html_sha256,
-        )
-        pdf_bytes = _print_html_to_pdf(html_path)
-        return self.storage.write_pdf(str(report.id), pdf_bytes)
-
-    def download_report_pdf(self, report_id: str) -> tuple[Report, Path]:
-        report = self.get_report(report_id)
-        relative = f"reports/{report.id}/report.pdf"
-        path = self.storage.resolve(relative)
-        if not path.is_file():
-            raise ReportPdfNotGeneratedError(report_id)
-        return report, path
 
     def list_for_run(self, run_id: str) -> list[Report]:
         if self.repository.get_run_graph(run_id) is None:

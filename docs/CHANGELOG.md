@@ -101,3 +101,7 @@
 - Reports：新增 `POST /reports/{id}/pdf` 与 `GET /reports/{id}/pdf`，经 SHA256 校验的 HTML 用 headless Chromium 打印为 PDF。
 - Seeds：`seeds/round2_cases.json` + `tools/seed_test_cases.py`，7 个新用例（异常恢复/光功率边界/PPPoE 重拨/WLAN/TR069），绑定 device_type 不绑定型号。
 - Docs：新增 `BETA_ROUND2_TEST_PLAN.md` 与 `DEVICE_MODEL_PORTABILITY.md`。
+
+## 2026-10-29（4）— 移除 PDF 导出
+
+- 按产品决策移除 `POST/GET /reports/{id}/pdf` 与相关服务/存储/异常处理代码；报告交付以自包含 HTML 为准。PDF 导出如有需要后续再议。

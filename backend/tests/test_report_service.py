@@ -227,31 +227,3 @@ def test_service_inlines_screenshot_evidence_and_customer_code(
     assert "CUST-2026-001" in html
 
 
-def test_service_pdf_export_roundtrip(db_session, tmp_path, monkeypatch) -> None:
-    from pathlib import Path as _Path
-
-    import app.reports.service as report_service_module
-
-    project, run, _evidence = create_completed_run(db_session, tmp_path)
-    service = build_service(db_session, tmp_path)
-    report = service.generate_report(run.id)
-
-    def fake_print(html_path):
-        assert _Path(html_path).is_file()
-        return b"%PDF-1.4 fake"
-
-    monkeypatch.setattr(
-        report_service_module, "_print_html_to_pdf", fake_print
-    )
-    stored = service.export_report_pdf(report.id)
-    assert stored.sha256
-    report_obj, path = service.download_report_pdf(report.id)
-    assert report_obj.id == report.id
-    assert path.read_bytes().startswith(b"%PDF-1.4")
-
-    # A report that has never been exported has no PDF on disk.
-    other = service.generate_report(run.id)
-    with pytest.raises(report_service_module.ReportPdfNotGeneratedError):
-        service.download_report_pdf(other.id)
-    with pytest.raises(report_service_module.ReportNotFoundError):
-        service.download_report_pdf("no-such-report")

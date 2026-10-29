@@ -83,29 +83,6 @@ def download_report(
 
 
 @router.post(
-    "/reports/{report_id}/pdf",
-    response_model=ReportRead,
-)
-def export_report_pdf(report_id: str, service: ServiceDependency):
-    """Render the verified HTML report to PDF (idempotent re-export)."""
-    service.export_report_pdf(report_id)
-    return service.get_report(report_id)
-
-
-@router.get("/reports/{report_id}/pdf")
-def download_report_pdf(
-    report_id: str,
-    service: ServiceDependency,
-) -> FileResponse:
-    report, path = service.download_report_pdf(report_id)
-    return FileResponse(
-        path,
-        media_type="application/pdf",
-        filename=f"{report.report_no}.pdf",
-    )
-
-
-@router.post(
     "/reports/{report_id}/archive",
     response_model=ArchiveRead,
     status_code=status.HTTP_201_CREATED,

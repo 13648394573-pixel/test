@@ -27,6 +27,7 @@ export default function ReportArchivePage({
   const [runId, setRunId] = useState("");
   const [title, setTitle] = useState("");
   const [mode, setMode] = useState<"formal" | "internal">("formal");
+  const [customerCode, setCustomerCode] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -59,7 +60,12 @@ export default function ReportArchivePage({
   const generate = async () => {
     if (!runId) return;
     try {
-      const report = await api.generateReport(runId, title.trim() || null, mode);
+      const report = await api.generateReport(
+        runId,
+        title.trim() || null,
+        mode,
+        customerCode.trim() || null
+      );
       setReports((current) => [report, ...current]);
       setTitle("");
       setError("");
@@ -128,6 +134,14 @@ export default function ReportArchivePage({
             <input
               value={title}
               onChange={(event) => setTitle(event.target.value)}
+            />
+          </label>
+          <label>
+            Customer Code
+            <input
+              value={customerCode}
+              onChange={(event) => setCustomerCode(event.target.value)}
+              placeholder="e.g. CUST-2026-001"
             />
           </label>
           <label>

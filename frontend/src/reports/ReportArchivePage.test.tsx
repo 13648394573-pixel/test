@@ -54,7 +54,12 @@ class MemoryReportApi implements ReportApi {
     return structuredClone(this.reports);
   }
 
-  async generateReport(runId: string, title: string | null, _mode: "formal" | "internal") {
+  async generateReport(
+    runId: string,
+    title: string | null,
+    _mode: "formal" | "internal",
+    _customerCode: string | null
+  ) {
     const report: Report = {
       id: "report-1",
       report_no: "RPT-000001",

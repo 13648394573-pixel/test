@@ -9,6 +9,7 @@ class ReportGenerate(BaseModel):
 
     title: str | None = Field(default=None, max_length=255)
     mode: Literal["formal", "internal"] = "formal"
+    customer_code: str | None = Field(default=None, max_length=64)
 
 
 class ArchiveRead(BaseModel):

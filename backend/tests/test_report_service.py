@@ -179,3 +179,49 @@ def test_archive_snapshot_deduplicates_shared_evidence() -> None:
     }
 
     assert ReportService._snapshot_evidences(snapshot) == [evidence]
+
+
+def test_service_inlines_screenshot_evidence_and_customer_code(
+    db_session,
+    tmp_path,
+) -> None:
+    from PIL import Image
+
+    project, run, _evidence = create_completed_run(db_session, tmp_path)
+    result = run.results[0]
+
+    evidence_storage = EvidenceStorage(tmp_path / "evidence", max_bytes=65536)
+    buffer = BytesIO()
+    Image.new("RGB", (8, 8), color=(200, 30, 30)).save(buffer, format="PNG")
+    buffer.seek(0)
+    stored = evidence_storage.store(
+        "run_result", result.id, "wan.png", buffer
+    )
+    screenshot = Evidence(
+        run_result_id=result.id,
+        category="SCREENSHOT",
+        original_name="wan.png",
+        storage_path=stored.storage_path,
+        media_type="image/png",
+        file_size=stored.file_size,
+        sha256=stored.sha256,
+    )
+    db_session.add(screenshot)
+    db_session.commit()
+
+    service = build_service(db_session, tmp_path)
+    report = service.generate_report(
+        run.id, mode="formal", customer_code="CUST-2026-001"
+    )
+
+    assert report.report_snapshot["customer_code"] == "CUST-2026-001"
+    inlined = [
+        item
+        for item in report.report_snapshot["results"][0]["evidences"]
+        if item.get("data_uri")
+    ]
+    assert len(inlined) == 1
+    assert inlined[0]["data_uri"].startswith("data:image/png;base64,")
+    html = service.download_report(report.id).read_text("utf-8")
+    assert "<img" in html
+    assert "CUST-2026-001" in html

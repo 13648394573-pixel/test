@@ -1,4 +1,5 @@
 from collections.abc import Callable
+import base64
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -66,6 +67,7 @@ class ReportService:
         run_id: str,
         title: str | None = None,
         mode: str = "formal",
+        customer_code: str | None = None,
     ) -> Report:
         if mode not in REPORT_MODES:
             raise ReportModeError(mode)
@@ -101,6 +103,10 @@ class ReportService:
         snapshot["report_title"] = report_title
         snapshot["report_no"] = report_no
         snapshot["report_version"] = version
+        snapshot["customer_code"] = (
+            customer_code.strip() if customer_code and customer_code.strip() else None
+        )
+        self._inline_screenshot_evidence(snapshot)
         stored = self.storage.write_html(
             report_id,
             render_report_html(snapshot, mode=mode),
@@ -124,6 +130,38 @@ class ReportService:
         except SQLAlchemyError:
             self.storage.delete(stored.storage_path)
             raise
+
+    def _inline_screenshot_evidence(self, snapshot: dict[str, Any]) -> None:
+        """Embed image evidence as base64 data URIs (SHA256-verified reads).
+
+        Text evidence stays referenced by name/hash only, keeping report
+        size bounded; screenshots are small enough to inline so that the
+        HTML report is self-contained for customer delivery.
+        """
+        entries: list[dict[str, Any]] = []
+        for result in snapshot["results"]:
+            entries.extend(result.get("evidences") or [])
+        for defect in snapshot.get("defects") or []:
+            entries.extend(defect.get("evidences") or [])
+        for item in entries:
+            media_type = str(item.get("media_type") or "")
+            if not media_type.startswith("image/"):
+                continue
+            storage_path = item.get("storage_path")
+            expected = item.get("sha256")
+            if not storage_path or not expected:
+                continue
+            try:
+                path = ReportStorage._resolve_within(
+                    self.storage.evidence_root,
+                    storage_path,
+                )
+                if not path.is_file() or ReportStorage._hash(path) != expected:
+                    continue
+                payload = base64.b64encode(path.read_bytes()).decode("ascii")
+            except (OSError, ValueError):
+                continue
+            item["data_uri"] = f"data:{media_type};base64,{payload}"
 
     def get_report(self, report_id: str) -> Report:
         report = self.repository.get_report(report_id)

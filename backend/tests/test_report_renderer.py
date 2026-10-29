@@ -57,12 +57,17 @@ def base_snapshot() -> dict:
 
 
 def test_formal_mode_renders_signoff_and_document_info() -> None:
-    html = render_report_html(base_snapshot(), mode="formal")
+    snapshot = base_snapshot()
+    snapshot["customer_code"] = "CUST-2026-001"
+    html = render_report_html(snapshot, mode="formal")
     assert "正式验收报告" in html
     assert "测试执行人" in html
     assert "审核人" in html
     assert "批准人" in html
     assert "RPT-000001" in html
+    assert "CUST-2026-001" in html
+    # Environment details are no longer part of the report body.
+    assert "测试环境" not in html
 
 
 def test_internal_mode_renders_run_id_and_technical_detail() -> None:

@@ -43,7 +43,12 @@ export interface Report {
 export interface ReportApi {
   listProjectReports(projectId: string): Promise<Report[]>;
   listRunReports(runId: string): Promise<Report[]>;
-  generateReport(runId: string, title: string | null, mode: "formal" | "internal"): Promise<Report>;
+  generateReport(
+    runId: string,
+    title: string | null,
+    mode: "formal" | "internal",
+    customerCode: string | null
+  ): Promise<Report>;
   getReport(reportId: string): Promise<Report>;
   createArchive(reportId: string): Promise<Archive>;
   getReportArchive(reportId: string): Promise<Archive>;

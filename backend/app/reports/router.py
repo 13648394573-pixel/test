@@ -39,7 +39,12 @@ def generate_report(
     payload: ReportGenerate,
     service: ServiceDependency,
 ):
-    return service.generate_report(run_id, payload.title, payload.mode)
+    return service.generate_report(
+        run_id,
+        payload.title,
+        payload.mode,
+        payload.customer_code,
+    )
 
 
 @router.get(

@@ -79,10 +79,12 @@ class ReportStorage:
                     ),
                 )
                 for item, path in evidence_paths:
-                    safe_name = Path(item["original_name"]).name
+                    # Align zip entry with the database evidences.storage_path
+                    # so archived files can be traced back to the evidence
+                    # store without a second mapping layer.
                     package.write(
                         path,
-                        f"evidence/{item['id']}/{safe_name}",
+                        f"evidence/{item['storage_path']}",
                     )
             temporary.replace(destination)
         except Exception:

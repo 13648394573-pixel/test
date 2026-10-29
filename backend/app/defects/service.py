@@ -40,6 +40,23 @@ class DuplicateRegressionError(Exception):
     pass
 
 
+class ProtectedDefectFieldError(Exception):
+    pass
+
+
+PROTECTED_DEFECT_FIELDS = frozenset(
+    {
+        "id",
+        "defect_code",
+        "source_run_result_id",
+        "status",
+        "resolved_at",
+        "closed_at",
+        "created_at",
+    }
+)
+
+
 def utc_now() -> datetime:
     return datetime.now(UTC).replace(tzinfo=None)
 
@@ -97,6 +114,13 @@ class DefectService:
         defect = self.get_defect(defect_id)
         if defect.status == "CLOSED":
             raise ClosedDefectError(defect_id)
+        protected = sorted(
+            set(values) & PROTECTED_DEFECT_FIELDS
+        )
+        if protected:
+            raise ProtectedDefectFieldError(
+                "immutable fields: " + ", ".join(protected)
+            )
         return self.repository.update_defect(defect, values)
 
     def transition(
@@ -178,6 +202,12 @@ class DefectService:
                 "status": "CLOSED",
                 "closed_at": self.clock(),
             }
+            # Defensive: closing a defect must never leave resolved_at
+            # unset, so the RESOLVED->CLOSED timeline stays auditable.
+            if defect.resolved_at is None:
+                defect_updates["resolved_at"] = (
+                    verification.executed_at or self.clock()
+                )
         elif verification.result == "FAIL":
             defect_updates = {
                 "status": "REOPENED",

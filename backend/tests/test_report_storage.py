@@ -59,7 +59,7 @@ def test_archive_contains_only_report_manifest_and_verified_evidence(
         assert set(package.namelist()) == {
             "report.html",
             "manifest.json",
-            "evidence/evidence-1/wan.log",
+            f"evidence/{evidence.storage_path}",
         }
         loaded_manifest = json.loads(package.read("manifest.json"))
         assert loaded_manifest["manifest_version"] == 1

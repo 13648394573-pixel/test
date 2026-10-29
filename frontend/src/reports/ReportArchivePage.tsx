@@ -26,6 +26,7 @@ export default function ReportArchivePage({
   const [projectId, setProjectId] = useState("");
   const [runId, setRunId] = useState("");
   const [title, setTitle] = useState("");
+  const [mode, setMode] = useState<"formal" | "internal">("formal");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -58,7 +59,7 @@ export default function ReportArchivePage({
   const generate = async () => {
     if (!runId) return;
     try {
-      const report = await api.generateReport(runId, title.trim() || null);
+      const report = await api.generateReport(runId, title.trim() || null, mode);
       setReports((current) => [report, ...current]);
       setTitle("");
       setError("");
@@ -128,6 +129,18 @@ export default function ReportArchivePage({
               value={title}
               onChange={(event) => setTitle(event.target.value)}
             />
+          </label>
+          <label>
+            Report Mode
+            <select
+              value={mode}
+              onChange={(event) =>
+                setMode(event.target.value as "formal" | "internal")
+              }
+            >
+              <option value="formal">Formal（客户验收）</option>
+              <option value="internal">Internal（内部存档）</option>
+            </select>
           </label>
           <button
             className="button button-primary"

@@ -7,7 +7,7 @@ from uuid import uuid4
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.models.report import Archive, Report
-from app.reports.renderer import render_report_html
+from app.reports.renderer import REPORT_MODES, render_report_html
 from app.reports.repository import ReportRepository
 from app.reports.snapshots import build_report_snapshot
 from app.reports.storage import (
@@ -30,6 +30,10 @@ class ArchiveNotFoundError(Exception):
 
 
 class ReportNotReadyError(Exception):
+    pass
+
+
+class ReportModeError(Exception):
     pass
 
 
@@ -61,7 +65,10 @@ class ReportService:
         self,
         run_id: str,
         title: str | None = None,
+        mode: str = "formal",
     ) -> Report:
+        if mode not in REPORT_MODES:
+            raise ReportModeError(mode)
         run = self.repository.get_run_graph(run_id)
         if run is None:
             raise ReportSourceNotFoundError(run_id)
@@ -90,14 +97,17 @@ class ReportService:
             defects,
             generated_at,
         )
+        report_no = self.repository.next_report_no()
         snapshot["report_title"] = report_title
+        snapshot["report_no"] = report_no
+        snapshot["report_version"] = version
         stored = self.storage.write_html(
             report_id,
-            render_report_html(snapshot),
+            render_report_html(snapshot, mode=mode),
         )
         values = {
             "id": report_id,
-            "report_no": self.repository.next_report_no(),
+            "report_no": report_no,
             "project_id": run.project_id,
             "test_run_id": run.id,
             "report_version": version,
@@ -164,10 +174,8 @@ class ReportService:
                 },
                 *[
                     {
-                        "path": (
-                            f"evidence/{item['id']}/"
-                            f"{Path(item['original_name']).name}"
-                        ),
+                        "path": f"evidence/{item['storage_path']}",
+                        "original_name": item["original_name"],
                         "sha256": item["sha256"],
                         "file_size": item["file_size"],
                     }

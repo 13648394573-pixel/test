@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-29 — 归档路径对齐、缺陷字段保护与报告双模式
+
+- Report Archive：ZIP 内 evidence 路径改为与数据库 `evidences.storage_path` 一致（`evidence/<storage_path>`），manifest `files[]` 增加 `original_name`，消除"zip 内 UUID 与磁盘目录对不上"的追溯断点。
+- Defects：`update_defect` 禁止直接修改受保护字段（status、resolved_at、closed_at、defect_code、source_run_result_id 等），修复创建时即写入 `resolved_at` 导致时间线失真的通道；回归 PASS 关闭缺陷时若 `resolved_at` 为空则兜底回填。
+- Reports：新增双模式报告模板（`formal` 客户验收版含签字栏/文档信息，`internal` 内部存档版含执行时间、RunResult ID 等技术细节），API `POST /test-runs/{id}/reports` 增加 `mode` 参数，前端报告页增加模式选择。
+- 历史数据订正（v1_beta_round1.db）：`DEF-000001.resolved_at` 由创建时刻订正为回归 PASS 时间（2026-08-08 02:57:27.347193），原值与订正原因保留在 `resolution_notes` 前缀 `[CORRECTED 2026-10-29]` 中。
+- 新增后端测试：`tests/test_report_renderer.py`、缺陷受保护字段用例；更新 `tests/test_report_storage.py` 与前端 report 测试。
+
 ## 2026-10-10 — 项目进度同步
 
 - 新增 PROJECT_PROGRESS.md，核对 main baae7b2 的平台、Runner 与现场检查进度。

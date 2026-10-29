@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -8,6 +8,7 @@ class ReportGenerate(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
     title: str | None = Field(default=None, max_length=255)
+    mode: Literal["formal", "internal"] = "formal"
 
 
 class ArchiveRead(BaseModel):

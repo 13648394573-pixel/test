@@ -19,10 +19,10 @@ export const reportApi: ReportApi = {
     request<Report[]>(`/api/test-projects/${projectId}/reports`),
   listRunReports: (runId) =>
     request<Report[]>(`/api/test-runs/${runId}/reports`),
-  generateReport: (runId, title) =>
+  generateReport: (runId, title, mode) =>
     request<Report>(`/api/test-runs/${runId}/reports`, {
       method: "POST",
-      body: JSON.stringify({ title })
+      body: JSON.stringify({ title, mode })
     }),
   getReport: (reportId) => request<Report>(`/api/reports/${reportId}`),
   createArchive: (reportId) =>

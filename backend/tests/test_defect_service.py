@@ -13,6 +13,7 @@ from app.defects.service import (
     InvalidDefectSourceError,
     InvalidDefectTransitionError,
     InvalidRegressionEvidenceError,
+    ProtectedDefectFieldError,
 )
 from app.test_execution.repository import TestExecutionRepository
 
@@ -243,3 +244,19 @@ def test_service_rejects_invalid_or_duplicate_regression_evidence(
     defects.create_regression(defect.id, valid.id, None)
     with pytest.raises(DuplicateRegressionError):
         defects.create_regression(defect.id, valid.id, None)
+
+
+def test_service_blocks_protected_field_updates(db_session: Session) -> None:
+    source = create_result(db_session, "protect", "case-wan", "FAIL")
+    defects = service(db_session)
+    defect = defects.create_defect(create_payload(source.id))
+
+    with pytest.raises(ProtectedDefectFieldError):
+        defects.update_defect(defect.id, {"status": "CLOSED"})
+    with pytest.raises(ProtectedDefectFieldError):
+        defects.update_defect(defect.id, {"resolved_at": NOW})
+    with pytest.raises(ProtectedDefectFieldError):
+        defects.update_defect(defect.id, {"defect_code": "DEF-999999"})
+
+    # Unprotected fields keep working.
+    assert defects.update_defect(defect.id, {"severity": "S1"}).severity == "S1"

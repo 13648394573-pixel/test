@@ -18,7 +18,7 @@ describe("report api", () => {
       }));
 
     await reportApi.listProjectReports("project-1");
-    await reportApi.generateReport("run-1", "Acceptance");
+    await reportApi.generateReport("run-1", "Acceptance", "formal");
     await reportApi.createArchive("report-1");
 
     expect(fetchMock.mock.calls[0][0]).toBe(
@@ -28,7 +28,7 @@ describe("report api", () => {
       "/api/test-runs/run-1/reports",
       expect.objectContaining({
         method: "POST",
-        body: JSON.stringify({ title: "Acceptance" })
+        body: JSON.stringify({ title: "Acceptance", mode: "formal" })
       })
     ]);
     expect(fetchMock.mock.calls[2][0]).toBe(

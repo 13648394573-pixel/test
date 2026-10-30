@@ -239,13 +239,15 @@ check("reports generated in both modes",
       f"modes={snap_f.get('mode')}/{snap_i.get('mode')}")
 
 html_f = req("GET", f"/reports/{rep_f['id']}/download").text
-check("formal report has sign-off", "测试执行人" in html_f and "批准人" in html_f)
-check("formal report shows customer code", "CUST-SMOKE-001" in html_f)
-check("formal report inlines screenshot", "data:image/png;base64," in html_f)
-check("formal report hides environment name", ("冒烟环境 " + SUFFIX) not in html_f)
-check("formal report shows parsed judgement badge", "O5" in html_f or "光功率" in html_f)
+check("report follows user template layout",
+      "<h2>Results</h2>" in html_f and "<h2>Defects</h2>" in html_f
+      and "<strong>Defects" in html_f)
+check("report shows device / environment lines",
+      "<p>Device: " in html_f and "<p>Environment: " in html_f)
+check("report shows customer code", "Customer Code CUST-SMOKE-001" in html_f)
+check("report inlines screenshot", "data:image/png;base64," in html_f)
 html_i = req("GET", f"/reports/{rep_i['id']}/download").text
-check("internal report keeps env snapshot reference", "冒烟环境 " + SUFFIX in html_i)
+check("formal and internal share same layout", html_i == html_f)
 
 # ---------------------------------------------------- 10. archive integrity
 arch = req("POST", f"/reports/{rep_f['id']}/archive", 201).json()

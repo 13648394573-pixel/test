@@ -1,0 +1,8 @@
+2026-10-29 17:53:37,513 INFO httpx HTTP Request: POST http://testserver/api/devices "HTTP/1.1 201 Created"
+2026-10-29 17:53:37,535 INFO httpx HTTP Request: POST http://testserver/api/test-cases "HTTP/1.1 201 Created"
+2026-10-29 17:53:37,600 INFO httpx HTTP Request: POST http://testserver/api/environment-profiles "HTTP/1.1 201 Created"
+2026-10-29 17:53:37,623 INFO httpx HTTP Request: POST http://testserver/api/test-projects "HTTP/1.1 201 Created"
+2026-10-29 17:53:37,629 INFO httpx HTTP Request: GET http://testserver/api/test-projects/missing "HTTP/1.1 404 Not Found"
+2026-10-29 17:53:37,636 INFO httpx HTTP Request: GET http://testserver/api/test-runs/missing "HTTP/1.1 404 Not Found"
+2026-10-29 17:53:37,644 INFO httpx HTTP Request: POST http://testserver/api/test-projects/706f495d-8032-404b-bfd0-e91c6f7eedd4/runs "HTTP/1.1 422 Unprocessable Entity"
+2026-10-29 17:53:37,651 INFO httpx HTTP Request: POST http://testserver/api/test-projects/706f495d-8032-404b-bfd0-e91c6f7eedd4/runs "HTTP/1.1 422 Unprocessable Entity"

@@ -1,0 +1,3 @@
+2026-10-29 17:52:56,951 INFO httpx HTTP Request: PUT http://testserver/api/local-credentials/olt.lab.primary "HTTP/1.1 200 OK"
+2026-10-29 17:52:56,957 INFO httpx HTTP Request: GET http://testserver/api/local-credentials/olt.lab.primary/status "HTTP/1.1 200 OK"
+2026-10-29 17:52:56,962 INFO httpx HTTP Request: DELETE http://testserver/api/local-credentials/olt.lab.primary "HTTP/1.1 200 OK"

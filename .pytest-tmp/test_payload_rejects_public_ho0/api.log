@@ -1,0 +1,3 @@
+2026-10-29 17:52:54,979 INFO httpx HTTP Request: POST http://testserver/api/lab-compatibility-checks "HTTP/1.1 422 Unprocessable Entity"
+2026-10-29 17:52:54,984 INFO httpx HTTP Request: POST http://testserver/api/lab-compatibility-checks "HTTP/1.1 422 Unprocessable Entity"
+2026-10-29 17:52:54,988 INFO httpx HTTP Request: POST http://testserver/api/lab-compatibility-checks "HTTP/1.1 422 Unprocessable Entity"

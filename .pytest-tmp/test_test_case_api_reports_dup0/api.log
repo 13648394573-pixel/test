@@ -1,0 +1,2 @@
+2026-10-29 17:53:23,488 INFO httpx HTTP Request: POST http://testserver/api/test-cases "HTTP/1.1 201 Created"
+2026-10-29 17:53:23,495 INFO httpx HTTP Request: POST http://testserver/api/test-cases "HTTP/1.1 409 Conflict"

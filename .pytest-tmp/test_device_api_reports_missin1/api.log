@@ -1,0 +1,1 @@
+2026-10-29 17:51:45,896 INFO httpx HTTP Request: PUT http://testserver/api/devices/missing "HTTP/1.1 404 Not Found"

@@ -1,0 +1,8 @@
+2026-10-29 17:52:59,186 INFO httpx HTTP Request: POST http://testserver/api/devices "HTTP/1.1 201 Created"
+2026-10-29 17:52:59,210 INFO httpx HTTP Request: POST http://testserver/api/test-cases "HTTP/1.1 201 Created"
+2026-10-29 17:52:59,277 INFO httpx HTTP Request: POST http://testserver/api/environment-profiles "HTTP/1.1 201 Created"
+2026-10-29 17:52:59,293 INFO httpx HTTP Request: POST http://testserver/api/test-projects "HTTP/1.1 201 Created"
+2026-10-29 17:52:59,319 INFO httpx HTTP Request: POST http://testserver/api/test-projects/2c61a3d1-d7ea-4228-8920-654921959df4/runs "HTTP/1.1 201 Created"
+2026-10-29 17:52:59,344 INFO httpx HTTP Request: POST http://testserver/api/test-runs/7ec5f3f2-75b3-4eda-bf41-a5eff877b458/reports "HTTP/1.1 409 Conflict"
+2026-10-29 17:52:59,352 INFO httpx HTTP Request: POST http://testserver/api/test-runs/missing/reports "HTTP/1.1 404 Not Found"
+2026-10-29 17:52:59,361 INFO httpx HTTP Request: GET http://testserver/api/reports/missing "HTTP/1.1 404 Not Found"

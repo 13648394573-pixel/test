@@ -1,0 +1,2 @@
+2026-10-29 17:52:53,577 INFO httpx HTTP Request: POST http://testserver/api/lab-compatibility-checks/host-key-preview "HTTP/1.1 200 OK"
+2026-10-29 17:52:53,583 INFO httpx HTTP Request: GET http://testserver/api/lab-compatibility-checks/12345678-1234-4234-8234-123456789abc "HTTP/1.1 200 OK"

@@ -1,0 +1,4 @@
+2026-10-29 17:53:11,108 INFO httpx HTTP Request: POST http://testserver/api/test-runs/compare "HTTP/1.1 422 Unprocessable Entity"
+2026-10-29 17:53:11,113 INFO httpx HTTP Request: POST http://testserver/api/test-runs/compare "HTTP/1.1 422 Unprocessable Entity"
+2026-10-29 17:53:11,117 INFO httpx HTTP Request: POST http://testserver/api/test-runs/compare "HTTP/1.1 422 Unprocessable Entity"
+2026-10-29 17:53:11,126 INFO httpx HTTP Request: POST http://testserver/api/test-runs/compare "HTTP/1.1 404 Not Found"

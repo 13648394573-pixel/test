@@ -1,0 +1,6 @@
+2026-10-29 17:51:42,894 INFO httpx HTTP Request: POST http://testserver/api/devices "HTTP/1.1 201 Created"
+2026-10-29 17:51:42,900 INFO httpx HTTP Request: GET http://testserver/api/devices "HTTP/1.1 200 OK"
+2026-10-29 17:51:42,906 INFO httpx HTTP Request: GET http://testserver/api/devices/c1af5e6f-9e1a-46bd-8e25-56b2eebaabad "HTTP/1.1 200 OK"
+2026-10-29 17:51:42,918 INFO httpx HTTP Request: PUT http://testserver/api/devices/c1af5e6f-9e1a-46bd-8e25-56b2eebaabad "HTTP/1.1 200 OK"
+2026-10-29 17:51:42,929 INFO httpx HTTP Request: DELETE http://testserver/api/devices/c1af5e6f-9e1a-46bd-8e25-56b2eebaabad "HTTP/1.1 204 No Content"
+2026-10-29 17:51:42,934 INFO httpx HTTP Request: GET http://testserver/api/devices "HTTP/1.1 200 OK"

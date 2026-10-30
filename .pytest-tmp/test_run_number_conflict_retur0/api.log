@@ -1,0 +1,7 @@
+2026-10-29 17:53:34,466 INFO httpx HTTP Request: POST http://testserver/api/devices "HTTP/1.1 201 Created"
+2026-10-29 17:53:34,490 INFO httpx HTTP Request: POST http://testserver/api/test-cases "HTTP/1.1 201 Created"
+2026-10-29 17:53:34,556 INFO httpx HTTP Request: POST http://testserver/api/environment-profiles "HTTP/1.1 201 Created"
+2026-10-29 17:53:34,572 INFO httpx HTTP Request: POST http://testserver/api/test-projects "HTTP/1.1 201 Created"
+2026-10-29 17:53:34,600 INFO httpx HTTP Request: POST http://testserver/api/test-projects/0ca53d3c-74d6-4efa-b912-38f57e491cf3/runs "HTTP/1.1 201 Created"
+2026-10-29 17:53:34,611 INFO httpx HTTP Request: POST http://testserver/api/test-projects/0ca53d3c-74d6-4efa-b912-38f57e491cf3/runs "HTTP/1.1 409 Conflict"
+2026-10-29 17:53:34,621 INFO httpx HTTP Request: GET http://testserver/api/test-projects/0ca53d3c-74d6-4efa-b912-38f57e491cf3/runs "HTTP/1.1 200 OK"

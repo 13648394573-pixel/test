@@ -1,0 +1,95 @@
+{
+  "command": {
+    "olt_host": "192.168.87.204",
+    "olt_port": 22,
+    "expected_host_key_fingerprint": "SHA256:approved",
+    "olt_username_ref": "olt.lab.username",
+    "olt_password_ref": "olt.lab.password",
+    "onu_serial_number": "48575443DD91BBBB",
+    "frame": 0,
+    "slot": 2,
+    "pon_port": 10,
+    "ont_id": 36,
+    "onu_web_url": "http://192.168.1.1",
+    "onu_web_username_ref": "onu.lab.username",
+    "onu_web_password_ref": "onu.lab.password",
+    "onu_adapter_key": "neutral-v1",
+    "pc_interface_name": "Ethernet",
+    "pc_source_address": "192.168.1.20",
+    "pc_ping_target": "192.168.1.1"
+  },
+  "view": {
+    "check_id": "248ffbb6-3233-48d3-ac8c-6620eeb27d1e",
+    "lifecycle": "COMPLETED",
+    "overall_status": "BLOCKED",
+    "stages": [
+      {
+        "code": "LOCAL_ENV",
+        "status": "VERIFIED",
+        "message": "本地证据目录可用",
+        "evidence": []
+      },
+      {
+        "code": "OLT_CONNECT",
+        "status": "BLOCKED",
+        "message": "OLT 查询输出暂不兼容，已保留脱敏证据供适配",
+        "evidence": [
+          {
+            "original_name": "01-display_autofind.txt",
+            "media_type": "text/plain",
+            "storage_path": "olt/01-display_autofind.txt",
+            "file_size": 94,
+            "sha256": "80071e71761c298105f3c5746816f00c72c52aec8736833527b44ee873f07466",
+            "redacted": true
+          },
+          {
+            "original_name": "01-display_autofind.png",
+            "media_type": "image/png",
+            "storage_path": "olt/01-display_autofind.png",
+            "file_size": 10369,
+            "sha256": "91e5cb6fb092e6e3c30501bd214c4ca3be8a4ad92e2e54380b31214a560bef29",
+            "redacted": true
+          }
+        ]
+      },
+      {
+        "code": "OLT_AUTOFIND",
+        "status": "NOT_RUN",
+        "message": "尚未执行",
+        "evidence": []
+      },
+      {
+        "code": "OLT_CURRENT_STATE",
+        "status": "NOT_RUN",
+        "message": "尚未执行",
+        "evidence": []
+      },
+      {
+        "code": "ONU_WEB_WAN",
+        "status": "NOT_RUN",
+        "message": "尚未执行",
+        "evidence": []
+      },
+      {
+        "code": "ONU_WEB_PING_PAGE",
+        "status": "NOT_RUN",
+        "message": "尚未执行",
+        "evidence": []
+      },
+      {
+        "code": "PC_INTERFACE",
+        "status": "NOT_RUN",
+        "message": "尚未执行",
+        "evidence": []
+      },
+      {
+        "code": "PC_PING",
+        "status": "NOT_RUN",
+        "message": "尚未执行",
+        "evidence": []
+      }
+    ],
+    "created_at": "2026-10-29T09:52:55.745155+00:00",
+    "updated_at": "2026-10-29T09:52:55.785263+00:00"
+  }
+}

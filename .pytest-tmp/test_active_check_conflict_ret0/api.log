@@ -1,0 +1,1 @@
+2026-10-29 17:52:55,583 INFO httpx HTTP Request: POST http://testserver/api/lab-compatibility-checks "HTTP/1.1 409 Conflict"

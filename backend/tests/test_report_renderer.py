@@ -56,25 +56,42 @@ def base_snapshot() -> dict:
     }
 
 
-def test_formal_mode_renders_signoff_and_document_info() -> None:
+def test_renders_user_template_structure() -> None:
     snapshot = base_snapshot()
     snapshot["customer_code"] = "CUST-2026-001"
     html = render_report_html(snapshot, mode="formal")
-    assert "正式验收报告" in html
-    assert "测试执行人" in html
-    assert "审核人" in html
-    assert "批准人" in html
-    assert "RPT-000001" in html
-    assert "CUST-2026-001" in html
-    # Environment details are no longer part of the report body.
-    assert "测试环境" not in html
+    # 模板头部信息行
+    assert "<h1>Acceptance Report</h1>" in html
+    assert "Version rc1" in html
+    assert "Customer Code CUST-2026-001" in html
+    assert "Generated: 2026-08-08T02:57:27" in html
+    assert "Device: UN-769XR / SN-1" in html
+    assert "Environment: Lab MA5800-X7" in html
+    # 模板计数条
+    assert "<strong>Total 1</strong>" in html
+    assert "<strong>PASS 1</strong>" in html
+    assert "<strong>FAIL 0</strong>" in html
+    assert "<strong>BLOCKED 0</strong>" in html
+    assert "<strong>Defects 0</strong>" in html
+    # 模板表格列
+    assert "<th>Case</th>" in html and "<th>Actual</th>" in html
+    assert "<th>Blocked reason</th>" in html
+    assert "<th>Code</th>" in html and "<th>Severity</th>" in html
+    assert "<h2>Results</h2>" in html and "<h2>Defects</h2>" in html
+    # 证据截图（用户明确要求）
+    assert "ont_online.txt" in html
+    # 不包含自主添加的版面
+    assert "测试执行人" not in html
+    assert "通过率" not in html
+    assert "文档信息" not in html
+    assert "已知问题" not in html
 
 
-def test_internal_mode_renders_run_id_and_technical_detail() -> None:
-    html = render_report_html(base_snapshot(), mode="internal")
-    assert "内部存档报告" in html
-    assert "run-1" in html
-    assert "locked" in html.lower() or "锁定" in html
+def test_modes_render_same_public_template() -> None:
+    formal = render_report_html(base_snapshot(), mode="formal")
+    internal = render_report_html(base_snapshot(), mode="internal")
+    # 正式 / 内部公用同一版式
+    assert formal == internal
 
 
 def test_unknown_mode_is_rejected() -> None:

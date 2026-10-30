@@ -1,0 +1,5 @@
+display_autofind
+Captured: 2026-10-29T09:52:55.764775+00:00
+
+Password: [REDACTED]
+unsupported

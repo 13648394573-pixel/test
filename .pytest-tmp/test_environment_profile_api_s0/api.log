@@ -1,0 +1,6 @@
+2026-10-29 17:52:04,276 INFO httpx HTTP Request: POST http://testserver/api/environment-profiles "HTTP/1.1 201 Created"
+2026-10-29 17:52:04,283 INFO httpx HTTP Request: GET http://testserver/api/environment-profiles "HTTP/1.1 200 OK"
+2026-10-29 17:52:04,290 INFO httpx HTTP Request: GET http://testserver/api/environment-profiles/fec1aa91-7982-48f7-bb5b-fc13a8ed30b7 "HTTP/1.1 200 OK"
+2026-10-29 17:52:04,308 INFO httpx HTTP Request: PUT http://testserver/api/environment-profiles/fec1aa91-7982-48f7-bb5b-fc13a8ed30b7 "HTTP/1.1 200 OK"
+2026-10-29 17:52:04,320 INFO httpx HTTP Request: DELETE http://testserver/api/environment-profiles/fec1aa91-7982-48f7-bb5b-fc13a8ed30b7 "HTTP/1.1 204 No Content"
+2026-10-29 17:52:04,325 INFO httpx HTTP Request: GET http://testserver/api/environment-profiles "HTTP/1.1 200 OK"

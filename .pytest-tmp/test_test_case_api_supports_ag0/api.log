@@ -1,0 +1,6 @@
+2026-10-29 17:53:22,930 INFO httpx HTTP Request: POST http://testserver/api/test-cases "HTTP/1.1 201 Created"
+2026-10-29 17:53:22,938 INFO httpx HTTP Request: GET http://testserver/api/test-cases "HTTP/1.1 200 OK"
+2026-10-29 17:53:22,944 INFO httpx HTTP Request: GET http://testserver/api/test-cases/38c24013-5c6b-43ad-b29b-82a34e13dab6 "HTTP/1.1 200 OK"
+2026-10-29 17:53:22,961 INFO httpx HTTP Request: PUT http://testserver/api/test-cases/38c24013-5c6b-43ad-b29b-82a34e13dab6 "HTTP/1.1 200 OK"
+2026-10-29 17:53:22,973 INFO httpx HTTP Request: DELETE http://testserver/api/test-cases/38c24013-5c6b-43ad-b29b-82a34e13dab6 "HTTP/1.1 204 No Content"
+2026-10-29 17:53:22,979 INFO httpx HTTP Request: GET http://testserver/api/test-cases "HTTP/1.1 200 OK"

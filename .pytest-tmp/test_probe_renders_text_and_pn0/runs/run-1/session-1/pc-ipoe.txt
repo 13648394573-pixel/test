@@ -1,0 +1,13 @@
+PC-side connectivity probe
+Captured: 2026-10-29T09:52:57.824979+00:00
+
+Interface: Ethernet
+Source: 192.168.1.20
+
+Packets: Sent = 4, Received = 4, Lost = 0 (0% loss),
+Approximate round trip times in milli-seconds:
+    Minimum = 1ms, Maximum = 3ms, Average = 2ms
+
+DNS success: None; addresses: 
+HTTPS status: None
+

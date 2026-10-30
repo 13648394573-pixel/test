@@ -240,11 +240,11 @@ check("reports generated in both modes",
 
 html_f = req("GET", f"/reports/{rep_f['id']}/download").text
 check("report follows user template layout",
-      "<h2>Results</h2>" in html_f and "<h2>Defects</h2>" in html_f
-      and "<strong>Defects" in html_f)
+      "<h2>测试结果</h2>" in html_f and "<h2>缺陷</h2>" in html_f
+      and "<strong>缺陷" in html_f)
 check("report shows device / environment lines",
-      "<p>Device: " in html_f and "<p>Environment: " in html_f)
-check("report shows customer code", "Customer Code CUST-SMOKE-001" in html_f)
+      "<p>被测设备：" in html_f and "<p>测试环境：" in html_f)
+check("report shows customer code", "客户代码 CUST-SMOKE-001" in html_f)
 check("report inlines screenshot", "data:image/png;base64," in html_f)
 html_i = req("GET", f"/reports/{rep_i['id']}/download").text
 check("formal and internal share same layout", html_i == html_f)

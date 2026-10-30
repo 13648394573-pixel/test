@@ -57,9 +57,9 @@ def _results_table(snapshot: dict[str, Any]) -> str:
             "</tr>"
         )
     return (
-        "<h2>Results</h2>"
-        "<table><thead><tr><th>Case</th><th>Title</th><th>Result</th>"
-        "<th>Actual</th><th>Blocked reason</th><th>Evidence</th></tr></thead>"
+        "<h2>测试结果</h2>"
+        "<table><thead><tr><th>用例</th><th>标题</th><th>结果</th>"
+        "<th>实际结果</th><th>阻塞原因</th><th>证据</th></tr></thead>"
         f"<tbody>{''.join(rows)}</tbody></table>"
     )
 
@@ -77,9 +77,9 @@ def _defects_table(snapshot: dict[str, Any]) -> str:
             "</tr>"
         )
     return (
-        "<h2>Defects</h2>"
-        "<table><thead><tr><th>Code</th><th>Title</th><th>Severity</th>"
-        "<th>Status</th></tr></thead>"
+        "<h2>缺陷</h2>"
+        "<table><thead><tr><th>编号</th><th>标题</th><th>严重级</th>"
+        "<th>状态</th></tr></thead>"
         f"<tbody>{''.join(rows)}</tbody></table>"
     )
 
@@ -96,11 +96,11 @@ def render_report_html(snapshot: dict[str, Any], mode: str = "formal") -> str:
     title = snapshot.get("report_title") or project["name"]
     summary_bar = (
         '<div class="summary">'
-        f"<strong>Total {summary.get('total', 0)}</strong>"
-        f"<strong>PASS {summary.get('pass', 0)}</strong>"
-        f"<strong>FAIL {summary.get('fail', 0)}</strong>"
-        f"<strong>BLOCKED {summary.get('blocked', 0)}</strong>"
-        f"<strong>Defects {summary.get('defects', 0)}</strong>"
+        f"<strong>总数 {summary.get('total', 0)}</strong>"
+        f"<strong>通过 {summary.get('pass', 0)}</strong>"
+        f"<strong>失败 {summary.get('fail', 0)}</strong>"
+        f"<strong>阻塞 {summary.get('blocked', 0)}</strong>"
+        f"<strong>缺陷 {summary.get('defects', 0)}</strong>"
         "</div>"
     )
     return (
@@ -109,12 +109,12 @@ def render_report_html(snapshot: dict[str, Any], mode: str = "formal") -> str:
         f"<title>{_text(title)}</title>"
         f"{STYLE}</head><body>"
         f"<h1>{_text(title)}</h1>"
-        f"<p>{_text(project['name'])} · Version {_text(project['version'])}"
-        f" · Customer Code {_text(snapshot.get('customer_code'))}</p>"
-        f"<p>Generated: {_text(snapshot.get('generated_at'))}</p>"
-        f"<p>Device: {_text(device.get('model'))} / "
+        f"<p>{_text(project['name'])} · 版本 {_text(project['version'])}"
+        f" · 客户代码 {_text(snapshot.get('customer_code'))}</p>"
+        f"<p>生成时间：{_text(snapshot.get('generated_at'))}</p>"
+        f"<p>被测设备：{_text(device.get('model'))} / "
         f"{_text(device.get('serial_number'))}</p>"
-        f"<p>Environment: {_text(profile_name)}</p>"
+        f"<p>测试环境：{_text(profile_name)}</p>"
         f"{summary_bar}"
         f"{_results_table(snapshot)}"
         f"{_defects_table(snapshot)}"

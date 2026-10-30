@@ -1,6 +1,0 @@
-2026-10-29 17:53:36,881 INFO httpx HTTP Request: POST http://testserver/api/devices "HTTP/1.1 201 Created"
-2026-10-29 17:53:36,904 INFO httpx HTTP Request: POST http://testserver/api/test-cases "HTTP/1.1 201 Created"
-2026-10-29 17:53:36,969 INFO httpx HTTP Request: POST http://testserver/api/environment-profiles "HTTP/1.1 201 Created"
-2026-10-29 17:53:36,986 INFO httpx HTTP Request: POST http://testserver/api/test-projects "HTTP/1.1 201 Created"
-2026-10-29 17:53:37,001 INFO httpx HTTP Request: DELETE http://testserver/api/test-projects/d810ac6f-0337-46af-ad7d-c97fba328324 "HTTP/1.1 204 No Content"
-2026-10-29 17:53:37,007 INFO httpx HTTP Request: GET http://testserver/api/test-projects "HTTP/1.1 200 OK"

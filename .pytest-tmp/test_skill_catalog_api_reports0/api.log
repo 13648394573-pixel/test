@@ -1,1 +1,0 @@
-2026-10-29 17:53:19,935 INFO httpx HTTP Request: GET http://testserver/api/skills/missing "HTTP/1.1 404 Not Found"

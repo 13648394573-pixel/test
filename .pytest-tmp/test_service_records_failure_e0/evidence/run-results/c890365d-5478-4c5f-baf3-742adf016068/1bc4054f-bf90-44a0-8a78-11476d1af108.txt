@@ -1,4 +1,0 @@
-diagnostic_id=9ae8647e-8bb9-494e-875d-6e6c751c80a2
-stage=WAN_INTERFACE
-error_type=HuaweiSelectorError
-message=Huawei selector stage WAN_INTERFACE failed

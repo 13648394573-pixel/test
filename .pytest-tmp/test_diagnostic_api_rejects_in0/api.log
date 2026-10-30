@@ -1,6 +1,0 @@
-2026-10-29 17:51:52,246 INFO httpx HTTP Request: POST http://testserver/api/devices "HTTP/1.1 201 Created"
-2026-10-29 17:51:52,269 INFO httpx HTTP Request: POST http://testserver/api/test-cases "HTTP/1.1 201 Created"
-2026-10-29 17:51:52,336 INFO httpx HTTP Request: POST http://testserver/api/environment-profiles "HTTP/1.1 201 Created"
-2026-10-29 17:51:52,353 INFO httpx HTTP Request: POST http://testserver/api/test-projects "HTTP/1.1 201 Created"
-2026-10-29 17:51:52,386 INFO httpx HTTP Request: POST http://testserver/api/test-projects/438a6f8b-fb01-4681-93e1-6f3e36b385bc/runs "HTTP/1.1 201 Created"
-2026-10-29 17:51:52,412 INFO httpx HTTP Request: POST http://testserver/api/run-results/dbd6437d-5b3a-408c-b1fd-0c57ce81a3ea/diagnostics "HTTP/1.1 422 Unprocessable Entity"

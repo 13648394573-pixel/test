@@ -27,3 +27,4 @@ Thumbs.db
 .worktrees/
 work/
 outputs/
+.pytest-tmp/

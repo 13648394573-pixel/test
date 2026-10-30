@@ -1,1 +1,0 @@
-2026-10-29 17:52:57,548 INFO httpx HTTP Request: GET http://testserver/api/local-credentials/olt.lab/status "HTTP/1.1 403 Forbidden"

@@ -1,6 +1,0 @@
-IPoE WAN information
-Captured: 2026-10-29T09:52:57.582197+00:00
-
-Address: [REDACTED]
-Password: [REDACTED]
-Token=[REDACTED]

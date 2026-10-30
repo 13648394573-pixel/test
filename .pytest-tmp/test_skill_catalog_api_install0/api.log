@@ -1,5 +1,0 @@
-2026-10-29 17:53:19,235 INFO httpx HTTP Request: GET http://testserver/api/skills "HTTP/1.1 200 OK"
-2026-10-29 17:53:19,317 INFO httpx HTTP Request: POST http://testserver/api/skills/catalog/onu-registration-dual-wan/install-draft "HTTP/1.1 201 Created"
-2026-10-29 17:53:19,323 INFO httpx HTTP Request: GET http://testserver/api/skills "HTTP/1.1 200 OK"
-2026-10-29 17:53:19,351 INFO httpx HTTP Request: GET http://testserver/api/skills/84a2c7cd-aef8-4213-8c8f-12d2e357e60d "HTTP/1.1 200 OK"
-2026-10-29 17:53:19,358 INFO httpx HTTP Request: POST http://testserver/api/skills/catalog/onu-registration-dual-wan/install-draft "HTTP/1.1 200 OK"

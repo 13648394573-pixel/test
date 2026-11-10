@@ -13,7 +13,7 @@ main 现在同时包含两条并行开发线：
 
 | 项目 | 结果 |
 |---|---|
-| 后端 | 874 passed / 0 failed / 10 errors（全部为 Playwright Chromium 未安装） |
+| 后端 | **884 passed / 0 failed / 0 errors**（431.83s，全绿） |
 | 前端 | 62 passed / 26 文件 |
 | 生产构建 | 通过 |
 | `alembic heads` | 单头 `0eefe6ae99bc` |
@@ -25,7 +25,11 @@ main 现在同时包含两条并行开发线：
 2. 当前审批界面需要输入已有 `session_id`，不是一键启动向导。
 3. LAN 绑定/NAT、IPv6、ACS/长期稳定性按用户决定留给独立功能 Skill。
 4. `Config failed` / `LOID Error` 根因仍为 UNDETERMINED（设备不提供失败配置查询命令）。
-5. 补齐 Playwright Chromium 后，10 项浏览器类测试应转绿，届时可给出全绿基线。
+
+已关闭：~~补齐 Playwright Chromium 后，10 项浏览器类测试应转绿~~ —— 2026-11-10 已执行
+`backend/.venv/Scripts/python.exe -m playwright install chromium`（Chrome for Testing 156.0.8078.4，
+`chromium-1248` / `chromium_headless_shell-1248` / `ffmpeg-1013`），原 10 项 error 全部转绿，
+后端达到 884 passed / 0 failed / 0 errors。新环境部署时需先执行同一命令，否则这 10 项会以 error 形式出现。
 
 > 下文 2026-10-15 / 10-16 各节是现场记录原文，保留为历史。其中"当前版本未合并 main""main 工作区干净且基线未变"等表述已被本次合并取代，以本节为准。
 

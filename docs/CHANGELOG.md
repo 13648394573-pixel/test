@@ -6,7 +6,7 @@
 - 迁移双头收敛：`20261029_0022`（main，`evidences.parsed_metadata`）与 `20261012_0022`（分支，`run_results.result_source` 允许 `LOCAL_RUNNER`）的 `down_revision` 同为 `20260918_0021`，合并后 `alembic upgrade head` 报 Multiple head revisions 并连带 25 个迁移用例失败。新增合并节点 `0eefe6ae99bc`，`alembic heads` 恢复单头；两条迁移改动不同表（evidences / run_results），合并节点不含数据操作。
 - 升级路径已实测四种：空库 upgrade→downgrade→upgrade 往返；停在 `20261029_0022` 的库升级后补齐 `result_source` 与 `LOCAL_RUNNER` 约束、保留 `parsed_metadata`；停在 `20261012_0022` 的库升级后补齐 `parsed_metadata`；V1 Beta 证据库（无 `alembic_version`，按发布记录 stamp `20260730_0007`）升级到合并头后 3/4/12/16/1/3/3 条记录数与内容不变，12 条结果仍为 LOCKED。
 - 测试断言去脆化（`tests/test_local_runner_result_source_migration.py`）：`legacy_rows` 由 `SELECT *` 改为显式旧列清单——新增可空列不应被判定为历史数据变化；拒绝降级用例改为断言版本集合含 `20261012_0022` 且未回退到 `20260918_0021`，以适配合并后的迁移图。
-- 验证：后端 **874 passed / 10 errors**（10 项全部为 Playwright Chromium 未安装，与合并无关）；前端 **62 passed / 26 文件**；生产构建通过。
+- 验证：后端 **884 passed / 0 failed / 0 errors**（全绿基线，431.83s）；前端 **62 passed / 26 文件**；生产构建通过。此前 10 项 error 系本机缺 Playwright 浏览器内核，已通过 `python -m playwright install chromium` 补齐（Chrome for Testing 156.0.8078.4 / `chromium-1248`、`chromium_headless_shell-1248`、`ffmpeg-1013`），补齐后原 10 项浏览器用例全部通过（含截图掩码与真实渲染页面断言）。
 - 未包含：真实设备上的平台执行闭环（Skill API → TestRun → LOCK → Evidence → Report → Archive）仍未端到端验收。合并只代表代码在同一基线上，不代表现场闭环通过。
 
 ## 2026-10-29 — 归档路径对齐、缺陷字段保护与报告双模式

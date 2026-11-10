@@ -39,6 +39,8 @@ class FakeExecutor:
         }.get(command.action_code)
         if fixture:
             return transcript(command.action_code, fixture)
+        if command.action_code == "display_service_ports":
+            return CommandTranscript(command.action_code, "", "21 1000 0/2/10 36 1 1000\nMA5800-X7#", "MA5800-X7#", "b" * 64)
         return CommandTranscript(
             command.action_code,
             "Command executed successfully\nMA5800-X7#",
@@ -70,6 +72,30 @@ def context(action_code: str, **parameters) -> ActionContext:
 
 def observation(outcome, fact_key: str):
     return next(item.value for item in outcome.observations if item.fact_key == fact_key)
+
+
+@pytest.mark.parametrize('serial,expected', [
+    ('48575443DD91BBBB (HWTC-DD91BBBB)', 'PASS'),
+    ('4857544311223344 (HWTC-11223344)', 'BLOCKED'),
+])
+def test_snapshot_uses_canonical_serial_without_weakening_identity_guard(serial, expected):
+    class AnnotatedExecutor(FakeExecutor):
+        def run(self, command):
+            result = super().run(command)
+            if command.action_code == 'display_ont_by_sn':
+                raw = result.normalized_output.replace(
+                    'SN                  : 48575443DD91BBBB', 'SN : ' + serial)
+                return CommandTranscript(command.action_code, raw, raw, 'MA5800-X7#', 'a' * 64)
+            return result
+
+    executor = AnnotatedExecutor()
+    outcome = MA5800Actions(executor).snapshot_ont(context('snapshot_ont'))
+    assert outcome.status == expected
+    if expected == 'PASS':
+        assert observation(outcome, 'olt.configuration_snapshot')['registration']['serial_number'] == '48575443DD91BBBB'
+    else:
+        assert outcome.error_code == 'OLT_TARGET_IDENTITY_MISMATCH'
+        assert [c.action_code for c in executor.commands] == ['display_ont_by_sn']
 
 
 def test_register_action_builds_command_only_from_validated_fields() -> None:
@@ -139,7 +165,9 @@ def test_delete_waits_for_matching_preview_approval() -> None:
         )
     )
     assert approved.status == "PASS"
-    assert executor.commands == [build_delete_command(valid_registration_parameters())]
+    assert [command.action_code for command in executor.commands] == [
+        "display_ont_by_sn", "display_service_ports", "delete_ont"]
+    assert executor.commands[-1] == build_delete_command(valid_registration_parameters())
 
 
 def test_snapshot_captures_registration_wan_and_service_port_scope() -> None:
@@ -153,7 +181,7 @@ def test_snapshot_captures_registration_wan_and_service_port_scope() -> None:
     assert snapshot["registration"]["ont_id"] == 36
     assert snapshot["registration"]["line_profile_id"] == 10
     assert snapshot["wan"][0]["mode"] == "IPOE"
-    assert snapshot["service_ports"] == []
+    assert snapshot["service_ports"][0]["service_port_id"] == 21
 
 
 def test_restore_rejects_unsupported_snapshot_without_sending_commands() -> None:

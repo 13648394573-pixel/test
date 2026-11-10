@@ -312,6 +312,57 @@ afterEach(() => {
 
 
 describe("Test Execution", () => {
+  it("shows complete local port approval and confirms without executing or locking", async () => {
+    const operation = {
+      operation_id: "create-1", session_id: "session-1", kind: "CREATE", port_id: 53,
+      serial_number: "AABBCCDDEEFF0011", line_profile_id: 10, service_profile_id: 10,
+      consumers: ["IPOE", "PPPOE"], baseline_hash: "b".repeat(64), read_hash: "d".repeat(64),
+      creation_event_id: null,
+      mapping: { olt_binding_hash: "c".repeat(64), fsp: "0/2/9", ont_id: 12,
+        vlan: 1000, gemport: 1, user_vlan: 1000, candidate_id: 53,
+        tag_transform: "translate", business_type: "multi-service" }
+    };
+    const view = {
+      session_id: "session-1", test_run_id: "run-1", run_result_id: "result-1",
+      status: "WAITING_OPERATOR", integrity_status: "DRAFT", runner_configured: true,
+      pending_interaction: { id: "approval-1", ref: "SERVICE_1_CREATE", type: "CONFIRMATION",
+        risk_level: "HIGH", title: "SERVICE_1_CREATE", instructions: "核对完整范围",
+        completion_condition: "确认后需另行推进", options: ["CONFIRM", "CANCEL"],
+        preview_hash: "a".repeat(64), action_code: "create_service_port",
+        target: { fsp: "0/2/9", ont_id: 12, serial_number: "AABBCCDDEEFF0011",
+          line_profile_id: 10, service_profile_id: 10 }, affected_service_ports: [53],
+        service_port_preview: { operations: [operation], evidence_ids: ["evidence-1"], retained_consumers: [] } },
+      service_port_resources: [], recovery_tasks: []
+    };
+    const requests: { path: string; options?: RequestInit }[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, options) => {
+      requests.push({ path: String(input), options });
+      if (String(input).endsWith("/respond")) {
+        return new Response(JSON.stringify({ ...view, status: "RUNNING", pending_interaction: null }), { status: 200 });
+      }
+      return new Response(JSON.stringify(view), { status: 200 });
+    });
+    render(<TestExecutionPage api={new MemoryExecutionApi()} deviceApi={emptyDeviceApi}
+      testCaseApi={emptyCaseApi} environmentApi={emptyEnvironmentApi} />);
+    fireEvent.change(screen.getByRole("textbox", { name: "本地执行会话 ID" }), { target: { value: "session-1" } });
+    fireEvent.click(screen.getByRole("button", { name: "读取执行会话" }));
+    const impact = await screen.findByRole("region", { name: "端口影响预览" });
+    for (const text of ["CREATE", "53", "0/2/9", "12", "AABBCCDDEEFF0011", "1000", "1",
+      "10", "translate", "multi-service", "IPOE / PPPOE", "b".repeat(64), "d".repeat(64)]) {
+      expect(within(impact).getAllByText(text).length).toBeGreaterThan(0);
+    }
+    const confirm = screen.getByRole("button", { name: "确认审批" });
+    expect(confirm).toBeDisabled();
+    fireEvent.click(screen.getByRole("checkbox", { name: "我已核对目标和完整影响范围" }));
+    fireEvent.click(confirm);
+    await screen.findByText("当前状态：RUNNING");
+    expect(requests.filter((r) => r.options?.method === "POST")).toEqual([{
+      path: "/api/skill-executions/session-1/interactions/approval-1/respond",
+      options: { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ choice: "CONFIRM", approved: true, preview_hash: "a".repeat(64) }) }
+    }]);
+  });
+
   it("creates, edits, and deletes a project with selected cases", async () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
     const api = new MemoryExecutionApi();

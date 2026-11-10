@@ -1,4 +1,5 @@
 import pytest
+from test_verified_onu_adaptation import surface
 
 from app.local_runner.contracts import ActionContext
 from app.local_runner.credentials import SecretValue
@@ -71,7 +72,7 @@ class FakeSurface:
         assert packet_count == 3
         return self.ping_text
 
-    def mask_sensitive_controls(self):
+    def mask_sensitive_controls(self, redaction_values=()):
         self.masked = True
 
     def page_text(self):
@@ -247,13 +248,8 @@ class _SensitivePage:
         return _LocatorList([])
 
 
-def test_playwright_surface_masks_wan_credentials_before_screenshot() -> None:
-    surface = NeutralPlaywrightSurface("http://192.168.1.1")
-    wan_page = _SensitivePage()
-    surface.page = wan_page
-    surface.surface = wan_page
-
+def test_playwright_surface_masks_wan_credentials_before_screenshot(surface) -> None:
+    surface.page.set_content('<input type="password" value="customer-secret"><input name="username" readonly value="customer-secret">')
+    surface.surface = surface.page
     surface.mask_sensitive_controls()
-
-    assert wan_page.pppoe_password.value == "[REDACTED]"
-    assert wan_page.pppoe_username.value == "[REDACTED]"
+    assert surface.page.locator("input").evaluate_all("xs => xs.map(x => x.value)") == ["[REDACTED]", "[REDACTED]"]

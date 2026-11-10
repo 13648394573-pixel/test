@@ -1,8 +1,156 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from hashlib import sha256
+import json
 import re
 from typing import Mapping
+
+from .service_port_contracts import GemVlanMapping, PortRead, ServicePortDetail, ServicePortMapping
+
+
+def parse_service_port_detail(text: str, *, binding_hash: str) -> PortRead:
+    """Accept only a complete scoped detail response; all ambiguity fails closed."""
+    if not isinstance(binding_hash, str) or re.fullmatch(r'[0-9a-f]{64}', binding_hash) is None:
+        raise ValueError('Invalid service-port binding hash')
+    if not isinstance(text, str):
+        raise ValueError('Invalid service-port detail output')
+    encoded = json.dumps({'binding_hash': binding_hash, 'text': text},
+                         sort_keys=True, separators=(',', ':'), ensure_ascii=False).encode('utf-8')
+    read = PortRead(binding_hash=binding_hash, observation_hash=sha256(encoded).hexdigest())
+    normalized = normalize_cli_output(text)
+    lines = normalized.splitlines()
+    if not lines or not PROMPT_LINE.fullmatch(lines[-1]):
+        return read
+    query_ids = {int(value) for value in re.findall(r'(?m)^display service-port (0|[1-9][0-9]*)$', normalized)}
+    if len(query_ids) != 1 or max(query_ids) > 65535:
+        return read
+    query_id = next(iter(query_ids))
+    preamble = {f'display service-port {query_id}', '{ <cr>||<K> }:', 'Command:'}
+    absence = 'Failure: Service virtual port does not exist'
+    if absence in lines:
+        if all(line in preamble | {absence} for line in lines[:-1]):
+            return PortRead(binding_hash, read.observation_hash, 'ABSENT', query_port_id=query_id)
+        return read
+    blocks = list(re.finditer(r'(?m)^-{10,}\n(Index\s*:.*?)(?=\n-{10,}$)', normalized, re.DOTALL))
+    if len(blocks) != 1:
+        return read
+    block = blocks[0]
+    prefix = normalized[:block.start()].splitlines()
+    tail = normalize_cli_output(normalized[block.end():]).splitlines()
+    notes = {'Note: F--Frame, S--Slot, P--Port', 'v/e--vlan/encap', 'Dvlan--double vlan',
+             'pritag--priority-tagged,', 'ppp--pppoe, ip--ipoe, ip4--ipv4oe, ip6--ipv6oe',
+             'When the traffic-table is not configured, the system does',
+             'not limit the traffic rate and the priority is set to 0'}
+    if (any(line not in preamble for line in prefix)
+            or any(not re.fullmatch(r'-{10,}', line) and line not in notes
+                   for line in tail[:-1])):
+        return read
+    fields = {}
+    for line in block.group(1).splitlines():
+        match = re.fullmatch(r'([^:]+?)\s*:\s*(.*?)', line)
+        if match is None or match[1].strip() in fields:
+            return read
+        fields[match[1].strip()] = match[2]
+    defaults = {'VLAN attr': 'common', 'Port type': 'gpon', 'Flow type': 'vlan',
+        'TX': '-', 'Inbound table name': '-', 'RX': '-', 'Outbound table name': '-',
+        'Admin status': 'enable', 'Label': '-', 'Priority': '-', 'PVC bundle': 'no',
+        'Max MAC count': '1023', 'Tag transform': 'translate', 'Service-port bundle': '-',
+        'Cos': '-', 'Car-Group': '-', 'Static MAC': '', 'IP address': '',
+        'Stat. performance': 'disable', 'Subscriber ID': '-'}
+    required = set(defaults) | {'Index', 'VLAN ID', 'F/S/P', 'ONT ID', 'GEM port index',
+                               'Flow para', 'State', 'Description', 'Remote description'}
+    if set(fields) != required or any(fields[key] != value for key, value in defaults.items()):
+        return read
+    numeric = ('Index', 'VLAN ID', 'ONT ID', 'GEM port index', 'Flow para')
+    if any(re.fullmatch(r'(?:0|[1-9][0-9]*)', fields[key]) is None for key in numeric):
+        return read
+    if int(fields['Index']) != query_id or fields['State'] not in ('up', 'down'):
+        return read
+    try:
+        mapping = ServicePortMapping(olt_binding_hash=binding_hash, fsp=fields['F/S/P'],
+            ont_id=int(fields['ONT ID']), vlan=int(fields['VLAN ID']), gemport=int(fields['GEM port index']),
+            user_vlan=int(fields['Flow para']), tag_transform='translate', business_type='multi-service')
+    except ValueError:
+        return read
+    return PortRead(binding_hash, read.observation_hash, 'FOUND',
+                    (ServicePortDetail(query_id, mapping, fields['State']),), query_port_id=query_id)
+
+
+def parse_profile_gem(text: str, *, expected_profile_id: int) -> tuple[GemVlanMapping, ...]:
+    """Verify the observed GPON ETH/VLAN mapping subset, rejecting partial rows."""
+    if type(expected_profile_id) is not int or not 0 <= expected_profile_id <= 4095:
+        raise ValueError('Invalid GPON profile ID')
+    normalized = normalize_cli_output(text)
+    lines = normalized.splitlines()
+    if (not lines or not PROMPT_LINE.fullmatch(lines[-1]) or
+            len(re.findall(r'(?m)^Binding times\s*:\s*\d+$', normalized)) != 1):
+        raise ValueError('Incomplete GPON profile response')
+    for key, expected in [('Profile-ID', str(expected_profile_id)), ('Access-type', 'GPON'), ('Mapping mode', 'VLAN')]:
+        values = re.findall(r'(?m)^' + re.escape(key) + r'\s*:\s*(.*?)$', normalized)
+        if values != [expected]:
+            raise ValueError('Unexpected GPON profile mapping')
+    queries = {int(value) for value in re.findall(r'(?m)^display ont-lineprofile gpon profile-id (\d+)$', normalized)}
+    if queries != {expected_profile_id} or re.search(r'(?im)^(?:Failure:|Error:|%)', normalized):
+        raise ValueError('Unconfirmed GPON profile query')
+    sections = re.split(r'(?m)^<Gem Index (\d+)>$', normalized)
+    mappings, seen_gems = [], set()
+    for offset in range(1, len(sections), 2):
+        gemport, section = int(sections[offset]), sections[offset + 1]
+        if gemport in seen_gems or not 0 <= gemport <= 4095:
+            raise ValueError('Ambiguous GEM mapping')
+        seen_gems.add(gemport)
+        if not re.search(r'\|Serv-Type:ETH\s*\|Encrypt:on\s*\|Cascade:off\s*\|GEM-CAR:-\s*\|', section):
+            raise ValueError('Unsupported GEM service type')
+        table = re.search(r'Mapping VLAN\s+Priority Port\s+Port\s+Bundle\s+Flow\s+Transparent\n'
+            r'index\s+type\s+ID\s+ID\s+CAR\n-{10,}\n(.*?)\n-{10,}', section, re.DOTALL)
+        if table is None:
+            raise ValueError('Incomplete GEM mapping table')
+        indexes, vlans = set(), set()
+        for line in table[1].splitlines():
+            row = re.fullmatch(r'(\d+)\s+(\d+)(?:\s+-){6}', line)
+            if row is None:
+                raise ValueError('Unsupported GEM mapping row')
+            index, vlan = map(int, row.groups())
+            if index in indexes or vlan in vlans or not 1 <= vlan <= 4094:
+                raise ValueError('Ambiguous GEM VLAN mapping')
+            indexes.add(index)
+            vlans.add(vlan)
+            mappings.append(GemVlanMapping(expected_profile_id, gemport, vlan))
+        if not indexes or indexes != set(range(len(indexes))):
+            raise ValueError('Empty or incomplete GEM mapping is unconfirmed')
+    if not mappings:
+        raise ValueError('No verified GEM mappings')
+    known_fields = {'Profile-ID', 'Profile-name', 'Access-type', 'FEC upstream switch',
+        'OMCC encrypt switch', 'Qos mode', 'Mapping mode', 'TR069 management', 'TR069 IP index', 'Binding times'}
+    field_counts, numeric_rows, table_headers = {}, 0, 0
+    notes = {'Notes: Run the display traffic table ip command to query', 'traffic table configuration'}
+    for line in lines[:-1]:
+        if (line in {f'display ont-lineprofile gpon profile-id {expected_profile_id}', '{ <cr>||<K> }:', 'Command:'}
+                or line in notes or re.fullmatch(r'-{10,}', line)
+                or re.fullmatch(r'<T-CONT\s+\d+>\s+DBA Profile-ID:\d+', line)
+                or re.fullmatch(r'<Gem Index \d+>', line)):
+            continue
+        if re.fullmatch(r'Mapping VLAN\s+Priority Port\s+Port\s+Bundle\s+Flow\s+Transparent', line):
+            table_headers += 1
+            continue
+        if (re.fullmatch(r'index\s+type\s+ID\s+ID\s+CAR', line)
+                or re.fullmatch(r'\|Serv-Type:ETH\s*\|Encrypt:on\s*\|Cascade:off\s*\|GEM-CAR:-\s*\|', line)
+                or re.fullmatch(r'\|Upstream-priority-queue:0\s*\|Downstream-priority-queue:-\s*\|', line)):
+            continue
+        if re.fullmatch(r'\d+\s+\d+(?:\s+-){6}', line):
+            numeric_rows += 1
+            continue
+        field = re.fullmatch(r'([^:]+?)\s*:\s*(.+)', line)
+        if field and field[1].strip() in known_fields:
+            key = field[1].strip()
+            field_counts[key] = field_counts.get(key, 0) + 1
+            continue
+        raise ValueError('Unrecognized GPON profile content')
+    if (set(field_counts) != known_fields or any(count != 1 for count in field_counts.values())
+            or numeric_rows != len(mappings) or table_headers != len(seen_gems)):
+        raise ValueError('Incomplete or ambiguous GPON profile structure')
+    return tuple(mappings)
 
 
 ANSI_ESCAPE = re.compile(r"\x1B(?:\[[0-?]*[ -/]*[@-~]|[@-_])")
@@ -129,12 +277,37 @@ def parse_autofind(value: str) -> tuple[AutofindObservation, ...]:
     return tuple(observations)
 
 
+def _parse_ont_serial(value: str) -> str:
+    serial_fields = re.findall(
+        r"(?im)^(?:SN|Ont SN)[ \t]*:[ \t]*(.*)$", normalize_cli_output(value)
+    )
+    if len(serial_fields) != 1:
+        raise ValueError("Expected exactly one MA5800 serial field")
+    match = re.fullmatch(
+        r"([0-9a-f]{16})(?:[ \t]+\(([a-z0-9]{4})-([0-9a-f]{8})\))?",
+        serial_fields[0],
+        re.IGNORECASE | re.ASCII,
+    )
+    if match is None:
+        raise ValueError("Invalid MA5800 serial format")
+    serial, vendor, suffix = match.groups()
+    serial = serial.upper()
+    if vendor is not None:
+        try:
+            expected_vendor = bytes.fromhex(serial[:8]).decode("ascii").upper()
+        except UnicodeDecodeError as exc:
+            raise ValueError("Invalid MA5800 serial annotation") from exc
+        if vendor.upper() != expected_vendor or suffix.upper() != serial[8:]:
+            raise ValueError("Inconsistent MA5800 serial annotation")
+    return serial
+
+
 def parse_ont_state(value: str) -> OntStateObservation:
     fields = _safe_fields(value)
     return OntStateObservation(
         fsp=_required(fields, "F/S/P").replace(" ", ""),
         ont_id=int(_required(fields, "ONT-ID", "ONT ID")),
-        serial_number=_required(fields, "SN", "Ont SN").upper(),
+        serial_number=_parse_ont_serial(value),
         run_state=_required(fields, "Run state").lower(),
         config_state=_required(fields, "Config state").lower(),
         match_state=_required(fields, "Match state").lower(),
@@ -184,23 +357,107 @@ def parse_ont_port_target(value: str, fsp: str, ont_id: int) -> OntStateObservat
 
 
 def parse_service_ports(value: str) -> tuple[ServicePortObservation, ...]:
+    normalized = normalize_cli_output(value)
+    if re.search(r'(?im)^(?:Failure\s*:|Error\s*:|%\s*)', normalized):
+        raise ValueError('Service-port query failed')
     observations: list[ServicePortObservation] = []
-    row = re.compile(
-        r"(?m)^\s*(\d+)\s+(\d+)\s+(\d+\s*/\s*\d+\s*/\s*\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s*$"
+    compact = re.compile(
+        r"(\d+)\s+(\d+)\s+(\d+\s*/\s*\d+\s*/\s*\d+)\s+(\d+)\s+(\d+)\s+(\d+)"
     )
-    for match in row.finditer(normalize_cli_output(value)):
+    full = re.compile(
+        r"(\d+)\s+(\d+)\s+common\s+gpon\s+(\d+\s*/\s*\d+\s*/\s*\d+)"
+        r"\s+(\d+)\s+(\d+)\s+vlan\s+(\d+)\s+(?:-|\d+)\s+(?:-|\d+)\s+(?:up|down)",
+        re.IGNORECASE,
+    )
+    full_table = 'switch-oriented flow list' in normalized.casefold()
+    totals: list[int] = []
+    header_tokens = {'INDEX', 'VLAN', 'PORT', 'F/', 'S/', 'P', 'F/S/P', 'VPI', 'VCI',
+                     'FLOW', 'RX', 'TX', 'STATE', 'ID', 'ATTR', 'TYPE', 'PARA',
+                     'ONT', 'GEM', 'USER-VLAN'}
+    legend_lines = {
+        'Note : F--Frame, S--Slot, P--Port,',
+        'VPI indicates ONT ID for PON, VCI indicates GEM index for GPON,',
+        'v/e--vlan/encap, pritag--priority-tagged,',
+        'ppp--pppoe, ip--ipoe, ip4--ipv4oe, ip6--ipv6oe, vxl--vxlan.',
+        'When FLOW TYPE is plist, the value of FLOW PARA is a byte in',
+        'hexadecimal format and indicates a priority list. Eight bits',
+        'of its binary value indicate priorities 0-7 from the least',
+        'significant bit to the most significant bit. Value 1 indicates',
+        'that the priority is used. For example, if FLOW PARA is 0x23 and',
+        'its binary format is 0010 0011, priorities 0, 1 and 5 are used',
+    }
+    seen_ids: set[int] = set()
+    for line in normalized.splitlines():
+        if line.casefold() == 'switch-oriented flow list':
+            continue
+        if re.match(r'(?i)^Total\b', line):
+            footer = re.fullmatch(r'Total\s*:\s*(\d+)(?:\s+\(Up/Down\s*:\s*\d+/\d+\))?',
+                                  line, re.IGNORECASE)
+            if footer is None:
+                raise ValueError('Invalid service-port total')
+            totals.append(int(footer.group(1)))
+            continue
+        if not re.match(r'^\d', line):
+            envelope = (PROMPT_LINE.fullmatch(line) or line == 'Command:' or
+                re.fullmatch(r'\{[ \t]*<cr>[^{}]*\}:', line) or
+                re.fullmatch(r'display service-port port \d+\s*/\s*\d+\s*/\s*\d+ ont \d+', line))
+            if not (envelope or re.fullmatch(r'-+', line) or
+                    all(token in header_tokens for token in line.upper().split()) or
+                    (totals and ' '.join(line.split()) in legend_lines)):
+                raise ValueError('Unrecognized service-port table content')
+            continue
+        match = compact.fullmatch(line) or full.fullmatch(line)
+        if match is None:
+            raise ValueError('Unrecognized service-port row')
+        full_table |= full.fullmatch(line) is not None
         service_port, vlan, fsp, ont_id, gemport, user_vlan = match.groups()
+        if int(service_port) in seen_ids:
+            raise ValueError('Duplicate service-port identity')
+        seen_ids.add(int(service_port))
         observations.append(
             ServicePortObservation(
                 service_port_id=int(service_port),
                 vlan=int(vlan),
-                fsp=fsp.replace(" ", ""),
+                fsp=re.sub(r'\s', '', fsp),
                 ont_id=int(ont_id),
                 gemport=int(gemport),
                 user_vlan=int(user_vlan),
             )
         )
+    if len(totals) > 1 or (totals and totals[0] != len(observations)):
+        raise ValueError('Service-port total does not match parsed rows')
+    if (full_table and not totals) or (not observations and totals != [0]):
+        raise ValueError('Service-port completeness cannot be confirmed')
     return tuple(observations)
+
+
+def is_scoped_service_port_absence(value: str, *, fsp: str, ont_id: int) -> bool:
+    """Recognize only the sampled empty-list reply for the exact requested ONT."""
+    lines = normalize_cli_output(value).splitlines()
+    query = f'display service-port port {fsp} ont {ont_id}'
+    absence = 'Failure: No service virtual port can be operated'
+    if (len(lines) < 3 or lines[0] != query or not PROMPT_LINE.fullmatch(lines[-1])
+            or lines[-2] != absence or lines.count(absence) != 1):
+        return False
+    return all(line in {query, 'Command:'} or re.fullmatch(r'\{[ \t]*<cr>[^{}]*\}:', line)
+               for line in lines[1:-2])
+
+
+def is_silent_service_port_create_reply(value: str, *, expected_command: str) -> bool:
+    """An exact command echo is completion evidence, never creation proof by itself."""
+    lines = normalize_cli_output(value).splitlines()
+    if len(lines) < 2 or not PROMPT_LINE.fullmatch(lines[-1]):
+        return False
+    compact = lambda text: re.sub(r'\s+', '', text)
+    expected = compact(expected_command)
+    body = lines[:-1]
+    if body.count('Command:') == 1:
+        marker = body.index('Command:')
+        echoed = [line for line in body[:marker]
+                  if line != '{ <cr>|bundle<K>|inbound<K>|rx-cttr<K> }:']
+        return (compact(''.join(echoed)) == expected
+                and compact(''.join(body[marker + 1:])) == expected)
+    return 'Command:' not in body and compact(''.join(body)) == expected
 
 
 def parse_command_result(value: str, *, expected_kind: str | None = None) -> CommandResult:

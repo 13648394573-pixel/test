@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     local_runner_evidence_root: str = "./data/runner-evidence"
     lab_compatibility_root: str = "./data/runner-evidence/lab-compatibility"
     credential_service_name: str = "ONU Test Workbench"
+    local_runner_config_path: str | None = None
     evidence_max_size_mb: int = 50
     report_root: str = "./data/reports"
     allow_metadata_create_all: bool = False

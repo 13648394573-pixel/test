@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from app.local_runner.ma5800.parsers import (
     normalize_cli_output,
     parse_autofind,
@@ -49,6 +51,33 @@ def test_parse_ont_state_requires_explicit_online_and_match_fields() -> None:
     assert state.match_state == "match"
     assert state.line_profile_id == 10
     assert state.service_profile_id == 10
+
+
+@pytest.mark.parametrize('serial', [
+    '48575443DD91BBBB',
+    '48575443dd91bbbb',
+    '48575443DD91BBBB (HWTC-DD91BBBB)',
+    '48575443dd91bbbb (hwtc-dd91bbbb)',
+])
+def test_ont_serial_normalizes_only_recognized_display_annotation(serial):
+    raw = load_fixture('ont_online.txt').replace(
+        'SN                  : 48575443DD91BBBB', 'SN : ' + serial)
+    assert parse_ont_state(raw).serial_number == '48575443DD91BBBB'
+
+
+@pytest.mark.parametrize('serial', [
+    '48575443DD91BBB', '48575443DD91BBBB0', 'NOT-A-SERIAL',
+    '48575443DD91BBBB trailing', '48575443DD91BBBB (HWTC-DD91BBBB) trailing',
+    '48575443DD91BBBB (XPON-DD91BBBB)', '48575443DD91BBBB (HWTC-11223344)',
+    '48575443DD91BBBB (malformed)',
+    '48575443DD91BBBB\nSN : 48575443DD91BBBB',
+    '48575443DD91BBBB\nOnt SN : 4857544311223344',
+])
+def test_ont_serial_rejects_malformed_or_ambiguous_identity(serial):
+    raw = load_fixture('ont_online.txt').replace(
+        'SN                  : 48575443DD91BBBB', 'SN : ' + serial)
+    with pytest.raises(ValueError):
+        parse_ont_state(raw)
 
 
 def test_parse_wan_info_extracts_ipoe_and_pppoe_without_account_data() -> None:

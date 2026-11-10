@@ -84,10 +84,23 @@ def seed_legacy(engine):
                         "VALUES ('e','MANUAL')"))
 
 
+# 本用例只断言"升级前写入的旧列值不变"，因此显式列出旧列而不是 SELECT *。
+# 后续迁移可以合法地新增可空列（例如 evidences.parsed_metadata），列数变化不代表历史数据丢失。
+LEGACY_COLUMNS = {
+    'test_projects': 'id,project_code,name,version,status',
+    'test_runs': 'id,run_no,project_id,device_source_id,device_snapshot,status',
+    'run_results': ('id,run_id,case_source_id,case_snapshot,result_source,result,'
+                    'integrity_status,actual_result'),
+    'evidences': ('id,run_result_id,category,original_name,storage_path,media_type,'
+                  'file_size,sha256'),
+    'evidence_run_result_links': 'evidence_id,run_result_id',
+}
+
+
 def legacy_rows(engine):
     with engine.connect() as db:
-        return {table: db.execute(text(f'SELECT * FROM {table} ORDER BY 1,2')).all()
-                for table in ('test_projects','test_runs','run_results','evidences','evidence_run_result_links')}
+        return {table: db.execute(text(f'SELECT {columns} FROM {table} ORDER BY 1,2')).all()
+                for table, columns in LEGACY_COLUMNS.items()}
 
 
 def test_upgrade_preserves_locked_legacy_results_snapshots_and_evidence(tmp_path):
@@ -111,7 +124,12 @@ def test_upgrade_preserves_locked_legacy_results_snapshots_and_evidence(tmp_path
         with pytest.raises(RuntimeError, match='LOCAL_RUNNER'):
             command.downgrade(config, '20260918_0021')
         with engine.connect() as db:
-            assert db.execute(text('SELECT version_num FROM alembic_version')).scalar_one() == '20261012_0022'
+            # 合并 20261029_0022 后，迁移图在 20260918_0021 上有两个子节点，
+            # 拒绝降级时 alembic_version 可能同时记录两条父节点，故按集合断言：
+            # 分支迁移仍在位、未回退到合并前的父节点。
+            versions = set(db.execute(text('SELECT version_num FROM alembic_version')).scalars())
+            assert '20261012_0022' in versions
+            assert '20260918_0021' not in versions
             assert db.execute(text("SELECT result_source FROM run_results WHERE id='local'")).scalar_one() == 'LOCAL_RUNNER'
     finally:
         engine.dispose()
